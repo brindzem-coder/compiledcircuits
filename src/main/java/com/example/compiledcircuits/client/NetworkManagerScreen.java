@@ -69,6 +69,8 @@ public class NetworkManagerScreen
     private Button deleteFolderButton;
 
     private int selectedFolderId = 0;
+    private int folderScroll = 0;
+    private int networkScroll = 0;
 
     public NetworkManagerScreen(
             List<NetworkListS2CPacket.Entry> entries,
@@ -104,7 +106,10 @@ public class NetworkManagerScreen
             FolderNode node = findFolderNode(id);
             if (node != null) node.toggleExpanded();
         }
-        if (findFolderNode(selectedFolderId) == null) selectedFolderId = 0;
+        if (findFolderNode(selectedFolderId) == null) {
+            selectedFolderId = 0;
+            networkScroll = 0;
+        }
         selectedNetwork = null;
         clearDrag();
         rebuildVisibleFolderRows();
@@ -265,6 +270,7 @@ public class NetworkManagerScreen
         );
 
         updateButtons();
+        clampScrolls();
     }
 
     // =========================================================
@@ -411,6 +417,7 @@ public class NetworkManagerScreen
                 rootFolder,
                 0
         );
+        if (this.height > 0) clampScrolls();
     }
 
     private void addVisibleFolder(
@@ -475,6 +482,56 @@ public class NetworkManagerScreen
         }
 
         updateButtonsSafe();
+        if (this.height > 0) clampScrolls();
+    }
+
+    private int getVisibleFolderRowCount() {
+        return Math.max(1, (this.height - BOTTOM_MARGIN - LIST_TOP) / FOLDER_ROW_HEIGHT);
+    }
+
+    private int getVisibleNetworkRowCount() {
+        return Math.max(1, (this.height - BOTTOM_MARGIN - LIST_TOP) / NETWORK_ROW_HEIGHT);
+    }
+
+    private int getMaxFolderScroll() {
+        return Math.max(0, visibleFolderRows.size() - getVisibleFolderRowCount());
+    }
+
+    private int getMaxNetworkScroll() {
+        return Math.max(0, visibleNetworks.size() - getVisibleNetworkRowCount());
+    }
+
+    private void clampScrolls() {
+        folderScroll = Math.max(0, Math.min(folderScroll, getMaxFolderScroll()));
+        networkScroll = Math.max(0, Math.min(networkScroll, getMaxNetworkScroll()));
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        if (mouseY >= LIST_TOP && mouseY < this.height - BOTTOM_MARGIN) {
+            int step = delta > 0 ? -1 : delta < 0 ? 1 : 0;
+            if (mouseX >= 7 && mouseX < folderPanelWidth - 2) {
+                folderScroll += step;
+                clampScrolls();
+                return true;
+            }
+            if (mouseX >= folderPanelWidth + 8 && mouseX <= this.width - 8) {
+                networkScroll += step;
+                clampScrolls();
+                return true;
+            }
+        }
+        return super.mouseScrolled(mouseX, mouseY, delta);
+    }
+
+    // Only complete rendered rows are interactive; the bottom remainder is blank.
+    private int getFolderIndexAt(double mouseX, double mouseY) {
+        if (mouseX < 7 || mouseX >= folderPanelWidth - 2 || mouseY < LIST_TOP) return -1;
+        int row = (int) ((mouseY - LIST_TOP) / FOLDER_ROW_HEIGHT);
+        if (row >= getVisibleFolderRowCount()
+                || LIST_TOP + (row + 1) * FOLDER_ROW_HEIGHT > height - BOTTOM_MARGIN) return -1;
+        int index = folderScroll + row;
+        return index < visibleFolderRows.size() ? index : -1;
     }
 
     // =========================================================
@@ -494,60 +551,48 @@ public class NetworkManagerScreen
             /*
              * LEFT FOLDER PANEL
              */
-            if (mouseX >= 5
-                    && mouseX < folderPanelWidth - 3
-                    && mouseY >= LIST_TOP
-                    && mouseY < this.height - BOTTOM_MARGIN) {
-
-                int index =
-                        (int) (
-                                (mouseY - LIST_TOP)
-                                        / FOLDER_ROW_HEIGHT
+            int folderIndex = getFolderIndexAt(mouseX, mouseY);
+            if (folderIndex >= 0) {
+                VisibleFolderRow row =
+                        visibleFolderRows.get(
+                                folderIndex
                         );
 
-                if (index >= 0
-                        && index < visibleFolderRows.size()) {
+                FolderNode folder =
+                        row.node();
 
-                    VisibleFolderRow row =
-                            visibleFolderRows.get(
-                                    index
-                            );
+                /*
+                 * Область маленької стрілочки.
+                 */
+                int arrowX =
+                        12
+                                + row.depth() * 14;
 
-                    FolderNode folder =
-                            row.node();
+                if (mouseX >= arrowX
+                        && mouseX <= arrowX + 12
+                        && !folder.getChildren().isEmpty()) {
 
-                    /*
-                     * Область маленької стрілочки.
-                     */
-                    int arrowX =
-                            12
-                                    + row.depth() * 14;
+                    folder.toggleExpanded();
 
-                    if (mouseX >= arrowX
-                            && mouseX <= arrowX + 12
-                            && !folder.getChildren().isEmpty()) {
-
-                        folder.toggleExpanded();
-
-                        rebuildVisibleFolderRows();
-
-                        return true;
-                    }
-
-                    /*
-                     * Клік по самій папці.
-                     */
-                    selectedFolderId = folder.getId();
-                    if (selectedFolderId != 0) {
-                        startDrag(DragType.FOLDER, selectedFolderId, mouseX, mouseY);
-                    }
-
-                    selectedNetwork = null;
-
-                    rebuildVisibleNetworks();
+                    rebuildVisibleFolderRows();
 
                     return true;
                 }
+
+                /*
+                 * Клік по самій папці.
+                 */
+                selectedFolderId = folder.getId();
+                if (selectedFolderId != 0) {
+                    startDrag(DragType.FOLDER, selectedFolderId, mouseX, mouseY);
+                }
+
+                selectedNetwork = null;
+                networkScroll = 0;
+
+                rebuildVisibleNetworks();
+
+                return true;
             }
 
             /*
@@ -567,7 +612,11 @@ public class NetworkManagerScreen
                                         / NETWORK_ROW_HEIGHT
                         );
 
-                if (index >= 0
+                int row = index;
+                index += networkScroll;
+
+                if (row < getVisibleNetworkRowCount()
+                        && LIST_TOP + (row + 1) * NETWORK_ROW_HEIGHT <= height - BOTTOM_MARGIN
                         && index < visibleNetworks.size()) {
 
                     selectedNetwork =
@@ -624,10 +673,8 @@ public class NetworkManagerScreen
     }
 
     private FolderNode getFolderAt(double mouseX, double mouseY) {
-        if (mouseX < 7 || mouseX >= folderPanelWidth - 2 || mouseY < LIST_TOP) return null;
-        int index = (int) ((mouseY - LIST_TOP) / FOLDER_ROW_HEIGHT);
-        if (index < 0 || index >= visibleFolderRows.size()
-                || LIST_TOP + (index + 1) * FOLDER_ROW_HEIGHT > height - BOTTOM_MARGIN) return null;
+        int index = getFolderIndexAt(mouseX, mouseY);
+        if (index < 0) return null;
         return visibleFolderRows.get(index).node();
     }
 
@@ -853,7 +900,9 @@ public class NetworkManagerScreen
 
         int rowY = LIST_TOP;
 
-        for (VisibleFolderRow row : visibleFolderRows) {
+        int endIndex = Math.min(visibleFolderRows.size(), folderScroll + getVisibleFolderRowCount());
+        for (int i = folderScroll; i < endIndex; i++) {
+            VisibleFolderRow row = visibleFolderRows.get(i);
 
             if (rowY + FOLDER_ROW_HEIGHT
                     > this.height - BOTTOM_MARGIN) {
@@ -961,8 +1010,9 @@ public class NetworkManagerScreen
             return;
         }
 
-        for (NetworkListS2CPacket.Entry entry
-                : visibleNetworks) {
+        int endIndex = Math.min(visibleNetworks.size(), networkScroll + getVisibleNetworkRowCount());
+        for (int i = networkScroll; i < endIndex; i++) {
+            NetworkListS2CPacket.Entry entry = visibleNetworks.get(i);
 
             if (rowY + NETWORK_ROW_HEIGHT
                     > this.height - BOTTOM_MARGIN) {
