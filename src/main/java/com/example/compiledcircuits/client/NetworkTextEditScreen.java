@@ -20,6 +20,7 @@ public class NetworkTextEditScreen
     private final Consumer<String> onSave;
 
     private EditBox editBox;
+    private final int maxLength;
 
     public NetworkTextEditScreen(
             Screen parent,
@@ -28,6 +29,11 @@ public class NetworkTextEditScreen
             String initialValue,
             Consumer<String> onSave
     ) {
+        this(parent, title, label, initialValue, onSave, 256);
+    }
+
+    public NetworkTextEditScreen(Screen parent, String title, String label, String initialValue,
+                                 Consumer<String> onSave, int maxLength) {
         super(
                 Component.literal(title)
         );
@@ -36,6 +42,7 @@ public class NetworkTextEditScreen
         this.label = label;
         this.initialValue = initialValue;
         this.onSave = onSave;
+        this.maxLength = maxLength;
     }
 
     @Override
@@ -57,7 +64,7 @@ public class NetworkTextEditScreen
                         Component.literal(label)
                 );
 
-        editBox.setMaxLength(256);
+        editBox.setMaxLength(maxLength);
         editBox.setValue(initialValue);
 
         addRenderableWidget(editBox);

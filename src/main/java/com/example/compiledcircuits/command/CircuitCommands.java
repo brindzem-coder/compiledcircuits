@@ -17,6 +17,7 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 
 import com.example.compiledcircuits.networking.ModNetworking;
+import com.example.compiledcircuits.networking.OpenCompileNameS2CPacket;
 import com.example.compiledcircuits.networking.NetworkListS2CPacket;
 import net.minecraftforge.network.PacketDistributor;
 
@@ -42,6 +43,9 @@ public final class CircuitCommands {
                                                 )
                                         )
                         )
+
+                        .then(Commands.literal("compile_named")
+                                .executes(context -> openCompileName(context.getSource())))
 
                         .then(
                                 Commands.literal("decompile")
@@ -124,6 +128,23 @@ public final class CircuitCommands {
                                         )
                         )
         );
+    }
+
+    private static int openCompileName(CommandSourceStack source) {
+        ServerPlayer player;
+        try {
+            player = source.getPlayerOrException();
+        } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
+            source.sendFailure(Component.literal("This command must be used by a player."));
+            return 0;
+        }
+        if (NetworkSelectionData.get(player) == null) {
+            source.sendFailure(Component.literal("No circuit selected."));
+            return 0;
+        }
+        ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                new OpenCompileNameS2CPacket());
+        return 1;
     }
 
     private static int compile(
