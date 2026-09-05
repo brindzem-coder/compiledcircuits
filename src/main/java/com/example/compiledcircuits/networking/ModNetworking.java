@@ -7,7 +7,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 
 public final class ModNetworking {
 
-    private static final String PROTOCOL_VERSION = "2";
+    private static final String PROTOCOL_VERSION = "3";
 
     public static final SimpleChannel CHANNEL =
             NetworkRegistry.ChannelBuilder
@@ -55,6 +55,14 @@ public final class ModNetworking {
                 NetworkHighlightS2CPacket::encode,
                 NetworkHighlightS2CPacket::decode,
                 NetworkHighlightS2CPacket::handle
+        );
+        CHANNEL.registerMessage(
+                packetId++,
+                NetworkBulkActionC2SPacket.class,
+                NetworkBulkActionC2SPacket::encode,
+                NetworkBulkActionC2SPacket::decode,
+                NetworkBulkActionC2SPacket::handle,
+                java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER)
         );
     }
 }

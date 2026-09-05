@@ -1,6 +1,11 @@
 package com.example.compiledcircuits.client;
 
 import com.example.compiledcircuits.networking.ModNetworking;
+import com.example.compiledcircuits.networking.NetworkBulkActionC2SPacket;
+import java.util.Set;
+import java.util.LinkedHashSet;
+import java.util.HashSet;
+import java.util.Collection;
 import com.example.compiledcircuits.networking.NetworkActionC2SPacket;
 import com.example.compiledcircuits.networking.NetworkListS2CPacket;
 import net.minecraft.client.Minecraft;
@@ -41,7 +46,10 @@ public class NetworkManagerScreen
     private FolderNode rootFolder;
 
 
-    private NetworkListS2CPacket.Entry selectedNetwork;
+    private final Set<Integer> selectedFolderIds = new LinkedHashSet<>();
+    private final Set<Integer> selectedNetworkIds = new LinkedHashSet<>();
+    private enum SelectionType { NONE, FOLDERS, NETWORKS }
+    private SelectionType selectionType = SelectionType.NONE;
 
     /*
      * Це вже "розгорнутий" список дерева,
@@ -110,7 +118,7 @@ public class NetworkManagerScreen
             selectedFolderId = 0;
             networkScroll = 0;
         }
-        selectedNetwork = null;
+        clearSelection();
         clearDrag();
         rebuildVisibleFolderRows();
         rebuildVisibleNetworks();
@@ -299,52 +307,18 @@ public class NetworkManagerScreen
     }
 
     private void renameFolder() {
-
-        if (selectedFolderId == 0) {
-            return;
-        }
-
-        FolderNode folder =
-                findFolderNode(
-                        selectedFolderId
-                );
-
-        if (folder == null) {
-            return;
-        }
-
-        Minecraft.getInstance()
-                .setScreen(
-                        new NetworkTextEditScreen(
-                                this,
-                                "Rename Folder",
-                                "Folder name:",
-                                folder.getName(),
-                                value ->
-                                        ModNetworking.CHANNEL.sendToServer(
-                                                new NetworkActionC2SPacket(
-                                                        NetworkActionC2SPacket.Action.RENAME_FOLDER,
-                                                        selectedFolderId,
-                                                        value
-                                                )
-                                        )
-                        )
-                );
+        if (selectedFolderIds.size() != 1) return;
+        int id = selectedFolderIds.iterator().next();
+        FolderNode folder = findFolderNode(id);
+        if (folder == null) return;
+        Minecraft.getInstance().setScreen(new NetworkTextEditScreen(this,
+                "Rename Folder", "Folder name:", folder.getName(),
+                value -> ModNetworking.CHANNEL.sendToServer(new NetworkActionC2SPacket(
+                        NetworkActionC2SPacket.Action.RENAME_FOLDER, id, value))));
     }
 
     private void deleteFolder() {
-
-        if (selectedFolderId == 0) {
-            return;
-        }
-
-        ModNetworking.CHANNEL.sendToServer(
-                new NetworkActionC2SPacket(
-                        NetworkActionC2SPacket.Action.DELETE_FOLDER,
-                        selectedFolderId,
-                        ""
-                )
-        );
+        sendBulk(NetworkBulkActionC2SPacket.BulkAction.DELETE_FOLDERS, selectedFolderIds, 0);
     }
 
     private void buildFolderTree() {
@@ -468,19 +442,6 @@ public class NetworkManagerScreen
                 )
         );
 
-        /*
-         * Якщо раніше була вибрана network,
-         * але тепер ми відкрили іншу папку —
-         * прибираємо selection.
-         */
-        if (selectedNetwork != null
-                && !visibleNetworks.contains(
-                selectedNetwork
-        )) {
-
-            selectedNetwork = null;
-        }
-
         updateButtonsSafe();
         if (this.height > 0) clampScrolls();
     }
@@ -538,132 +499,173 @@ public class NetworkManagerScreen
     // MOUSE
     // =========================================================
 
+    private void clearSelection() {
+        selectedFolderIds.clear();
+        selectedNetworkIds.clear();
+        selectionType = SelectionType.NONE;
+        updateButtonsSafe();
+    }
+
+    private void selectItem(SelectionType type, int id, boolean additive) {
+        if (type == SelectionType.FOLDERS && id == 0) return;
+        if (selectionType != type || !additive) clearSelection();
+        Set<Integer> selected = type == SelectionType.FOLDERS ? selectedFolderIds : selectedNetworkIds;
+        if (!additive || !selected.remove(id)) selected.add(id);
+        selectionType = selected.isEmpty() ? SelectionType.NONE : type;
+        updateButtonsSafe();
+    }
+
+    private void selectFolderItem(int id, boolean additive) {
+        selectItem(SelectionType.FOLDERS, id, additive);
+    }
+
+    private void selectNetworkItem(int id, boolean additive) {
+        selectItem(SelectionType.NETWORKS, id, additive);
+    }
+
+    private NetworkListS2CPacket.Entry getVisibleNetworkAt(double mouseX, double mouseY) {
+        if (mouseX < folderPanelWidth + 8 || mouseX > width - 8 || mouseY < LIST_TOP) return null;
+        int row = (int) ((mouseY - LIST_TOP) / NETWORK_ROW_HEIGHT);
+        int index = networkScroll + row;
+        if (row >= getVisibleNetworkRowCount()
+                || LIST_TOP + (row + 1) * NETWORK_ROW_HEIGHT > height - BOTTOM_MARGIN
+                || index >= visibleNetworks.size()) return null;
+        return visibleNetworks.get(index);
+    }
+
     @Override
-    public boolean mouseClicked(
-            double mouseX,
-            double mouseY,
-            int button
-    ) {
-
-        if (button == 0) {
-            clearDrag();
-
-            /*
-             * LEFT FOLDER PANEL
-             */
-            int folderIndex = getFolderIndexAt(mouseX, mouseY);
-            if (folderIndex >= 0) {
-                VisibleFolderRow row =
-                        visibleFolderRows.get(
-                                folderIndex
-                        );
-
-                FolderNode folder =
-                        row.node();
-
-                /*
-                 * Область маленької стрілочки.
-                 */
-                int arrowX =
-                        12
-                                + row.depth() * 14;
-
-                if (mouseX >= arrowX
-                        && mouseX <= arrowX + 12
-                        && !folder.getChildren().isEmpty()) {
-
-                    folder.toggleExpanded();
-
-                    rebuildVisibleFolderRows();
-
-                    return true;
-                }
-
-                /*
-                 * Клік по самій папці.
-                 */
-                selectedFolderId = folder.getId();
-                if (selectedFolderId != 0) {
-                    startDrag(DragType.FOLDER, selectedFolderId, mouseX, mouseY);
-                }
-
-                selectedNetwork = null;
-                networkScroll = 0;
-
-                rebuildVisibleNetworks();
-
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button != 0) return super.mouseClicked(mouseX, mouseY, button);
+        clearDrag();
+        boolean shift = Screen.hasShiftDown();
+        int folderIndex = getFolderIndexAt(mouseX, mouseY);
+        if (folderIndex >= 0) {
+            VisibleFolderRow row = visibleFolderRows.get(folderIndex);
+            FolderNode folder = row.node();
+            int arrowX = 12 + row.depth() * 14;
+            if (mouseX >= arrowX && mouseX <= arrowX + 12 && !folder.getChildren().isEmpty()) {
+                folder.toggleExpanded();
+                rebuildVisibleFolderRows();
                 return true;
             }
-
-            /*
-             * RIGHT NETWORK PANEL
-             */
-            int networkLeft =
-                    folderPanelWidth + 8;
-
-            if (mouseX >= networkLeft
-                    && mouseX <= this.width - 8
-                    && mouseY >= LIST_TOP
-                    && mouseY < this.height - BOTTOM_MARGIN) {
-
-                int index =
-                        (int) (
-                                (mouseY - LIST_TOP)
-                                        / NETWORK_ROW_HEIGHT
-                        );
-
-                int row = index;
-                index += networkScroll;
-
-                if (row < getVisibleNetworkRowCount()
-                        && LIST_TOP + (row + 1) * NETWORK_ROW_HEIGHT <= height - BOTTOM_MARGIN
-                        && index < visibleNetworks.size()) {
-
-                    selectedNetwork =
-                            visibleNetworks.get(
-                                    index
-                            );
-
-                    startDrag(DragType.NETWORK, selectedNetwork.id(), mouseX, mouseY);
-                    updateButtons();
-
-                    return true;
-                }
+            selectedFolderId = folder.getId();
+            networkScroll = 0;
+            if (folder.getId() == 0) {
+                clearSelection();
+            } else {
+                beginItemPress(SelectionType.FOLDERS, folder.getId(), shift, mouseX, mouseY);
             }
+            rebuildVisibleNetworks();
+            return true;
         }
-
-        return super.mouseClicked(
-                mouseX,
-                mouseY,
-                button
-        );
+        NetworkListS2CPacket.Entry network = getVisibleNetworkAt(mouseX, mouseY);
+        if (network != null) {
+            beginItemPress(SelectionType.NETWORKS, network.id(), shift, mouseX, mouseY);
+            return true;
+        }
+        if (mouseY >= LIST_TOP && mouseY < height - BOTTOM_MARGIN
+                && ((mouseX >= 7 && mouseX < folderPanelWidth - 2)
+                || (mouseX >= folderPanelWidth + 8 && mouseX <= width - 8))) {
+            if (!shift) clearSelection();
+            return true;
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
     }
 
     private enum DragType { NONE, NETWORK, FOLDER }
-
     private DragType dragType = DragType.NONE;
     private int dragId = -1;
     private double dragStartX;
     private double dragStartY;
     private boolean dragging;
+    private boolean shiftPaintSelecting;
+    private SelectionType paintSelectionType = SelectionType.NONE;
+    private final Set<Integer> paintVisitedIds = new HashSet<>();
+    private int paintStartId = -1;
+    private double paintLastX;
+    private double paintLastY;
+    private boolean paintDragging;
 
-    private void startDrag(DragType type, int id, double x, double y) {
-        dragType = type;
-        dragId = id;
+    private void beginItemPress(SelectionType type, int id, boolean shift, double x, double y) {
         dragStartX = x;
         dragStartY = y;
-        dragging = false;
+        if (shift) {
+            selectItem(type, id, true);
+            shiftPaintSelecting = true;
+            paintSelectionType = type;
+            paintStartId = id;
+            paintLastX = x;
+            paintLastY = y;
+        } else {
+            Set<Integer> selected = type == SelectionType.FOLDERS ? selectedFolderIds : selectedNetworkIds;
+            // Preserve a group until release distinguishes an ordinary click from a move.
+            if (!selected.contains(id)) selectItem(type, id, false);
+            dragType = type == SelectionType.FOLDERS ? DragType.FOLDER : DragType.NETWORK;
+            dragId = id;
+        }
     }
 
     private void clearDrag() {
         dragType = DragType.NONE;
         dragId = -1;
         dragging = false;
+        shiftPaintSelecting = false;
+        paintSelectionType = SelectionType.NONE;
+        paintVisitedIds.clear();
+        paintStartId = -1;
+        paintDragging = false;
+    }
+
+    private void addToPaintSelection(int id) {
+        if (paintSelectionType == SelectionType.NONE
+                || (paintSelectionType == SelectionType.FOLDERS && id == 0)
+                || !paintVisitedIds.add(id)) return;
+        if (selectionType != paintSelectionType) clearSelection();
+        selectionType = paintSelectionType;
+        if (selectionType == SelectionType.FOLDERS) selectedFolderIds.add(id);
+        else selectedNetworkIds.add(id);
+        updateButtonsSafe();
+    }
+
+    private void paintAt(double x, double y) {
+        if (paintSelectionType == SelectionType.FOLDERS) {
+            FolderNode folder = getFolderAt(x, y);
+            if (folder != null) addToPaintSelection(folder.getId());
+        } else {
+            NetworkListS2CPacket.Entry network = getVisibleNetworkAt(x, y);
+            if (network != null) addToPaintSelection(network.id());
+        }
+    }
+
+    private void paintTo(double x, double y) {
+        double dx = x - dragStartX;
+        double dy = y - dragStartY;
+        if (!paintDragging && dx * dx + dy * dy <= 16.0D) return;
+        paintDragging = true;
+        // A Shift-click toggles; once it becomes a drag, every traversed row is added.
+        addToPaintSelection(paintStartId);
+        int steps = Math.max(1, (int) Math.ceil(Math.max(Math.abs(x - paintLastX),
+                Math.abs(y - paintLastY)) / 8.0D));
+        for (int i = 1; i <= steps; i++) {
+            double fraction = (double) i / steps;
+            paintAt(paintLastX + (x - paintLastX) * fraction, paintLastY + (y - paintLastY) * fraction);
+        }
+        paintLastX = x;
+        paintLastY = y;
     }
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (button == 0 && shiftPaintSelecting) {
+            if (Screen.hasShiftDown()) paintTo(mouseX, mouseY);
+            else {
+                paintLastX = mouseX;
+                paintLastY = mouseY;
+            }
+            return true;
+        }
         if (button == 0 && dragType != DragType.NONE) {
+            if (Screen.hasShiftDown()) return true;
             double dx = mouseX - dragStartX;
             double dy = mouseY - dragStartY;
             if (dx * dx + dy * dy > 16.0D) dragging = true;
@@ -674,25 +676,32 @@ public class NetworkManagerScreen
 
     private FolderNode getFolderAt(double mouseX, double mouseY) {
         int index = getFolderIndexAt(mouseX, mouseY);
-        if (index < 0) return null;
-        return visibleFolderRows.get(index).node();
+        return index < 0 ? null : visibleFolderRows.get(index).node();
     }
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (button == 0 && dragging) {
-            FolderNode target = getFolderAt(mouseX, mouseY);
-            if (target != null) {
-                ModNetworking.CHANNEL.sendToServer(new NetworkActionC2SPacket(
-                        dragType == DragType.NETWORK
-                                ? NetworkActionC2SPacket.Action.MOVE_NETWORK
-                                : NetworkActionC2SPacket.Action.MOVE_FOLDER,
-                        dragId, target.getId(), ""));
+        if (button == 0 && shiftPaintSelecting) {
+            clearDrag();
+            return true;
+        }
+        if (button == 0 && dragType != DragType.NONE) {
+            if (dragging) {
+                FolderNode target = getFolderAt(mouseX, mouseY);
+                if (target != null && !Screen.hasShiftDown()) {
+                    sendBulk(dragType == DragType.NETWORK
+                                    ? NetworkBulkActionC2SPacket.BulkAction.MOVE_NETWORKS
+                                    : NetworkBulkActionC2SPacket.BulkAction.MOVE_FOLDERS,
+                            dragType == DragType.NETWORK ? selectedNetworkIds : selectedFolderIds,
+                            target.getId());
+                }
+            } else {
+                selectItem(dragType == DragType.NETWORK ? SelectionType.NETWORKS : SelectionType.FOLDERS,
+                        dragId, false);
             }
             clearDrag();
             return true;
         }
-        clearDrag();
         return super.mouseReleased(mouseX, mouseY, button);
     }
 
@@ -721,79 +730,40 @@ public class NetworkManagerScreen
     }
 
     private void updateButtons() {
-
-        boolean active =
-                selectedNetwork != null;
-
-        highlightButton.active = active;
-        renameButton.active = active;
-        renameFolderButton.active = selectedFolderId != 0;
-        deleteFolderButton.active = selectedFolderId != 0;
-        decompileButton.active = active;
+        boolean networks = selectionType == SelectionType.NETWORKS && !selectedNetworkIds.isEmpty();
+        boolean folders = selectionType == SelectionType.FOLDERS && !selectedFolderIds.isEmpty();
+        newFolderButton.active = true;
+        highlightButton.active = networks;
+        renameButton.active = networks && selectedNetworkIds.size() == 1;
+        decompileButton.active = networks;
+        renameFolderButton.active = folders && selectedFolderIds.size() == 1;
+        deleteFolderButton.active = folders;
     }
 
     private void highlightSelected() {
-
-        if (selectedNetwork == null) {
-            return;
-        }
-
-        sendAction(
-                NetworkActionC2SPacket.Action.HIGHLIGHT,
-                ""
-        );
+        sendBulk(NetworkBulkActionC2SPacket.BulkAction.HIGHLIGHT_NETWORKS, selectedNetworkIds, 0);
     }
 
     private void renameSelected() {
-
-        if (selectedNetwork == null) {
-            return;
-        }
-
-        Minecraft.getInstance()
-                .setScreen(
-                        new NetworkTextEditScreen(
-                                this,
-                                "Rename Network",
-                                "Network name:",
-                                selectedNetwork.name(),
-                                value ->
-                                        sendAction(
-                                                NetworkActionC2SPacket.Action.RENAME_NETWORK,
-                                                value
-                                        )
-                        )
-                );
+        if (selectedNetworkIds.size() != 1) return;
+        int id = selectedNetworkIds.iterator().next();
+        NetworkListS2CPacket.Entry network = entries.stream().filter(entry -> entry.id() == id)
+                .findFirst().orElse(null);
+        if (network == null) return;
+        Minecraft.getInstance().setScreen(new NetworkTextEditScreen(this,
+                "Rename Network", "Network name:", network.name(),
+                value -> ModNetworking.CHANNEL.sendToServer(new NetworkActionC2SPacket(
+                        NetworkActionC2SPacket.Action.RENAME_NETWORK, id, value))));
     }
 
     private void decompileSelected() {
-
-        if (selectedNetwork == null) {
-            return;
-        }
-
-        sendAction(
-                NetworkActionC2SPacket.Action.DECOMPILE,
-                ""
-        );
+        sendBulk(NetworkBulkActionC2SPacket.BulkAction.DECOMPILE_NETWORKS, selectedNetworkIds, 0);
     }
 
-    private void sendAction(
-            NetworkActionC2SPacket.Action action,
-            String value
-    ) {
-
-        if (selectedNetwork == null) {
-            return;
+    private void sendBulk(NetworkBulkActionC2SPacket.BulkAction action, Collection<Integer> ids, int targetId) {
+        if (!ids.isEmpty()) {
+            ModNetworking.CHANNEL.sendToServer(new NetworkBulkActionC2SPacket(action, ids, targetId));
         }
-
-        ModNetworking.CHANNEL.sendToServer(
-                new NetworkActionC2SPacket(
-                        action,
-                        selectedNetwork.id(),
-                        value
-                )
-        );
     }
 
     // =========================================================
@@ -853,7 +823,7 @@ public class NetworkManagerScreen
 
         graphics.drawString(
                 this.font,
-                "Folders",
+                "Folders (" + selectedFolderIds.size() + " selected)",
                 12,
                 37,
                 0xAAAAAA
@@ -861,7 +831,7 @@ public class NetworkManagerScreen
 
         graphics.drawString(
                 this.font,
-                "Networks",
+                "Networks (" + selectedNetworkIds.size() + " selected)",
                 folderPanelWidth + 10,
                 37,
                 0xAAAAAA
@@ -880,7 +850,9 @@ public class NetworkManagerScreen
         );
 
         if (dragging) {
-            graphics.drawString(font, dragType == DragType.NETWORK ? "Move network" : "Move folder",
+            graphics.drawString(font, dragType == DragType.NETWORK
+                    ? "Move " + selectedNetworkIds.size() + " networks"
+                    : "Move " + selectedFolderIds.size() + " folders",
                     mouseX + 10, mouseY + 10, 0xFFFFAA);
         }
 
@@ -913,7 +885,7 @@ public class NetworkManagerScreen
                     row.node();
 
             boolean selected =
-                    selectedFolderId == folder.getId();
+                    selectedFolderIds.contains(folder.getId());
 
             boolean hovered =
                     mouseX >= 7
@@ -1020,9 +992,7 @@ public class NetworkManagerScreen
             }
 
             boolean selected =
-                    selectedNetwork != null
-                            && selectedNetwork.id()
-                            == entry.id();
+                    selectedNetworkIds.contains(entry.id());
 
             boolean hovered =
                     mouseX >= left

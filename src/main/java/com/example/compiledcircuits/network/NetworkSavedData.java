@@ -9,6 +9,12 @@ import net.minecraft.world.level.saveddata.SavedData;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -291,6 +297,85 @@ public class NetworkSavedData extends SavedData {
 
         setDirty();
 
+        return true;
+    }
+
+    public boolean moveNetworks(Collection<Integer> ids, int targetFolderId) {
+        if (ids.isEmpty() || !folderExists(targetFolderId) || !networks.keySet().containsAll(ids)) {
+            return false;
+        }
+        for (int id : ids) networks.get(id).setFolderId(targetFolderId);
+        setDirty();
+        return true;
+    }
+
+    /** An empty result signals a rejected operation; no networks are removed. */
+    public List<CompiledNetwork> removeNetworks(Collection<Integer> ids) {
+        if (ids.isEmpty() || !networks.keySet().containsAll(ids)) return List.of();
+        List<CompiledNetwork> removed = new ArrayList<>();
+        for (int id : new LinkedHashSet<>(ids)) removed.add(networks.remove(id));
+        setDirty();
+        return removed;
+    }
+
+    public Set<Integer> getTopLevelSelectedFolders(Collection<Integer> ids) {
+        Set<Integer> selected = new HashSet<>(ids);
+        Set<Integer> result = new LinkedHashSet<>();
+        for (int id : ids) {
+            CircuitFolder folder = folders.get(id);
+            if (folder == null) continue;
+            int parent = folder.getParentId();
+            Set<Integer> visited = new HashSet<>();
+            boolean selectedAncestor = false;
+            while (parent != 0) {
+                if (!visited.add(parent) || selected.contains(parent)) {
+                    selectedAncestor = true;
+                    break;
+                }
+                CircuitFolder ancestor = folders.get(parent);
+                if (ancestor == null) break;
+                parent = ancestor.getParentId();
+            }
+            if (!selectedAncestor) result.add(id);
+        }
+        return result;
+    }
+
+    public boolean moveFolders(Collection<Integer> ids, int targetParentId) {
+        if (ids.isEmpty() || ids.contains(0) || !folderExists(targetParentId)
+                || !folders.keySet().containsAll(ids)) return false;
+        Set<Integer> topLevel = getTopLevelSelectedFolders(ids);
+        if (topLevel.isEmpty()) return false;
+        // Includes conflicts between selected folders originally in different parents.
+        Set<String> targetNames = new TreeSet<>(String.CASE_INSENSITIVE_ORDER);
+        for (CircuitFolder folder : folders.values()) {
+            if (folder.getParentId() == targetParentId && !topLevel.contains(folder.getId())) {
+                targetNames.add(folder.getName());
+            }
+        }
+        for (int id : topLevel) {
+            if (id == targetParentId || isDescendant(targetParentId, id)
+                    || !targetNames.add(folders.get(id).getName())) return false;
+        }
+        for (int id : topLevel) folders.get(id).setParentId(targetParentId);
+        setDirty();
+        return true;
+    }
+
+    public boolean deleteFolders(Collection<Integer> ids) {
+        Set<Integer> selected = new HashSet<>(ids);
+        if (selected.isEmpty() || selected.contains(0) || !folders.keySet().containsAll(selected)) {
+            return false;
+        }
+        // Only absolutely empty folders may be deleted, even if children are selected too.
+        for (CircuitFolder folder : folders.values()) {
+            if (selected.contains(folder.getParentId())) return false;
+        }
+        for (CompiledNetwork network : networks.values()) {
+            if (selected.contains(network.getFolderId())) return false;
+        }
+        for (int id : selected) folders.remove(id);
+        setDirty();
         return true;
     }
 

@@ -316,47 +316,19 @@ public class NetworkActionC2SPacket {
             CompiledNetwork network
     ) {
 
-        int id =
-                network.getId();
-
-        Set<BlockPos> outputs =
-                new HashSet<>(
-                        network.getOutputs()
-                );
-
-        ServerLevel level =
-                findNetworkLevel(
-                        player,
-                        network
-                );
-
-        data.removeNetwork(id);
-
-        /*
-         * Output після видалення network
-         * починає повертати 0.
-         */
-        if (level != null) {
-
-            for (BlockPos outputPos : outputs) {
-
-                if (!level.hasChunkAt(outputPos)) {
-                    continue;
-                }
-
-                BlockState state =
-                        level.getBlockState(
-                                outputPos
-                        );
-
-                level.updateNeighborsAt(
-                        outputPos,
-                        state.getBlock()
-                );
-            }
-        }
-
+        data.removeNetwork(network.getId());
+        updateRemovedNetworkOutputs(player, network);
         NetworkGuiSync.sendList(player);
+    }
+
+    static void updateRemovedNetworkOutputs(ServerPlayer player, CompiledNetwork network) {
+        ServerLevel level = findNetworkLevel(player, network);
+        if (level == null) return;
+        for (BlockPos outputPos : network.getOutputs()) {
+            if (!level.hasChunkAt(outputPos)) continue;
+            BlockState state = level.getBlockState(outputPos);
+            level.updateNeighborsAt(outputPos, state.getBlock());
+        }
     }
 
     private static ServerLevel findNetworkLevel(
