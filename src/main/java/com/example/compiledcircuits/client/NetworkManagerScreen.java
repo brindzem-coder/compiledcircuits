@@ -40,10 +40,6 @@ public class NetworkManagerScreen
 
     private FolderNode rootFolder;
 
-    /*
-     * "" означає root.
-     */
-    private String selectedFolder = "";
 
     private NetworkListS2CPacket.Entry selectedNetwork;
 
@@ -66,7 +62,6 @@ public class NetworkManagerScreen
 
     private Button highlightButton;
     private Button renameButton;
-    private Button folderButton;
     private Button decompileButton;
 
     private Button newFolderButton;
@@ -96,6 +91,31 @@ public class NetworkManagerScreen
         rebuildVisibleNetworks();
     }
 
+    public void updateData(List<NetworkListS2CPacket.Entry> entries,
+                           List<NetworkListS2CPacket.FolderEntry> folders) {
+        java.util.Set<Integer> collapsed = new java.util.HashSet<>();
+        rememberCollapsed(rootFolder, collapsed);
+        this.entries.clear();
+        this.entries.addAll(entries);
+        this.folders.clear();
+        this.folders.addAll(folders);
+        buildFolderTree();
+        for (int id : collapsed) {
+            FolderNode node = findFolderNode(id);
+            if (node != null) node.toggleExpanded();
+        }
+        if (findFolderNode(selectedFolderId) == null) selectedFolderId = 0;
+        selectedNetwork = null;
+        clearDrag();
+        rebuildVisibleFolderRows();
+        rebuildVisibleNetworks();
+    }
+
+    private void rememberCollapsed(FolderNode node, java.util.Set<Integer> collapsed) {
+        if (!node.isExpanded()) collapsed.add(node.getId());
+        for (FolderNode child : node.getChildren()) rememberCollapsed(child, collapsed);
+    }
+
     // =========================================================
     // INIT
     // =========================================================
@@ -112,6 +132,7 @@ public class NetworkManagerScreen
         int buttonY = this.height - 28;
 
         int x = folderPanelWidth + 4;
+        int networkButtonWidth = (this.width - x - 16) / 3;
 
         highlightButton =
                 addRenderableWidget(
@@ -123,13 +144,13 @@ public class NetworkManagerScreen
                                 .bounds(
                                         x,
                                         buttonY,
-                                        70,
+                                        networkButtonWidth,
                                         20
                                 )
                                 .build()
                 );
 
-        x += 74;
+        x += networkButtonWidth + 4;
 
         renameButton =
                 addRenderableWidget(
@@ -141,31 +162,14 @@ public class NetworkManagerScreen
                                 .bounds(
                                         x,
                                         buttonY,
-                                        60,
+                                        networkButtonWidth,
                                         20
                                 )
                                 .build()
                 );
 
-        x += 64;
+        x += networkButtonWidth + 4;
 
-        folderButton =
-                addRenderableWidget(
-                        Button.builder(
-                                        Component.literal("Move Folder"),
-                                        button ->
-                                                folderSelected()
-                                )
-                                .bounds(
-                                        x,
-                                        buttonY,
-                                        82,
-                                        20
-                                )
-                                .build()
-                );
-
-        x += 86;
 
         decompileButton =
                 addRenderableWidget(
@@ -177,7 +181,7 @@ public class NetworkManagerScreen
                                 .bounds(
                                         x,
                                         buttonY,
-                                        74,
+                                        networkButtonWidth,
                                         20
                                 )
                                 .build()
@@ -227,6 +231,8 @@ public class NetworkManagerScreen
                                 )
                                 .build()
                 );
+
+        fx += folderButtonWidth + 4;
 
         deleteFolderButton =
                 addRenderableWidget(
@@ -447,12 +453,6 @@ public class NetworkManagerScreen
                 );
             }
 
-            if (networkFolder.equals(
-                    selectedFolder
-            )) {
-
-                visibleNetworks.add(entry);
-            }
         }
 
         visibleNetworks.sort(
@@ -477,34 +477,6 @@ public class NetworkManagerScreen
         updateButtonsSafe();
     }
 
-    private String normalizeFolder(
-            String folder
-    ) {
-
-        if (folder == null) {
-            return "";
-        }
-
-        folder = folder.trim()
-                .replace('\\', '/');
-
-        while (folder.startsWith("/")) {
-            folder = folder.substring(1);
-        }
-
-        while (folder.endsWith("/")
-                && !folder.isEmpty()) {
-
-            folder =
-                    folder.substring(
-                            0,
-                            folder.length() - 1
-                    );
-        }
-
-        return folder;
-    }
-
     // =========================================================
     // MOUSE
     // =========================================================
@@ -517,6 +489,7 @@ public class NetworkManagerScreen
     ) {
 
         if (button == 0) {
+            clearDrag();
 
             /*
              * LEFT FOLDER PANEL
@@ -564,8 +537,10 @@ public class NetworkManagerScreen
                     /*
                      * Клік по самій папці.
                      */
-                    selectedFolder =
-                            folder.getFullPath();
+                    selectedFolderId = folder.getId();
+                    if (selectedFolderId != 0) {
+                        startDrag(DragType.FOLDER, selectedFolderId, mouseX, mouseY);
+                    }
 
                     selectedNetwork = null;
 
@@ -600,6 +575,7 @@ public class NetworkManagerScreen
                                     index
                             );
 
+                    startDrag(DragType.NETWORK, selectedNetwork.id(), mouseX, mouseY);
                     updateButtons();
 
                     return true;
@@ -612,6 +588,78 @@ public class NetworkManagerScreen
                 mouseY,
                 button
         );
+    }
+
+    private enum DragType { NONE, NETWORK, FOLDER }
+
+    private DragType dragType = DragType.NONE;
+    private int dragId = -1;
+    private double dragStartX;
+    private double dragStartY;
+    private boolean dragging;
+
+    private void startDrag(DragType type, int id, double x, double y) {
+        dragType = type;
+        dragId = id;
+        dragStartX = x;
+        dragStartY = y;
+        dragging = false;
+    }
+
+    private void clearDrag() {
+        dragType = DragType.NONE;
+        dragId = -1;
+        dragging = false;
+    }
+
+    @Override
+    public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (button == 0 && dragType != DragType.NONE) {
+            double dx = mouseX - dragStartX;
+            double dy = mouseY - dragStartY;
+            if (dx * dx + dy * dy > 16.0D) dragging = true;
+            if (dragging) return true;
+        }
+        return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+    }
+
+    private FolderNode getFolderAt(double mouseX, double mouseY) {
+        if (mouseX < 7 || mouseX >= folderPanelWidth - 2 || mouseY < LIST_TOP) return null;
+        int index = (int) ((mouseY - LIST_TOP) / FOLDER_ROW_HEIGHT);
+        if (index < 0 || index >= visibleFolderRows.size()
+                || LIST_TOP + (index + 1) * FOLDER_ROW_HEIGHT > height - BOTTOM_MARGIN) return null;
+        return visibleFolderRows.get(index).node();
+    }
+
+    @Override
+    public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == 0 && dragging) {
+            FolderNode target = getFolderAt(mouseX, mouseY);
+            if (target != null) {
+                ModNetworking.CHANNEL.sendToServer(new NetworkActionC2SPacket(
+                        dragType == DragType.NETWORK
+                                ? NetworkActionC2SPacket.Action.MOVE_NETWORK
+                                : NetworkActionC2SPacket.Action.MOVE_FOLDER,
+                        dragId, target.getId(), ""));
+            }
+            clearDrag();
+            return true;
+        }
+        clearDrag();
+        return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    private FolderNode findFolderNode(int id) {
+        return findFolderRecursive(rootFolder, id);
+    }
+
+    private FolderNode findFolderRecursive(FolderNode node, int id) {
+        if (node.getId() == id) return node;
+        for (FolderNode child : node.getChildren()) {
+            FolderNode found = findFolderRecursive(child, id);
+            if (found != null) return found;
+        }
+        return null;
     }
 
     // =========================================================
@@ -632,7 +680,8 @@ public class NetworkManagerScreen
 
         highlightButton.active = active;
         renameButton.active = active;
-        folderButton.active = active;
+        renameFolderButton.active = selectedFolderId != 0;
+        deleteFolderButton.active = selectedFolderId != 0;
         decompileButton.active = active;
     }
 
@@ -663,29 +712,7 @@ public class NetworkManagerScreen
                                 selectedNetwork.name(),
                                 value ->
                                         sendAction(
-                                                NetworkActionC2SPacket.Action.RENAME,
-                                                value
-                                        )
-                        )
-                );
-    }
-
-    private void folderSelected() {
-
-        if (selectedNetwork == null) {
-            return;
-        }
-
-        Minecraft.getInstance()
-                .setScreen(
-                        new NetworkTextEditScreen(
-                                this,
-                                "Move Network",
-                                "Folder path:",
-                                selectedNetwork.folder(),
-                                value ->
-                                        sendAction(
-                                                NetworkActionC2SPacket.Action.FOLDER,
+                                                NetworkActionC2SPacket.Action.RENAME_NETWORK,
                                                 value
                                         )
                         )
@@ -805,6 +832,11 @@ public class NetworkManagerScreen
                 mouseY
         );
 
+        if (dragging) {
+            graphics.drawString(font, dragType == DragType.NETWORK ? "Move network" : "Move folder",
+                    mouseX + 10, mouseY + 10, 0xFFFFAA);
+        }
+
         super.render(
                 graphics,
                 mouseX,
@@ -832,9 +864,7 @@ public class NetworkManagerScreen
                     row.node();
 
             boolean selected =
-                    selectedFolder.equals(
-                            folder.getFullPath()
-                    );
+                    selectedFolderId == folder.getId();
 
             boolean hovered =
                     mouseX >= 7

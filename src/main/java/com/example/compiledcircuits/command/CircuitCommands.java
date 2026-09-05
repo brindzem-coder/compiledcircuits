@@ -253,7 +253,7 @@ public final class CircuitCommands {
                 new CompiledNetwork(
                         networkId,
                         defaultName,
-                        "",
+                        0,
                         dimension,
                         result.wires(),
                         result.inputs(),
@@ -448,9 +448,9 @@ public final class CircuitCommands {
         for (CompiledNetwork network : networks) {
 
             String folder =
-                    network.getFolder().isEmpty()
+                    network.getFolderId() == 0
                             ? "/"
-                            : network.getFolder();
+                            : savedData.getFolderPath(network.getFolderId());
 
             String state =
                     network.isPowered()
@@ -599,7 +599,11 @@ public final class CircuitCommands {
             return 0;
         }
 
-        network.setFolder(path);
+        int folderId = savedData.findFolderByPath(path);
+        if (!savedData.moveNetwork(id, folderId)) {
+            source.sendFailure(Component.literal("Folder does not exist. Create it in the Network Manager first."));
+            return 0;
+        }
 
         savedData.setDirty();
 
@@ -688,31 +692,7 @@ public final class CircuitCommands {
             return 0;
         }
 
-        NetworkSavedData savedData =
-                NetworkSavedData.get(source.getServer());
-
-        java.util.List<NetworkListS2CPacket.Entry> entries =
-                new java.util.ArrayList<>();
-
-        for (CompiledNetwork network : savedData.getNetworks()) {
-            entries.add(
-                    new NetworkListS2CPacket.Entry(
-                            network.getId(),
-                            network.getName(),
-                            network.getFolder(),
-                            network.getDimension(),
-                            network.isPowered(),
-                            network.getWires().size(),
-                            network.getInputs().size(),
-                            network.getOutputs().size()
-                    )
-            );
-        }
-
-        ModNetworking.CHANNEL.send(
-                PacketDistributor.PLAYER.with(() -> player),
-                new NetworkListS2CPacket(entries)
-        );
+        NetworkGuiSync.sendList(player);
 
         return 1;
     }

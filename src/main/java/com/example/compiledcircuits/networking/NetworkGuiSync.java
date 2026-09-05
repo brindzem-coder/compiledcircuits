@@ -1,6 +1,7 @@
 package com.example.compiledcircuits.networking;
 
 import com.example.compiledcircuits.network.CompiledNetwork;
+import com.example.compiledcircuits.network.CircuitFolder;
 import com.example.compiledcircuits.network.NetworkSavedData;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.PacketDistributor;
@@ -46,11 +47,6 @@ public final class NetworkGuiSync {
         List<NetworkListS2CPacket.FolderEntry> folders =
                 new ArrayList<>();
 
-        new NetworkListS2CPacket(
-                entries,
-                folders
-        )
-
         for (CircuitFolder folder
                 : savedData.getFolders()) {
 
@@ -74,7 +70,7 @@ public final class NetworkGuiSync {
                         () -> player
                 ),
                 new NetworkListS2CPacket(
-                        entries
+                        entries, folders
                 )
         );
     }

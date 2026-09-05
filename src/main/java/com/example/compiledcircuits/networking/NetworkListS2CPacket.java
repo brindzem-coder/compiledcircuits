@@ -16,9 +16,6 @@ public class NetworkListS2CPacket {
 
     public final List<FolderEntry> folders;
 
-    public NetworkListS2CPacket(List<Entry> entries) {
-        this.entries = entries;
-    }
 
     public static void encode(NetworkListS2CPacket packet, FriendlyByteBuf buf) {
         buf.writeInt(packet.entries.size());
@@ -49,16 +46,6 @@ public class NetworkListS2CPacket {
         List<Entry> entries = new ArrayList<>();
 
         for (int i = 0; i < size; i++) {
-            entries.add(new Entry(
-                    buf.readInt(),
-                    buf.readUtf(),
-                    buf.readUtf(),
-                    buf.readUtf(),
-                    buf.readBoolean(),
-                    buf.readInt(),
-                    buf.readInt(),
-                    buf.readInt()
-            ));
             entries.add(
                     new Entry(
                             buf.readInt(),

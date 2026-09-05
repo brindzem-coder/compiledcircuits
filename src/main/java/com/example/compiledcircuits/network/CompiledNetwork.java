@@ -94,10 +94,6 @@ public class CompiledNetwork {
         this.powered = powered;
     }
 
-    public void setFolder(String folder) {
-        this.folder = folder;
-    }
-
     public CompoundTag save() {
 
         CompoundTag tag = new CompoundTag();
@@ -121,9 +117,7 @@ public class CompiledNetwork {
         int id = tag.getInt("id");
         String name = tag.getString("name");
 
-        String folder = tag.contains("folder")
-                ? tag.getString("folder")
-                : "";
+        int folderId = tag.contains("folderId") ? tag.getInt("folderId") : 0;
 
         String dimension = tag.getString("dimension");
 
@@ -155,7 +149,7 @@ public class CompiledNetwork {
                 new CompiledNetwork(
                         id,
                         name,
-                        folder,
+                        folderId,
                         dimension,
                         wires,
                         inputs,
@@ -164,11 +158,6 @@ public class CompiledNetwork {
 
         network.powered =
                 tag.getBoolean("powered");
-
-        int folderId =
-                tag.contains("folderId")
-                        ? tag.getInt("folderId")
-                        : 0;
 
         return network;
     }

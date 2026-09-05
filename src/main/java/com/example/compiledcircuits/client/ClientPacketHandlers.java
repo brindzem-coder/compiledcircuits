@@ -11,6 +11,10 @@ public final class ClientPacketHandlers {
     }
 
     public static void openNetworkManager(NetworkListS2CPacket packet) {
+        if (Minecraft.getInstance().screen instanceof NetworkManagerScreen screen) {
+            screen.updateData(packet.entries, packet.folders);
+            return;
+        }
         Minecraft.getInstance().setScreen(
                 new NetworkManagerScreen(
                         packet.entries,

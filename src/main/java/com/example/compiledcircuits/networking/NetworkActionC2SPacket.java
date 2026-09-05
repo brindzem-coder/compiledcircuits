@@ -67,15 +67,6 @@ public class NetworkActionC2SPacket {
         );
     }
 
-    public NetworkActionC2SPacket(
-            Action action,
-            int networkId,
-            String value
-    ) {
-        this.action = action;
-        this.networkId = networkId;
-        this.value = value;
-    }
 
     public static void encode(
             NetworkActionC2SPacket packet,
@@ -124,7 +115,9 @@ public class NetworkActionC2SPacket {
                             packet.networkId
                     );
 
-            if (network == null) {
+            if (network == null && (packet.action == Action.HIGHLIGHT
+                    || packet.action == Action.RENAME_NETWORK
+                    || packet.action == Action.DECOMPILE)) {
 
                 player.sendSystemMessage(
                         Component.literal(
@@ -315,68 +308,6 @@ public class NetworkActionC2SPacket {
         data.setDirty();
 
         NetworkGuiSync.sendList(player);
-    }
-
-    private static void moveFolder(
-            ServerPlayer player,
-            NetworkSavedData data,
-            CompiledNetwork network,
-            String value
-    ) {
-
-        String folder =
-                normalizeFolder(value);
-
-        if (folder.length() > 256) {
-
-            player.sendSystemMessage(
-                    Component.literal(
-                            "Folder path is too long."
-                    )
-            );
-
-            return;
-        }
-
-        network.setFolder(folder);
-
-        data.setDirty();
-
-        NetworkGuiSync.sendList(player);
-    }
-
-    private static String normalizeFolder(
-            String path
-    ) {
-
-        path = path.trim();
-
-        if (path.equalsIgnoreCase("root")
-                || path.equals("/")) {
-            return "";
-        }
-
-        path =
-                path.replace('\\', '/');
-
-        while (path.contains("//")) {
-            path = path.replace("//", "/");
-        }
-
-        while (path.startsWith("/")) {
-            path = path.substring(1);
-        }
-
-        while (path.endsWith("/")
-                && !path.isEmpty()) {
-
-            path = path.substring(
-                    0,
-                    path.length() - 1
-            );
-        }
-
-        return path;
     }
 
     private static void decompile(

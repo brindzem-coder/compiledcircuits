@@ -39,6 +39,30 @@ public class NetworkSavedData extends SavedData {
         return folders.get(id);
     }
 
+    public String getFolderPath(int id) {
+        CircuitFolder folder = folders.get(id);
+        if (folder == null) return "";
+        String parent = getFolderPath(folder.getParentId());
+        return parent.isEmpty() ? folder.getName() : parent + "/" + folder.getName();
+    }
+
+    public int findFolderByPath(String path) {
+        int parentId = 0;
+        if (path.isEmpty()) return parentId;
+        for (String name : path.split("/")) {
+            int found = -1;
+            for (CircuitFolder folder : folders.values()) {
+                if (folder.getParentId() == parentId && folder.getName().equalsIgnoreCase(name)) {
+                    found = folder.getId();
+                    break;
+                }
+            }
+            if (found < 0) return -1;
+            parentId = found;
+        }
+        return parentId;
+    }
+
     public boolean folderExists(int id) {
         return id == 0 || folders.containsKey(id);
     }
