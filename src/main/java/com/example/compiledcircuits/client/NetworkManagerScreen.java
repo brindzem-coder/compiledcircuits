@@ -11,6 +11,7 @@ import com.example.compiledcircuits.networking.NetworkListS2CPacket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -25,8 +26,10 @@ public class NetworkManagerScreen
     // Layout
     // -------------------------
 
-    private static final int TOP = 35;
-    private static final int LIST_TOP = 52;
+    private static final int TOP = 55;
+    private static final int LIST_TOP = 72;
+    private static final int SEARCH_WIDTH = 190;
+    private static final int SEARCH_HEIGHT = 20;
     private static final int BOTTOM_MARGIN = 40;
 
     private static final int FOLDER_ROW_HEIGHT = 18;
@@ -75,6 +78,7 @@ public class NetworkManagerScreen
     private Button newFolderButton;
     private Button renameFolderButton;
     private Button deleteFolderButton;
+    private EditBox searchBox;
 
     private int selectedFolderId = 0;
     private int folderScroll = 0;
@@ -141,6 +145,15 @@ public class NetworkManagerScreen
                         140,
                         (int) (this.width * 0.38F)
                 );
+
+        String searchText = searchBox == null ? "" : searchBox.getValue();
+        int searchX = (this.width - SEARCH_WIDTH) / 2;
+        searchBox = new EditBox(this.font, searchX, 30, SEARCH_WIDTH, SEARCH_HEIGHT,
+                Component.literal("Search"));
+        searchBox.setHint(Component.literal("Search..."));
+        searchBox.setMaxLength(64);
+        searchBox.setValue(searchText);
+        addRenderableWidget(searchBox);
 
         int buttonY = this.height - 28;
 
@@ -785,7 +798,7 @@ public class NetworkManagerScreen
          */
         graphics.fill(
                 5,
-                30,
+                TOP,
                 this.width - 5,
                 this.height - 35,
                 0xAA111111
@@ -796,7 +809,7 @@ public class NetworkManagerScreen
          */
         graphics.fill(
                 7,
-                32,
+                TOP + 2,
                 folderPanelWidth - 2,
                 this.height - 37,
                 0xAA181818
@@ -807,7 +820,7 @@ public class NetworkManagerScreen
          */
         graphics.fill(
                 folderPanelWidth,
-                32,
+                TOP + 2,
                 folderPanelWidth + 1,
                 this.height - 37,
                 0xFF555555
@@ -825,7 +838,7 @@ public class NetworkManagerScreen
                 this.font,
                 "Folders (" + selectedFolderIds.size() + " selected)",
                 12,
-                37,
+                TOP + 2,
                 0xAAAAAA
         );
 
@@ -833,7 +846,7 @@ public class NetworkManagerScreen
                 this.font,
                 "Networks (" + selectedNetworkIds.size() + " selected)",
                 folderPanelWidth + 10,
-                37,
+                TOP + 2,
                 0xAAAAAA
         );
 
