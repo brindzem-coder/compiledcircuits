@@ -15,7 +15,7 @@ public final class NetworkGuiSync {
     private NetworkGuiSync() {
     }
 
-    public static void sendList(
+    public static NetworkListS2CPacket buildListPacket(
             ServerPlayer player
     ) {
 
@@ -65,13 +65,15 @@ public final class NetworkGuiSync {
                 )
         );
 
-        ModNetworking.CHANNEL.send(
-                PacketDistributor.PLAYER.with(
-                        () -> player
-                ),
-                new NetworkListS2CPacket(
-                        entries, folders
-                )
-        );
+        return new NetworkListS2CPacket(entries, folders);
+    }
+
+    public static void sendList(ServerPlayer player) {
+        ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), buildListPacket(player));
+    }
+
+    public static void sendListAndNavigate(ServerPlayer player, int networkId) {
+        ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                new OpenNetworkManagerAtS2CPacket(buildListPacket(player), networkId));
     }
 }

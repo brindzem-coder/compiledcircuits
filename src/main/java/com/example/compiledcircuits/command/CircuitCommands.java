@@ -1,6 +1,7 @@
 package com.example.compiledcircuits.command;
 
 import com.example.compiledcircuits.network.CompiledNetwork;
+import com.example.compiledcircuits.network.NetworkCompiler;
 import com.example.compiledcircuits.network.NetworkSavedData;
 import com.example.compiledcircuits.network.NetworkScanner;
 import com.example.compiledcircuits.network.NetworkSelectionData;
@@ -43,6 +44,9 @@ public final class CircuitCommands {
                                                 )
                                         )
                         )
+
+                        .then(Commands.literal("open_selected")
+                                .executes(context -> openSelectedNetwork(context.getSource())))
 
                         .then(Commands.literal("compile_named")
                                 .executes(context -> openCompileName(context.getSource())))
@@ -142,8 +146,37 @@ public final class CircuitCommands {
             source.sendFailure(Component.literal("No circuit selected."));
             return 0;
         }
+        CompiledNetwork conflict = NetworkCompiler.findSelectedConflict(player);
+        if (conflict != null) {
+            source.sendFailure(Component.literal("Cannot compile: part of this circuit already belongs to "
+                    + conflict.getName() + " (#" + conflict.getId() + ")."));
+            return 0;
+        }
         ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new OpenCompileNameS2CPacket());
+        return 1;
+    }
+
+    private static int openSelectedNetwork(CommandSourceStack source) {
+        ServerPlayer player;
+        try {
+            player = source.getPlayerOrException();
+        } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
+            source.sendFailure(Component.literal("This command must be used by a player."));
+            return 0;
+        }
+        BlockPos selectedPos = NetworkSelectionData.get(player);
+        if (selectedPos == null) {
+            source.sendFailure(Component.literal("No circuit selected."));
+            return 0;
+        }
+        CompiledNetwork network = NetworkSavedData.get(player.getServer())
+                .findNetworkContaining(player.serverLevel(), selectedPos);
+        if (network == null) {
+            source.sendFailure(Component.literal("Selected blocks do not belong to a compiled network."));
+            return 0;
+        }
+        NetworkGuiSync.sendListAndNavigate(player, network.getId());
         return 1;
     }
 

@@ -10,6 +10,15 @@ public final class NetworkCompiler {
     private NetworkCompiler() {
     }
 
+    public static CompiledNetwork findSelectedConflict(ServerPlayer player) {
+        BlockPos selectedPos = NetworkSelectionData.get(player);
+        if (selectedPos == null) return null;
+        ServerLevel level = player.serverLevel();
+        NetworkScanner.ScanResult scan = NetworkScanner.scan(level, selectedPos);
+        if (!scan.success() || scan.totalSize() <= 0) return null;
+        return NetworkSavedData.get(player.getServer()).findConflict(level, scan);
+    }
+
     public static boolean compileSelected(
             ServerPlayer player,
             String requestedName

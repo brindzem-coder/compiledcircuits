@@ -91,6 +91,7 @@ public class NetworkManagerScreen
     private final List<SearchResult> searchResults = new ArrayList<>();
     private int searchScroll = 0;
 
+    private Integer initialNavigateNetworkId;
     private int selectedFolderId = 0;
     private int folderScroll = 0;
     private int networkScroll = 0;
@@ -99,13 +100,19 @@ public class NetworkManagerScreen
             List<NetworkListS2CPacket.Entry> entries,
             List<NetworkListS2CPacket.FolderEntry> folders
     ) {
+        this(entries, folders, null);
+    }
 
+    public NetworkManagerScreen(List<NetworkListS2CPacket.Entry> entries,
+                                List<NetworkListS2CPacket.FolderEntry> folders,
+                                Integer initialNavigateNetworkId) {
         super(
                 Component.literal(
                         "Network Manager"
                 )
         );
 
+        this.initialNavigateNetworkId = initialNavigateNetworkId;
         this.entries =
                 new ArrayList<>(entries);
 
@@ -317,6 +324,11 @@ public class NetworkManagerScreen
         rebuildSearchResults();
         updateButtons();
         clampScrolls();
+        if (initialNavigateNetworkId != null) {
+            int target = initialNavigateNetworkId;
+            initialNavigateNetworkId = null;
+            navigateToNetwork(target);
+        }
     }
 
     // =========================================================
