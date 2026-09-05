@@ -47,6 +47,10 @@ public class FolderNode {
         return expanded;
     }
 
+    public void setExpanded(boolean expanded) {
+        this.expanded = expanded;
+    }
+
     public void toggleExpanded() {
         expanded = !expanded;
     }

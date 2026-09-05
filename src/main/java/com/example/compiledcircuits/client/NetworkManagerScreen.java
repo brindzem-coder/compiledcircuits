@@ -588,8 +588,7 @@ public class NetworkManagerScreen
         if (isSearchMode()) {
             SearchResult result = getSearchResultAt(mouseX, mouseY);
             if (result != null) {
-                if (result.type() == SearchResultType.NETWORK) selectNetworkItem(result.id(), shift);
-                else selectFolderItem(result.id(), shift);
+                activateSearchResult(result, shift);
                 return true;
             }
             // Hidden folder/network rows must never receive search-mode clicks.
@@ -765,6 +764,101 @@ public class NetworkManagerScreen
             return true;
         }
         return super.mouseReleased(mouseX, mouseY, button);
+    }
+
+    private void activateSearchResult(SearchResult result, boolean shift) {
+        if (shift) {
+            if (result.type() == SearchResultType.NETWORK) selectNetworkItem(result.id(), true);
+            else selectFolderItem(result.id(), true);
+        } else if (result.type() == SearchResultType.NETWORK) {
+            navigateToNetwork(result.id());
+        } else {
+            navigateToFolder(result.id());
+        }
+    }
+
+    private void expandPathToFolder(int folderId) {
+        Set<Integer> visited = new HashSet<>();
+        int current = folderId;
+        rootFolder.setExpanded(true);
+        while (current != 0 && visited.add(current) && visited.size() <= 1024) {
+            FolderNode folder = findFolderNode(current);
+            if (folder == null) break;
+            folder.setExpanded(true);
+            current = folder.getParentId();
+        }
+        rebuildVisibleFolderRows();
+    }
+
+    private int findVisibleFolderRowIndex(int folderId) {
+        for (int i = 0; i < visibleFolderRows.size(); i++) {
+            if (visibleFolderRows.get(i).node().getId() == folderId) return i;
+        }
+        return -1;
+    }
+
+    private void scrollFolderIntoView(int folderId) {
+        int index = findVisibleFolderRowIndex(folderId);
+        if (index < 0) return;
+        int count = getVisibleFolderRowCount();
+        if (index < folderScroll) folderScroll = index;
+        else if (index >= folderScroll + count) folderScroll = index - count + 1;
+        clampScrolls();
+    }
+
+    private int findVisibleNetworkIndex(int networkId) {
+        for (int i = 0; i < visibleNetworks.size(); i++) {
+            if (visibleNetworks.get(i).id() == networkId) return i;
+        }
+        return -1;
+    }
+
+    private void scrollNetworkIntoView(int networkId) {
+        int index = findVisibleNetworkIndex(networkId);
+        if (index < 0) return;
+        int count = getVisibleNetworkRowCount();
+        if (index < networkScroll) networkScroll = index;
+        else if (index >= networkScroll + count) networkScroll = index - count + 1;
+        clampScrolls();
+    }
+
+    private void exitSearchMode() {
+        clearDrag();
+        if (searchBox != null) {
+            searchBox.setValue("");
+            searchBox.setFocused(false);
+            if (getFocused() == searchBox) setFocused(null);
+        }
+        searchResults.clear();
+        searchScroll = 0;
+    }
+
+    private void navigateToFolder(int folderId) {
+        if (folderId == 0 || findFolderNode(folderId) == null) return;
+        expandPathToFolder(folderId);
+        selectedFolderId = folderId;
+        networkScroll = 0;
+        rebuildVisibleNetworks();
+        selectFolderItem(folderId, false);
+        exitSearchMode();
+        scrollFolderIntoView(folderId);
+        updateButtonsSafe();
+    }
+
+    private void navigateToNetwork(int networkId) {
+        NetworkListS2CPacket.Entry target = entries.stream()
+                .filter(entry -> entry.id() == networkId).findFirst().orElse(null);
+        if (target == null || findFolderNode(target.folderId()) == null) return;
+        // Expand root as well, including when navigating to a root network.
+        expandPathToFolder(target.folderId());
+        selectedFolderId = target.folderId();
+        networkScroll = 0;
+        rebuildVisibleNetworks();
+        selectNetworkItem(networkId, false);
+        exitSearchMode();
+        scrollFolderIntoView(target.folderId());
+        scrollNetworkIntoView(networkId);
+        updateButtonsSafe();
     }
 
     private FolderNode findFolderNode(int id) {
