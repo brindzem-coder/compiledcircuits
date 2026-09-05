@@ -1,0 +1,6 @@
+{
+  "block.compiledcircuits.basic_wire": "Базовий дріт",
+  "block.compiledcircuits.input_endpoint": "Вхід",
+  "block.compiledcircuits.output_endpoint": "Вихід",
+  "item.compiledcircuits.network_selector": "Вибирач"
+}

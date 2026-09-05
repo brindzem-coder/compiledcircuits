@@ -1,0 +1,27 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "compiledcircuits:block/output_endpoint"
+    },
+    "facing=south": {
+      "model": "compiledcircuits:block/output_endpoint",
+      "y": 180
+    },
+    "facing=east": {
+      "model": "compiledcircuits:block/output_endpoint",
+      "y": 90
+    },
+    "facing=west": {
+      "model": "compiledcircuits:block/output_endpoint",
+      "y": 270
+    },
+    "facing=up": {
+      "model": "compiledcircuits:block/output_endpoint",
+      "x": 270
+    },
+    "facing=down": {
+      "model": "compiledcircuits:block/output_endpoint",
+      "x": 90
+    }
+  }
+}

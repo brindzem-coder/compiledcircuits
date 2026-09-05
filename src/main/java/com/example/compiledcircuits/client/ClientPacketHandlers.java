@@ -1,0 +1,34 @@
+package com.example.compiledcircuits.client;
+
+import com.example.compiledcircuits.networking.NetworkListS2CPacket;
+import net.minecraft.client.Minecraft;
+
+import com.example.compiledcircuits.networking.NetworkHighlightS2CPacket;
+
+public final class ClientPacketHandlers {
+
+    private ClientPacketHandlers() {
+    }
+
+    public static void openNetworkManager(NetworkListS2CPacket packet) {
+        Minecraft.getInstance().setScreen(
+                new NetworkManagerScreen(
+                        packet.entries,
+                        packet.folders
+                )
+        );
+    }
+
+    public static void handleHighlight(
+            NetworkHighlightS2CPacket packet
+    ) {
+
+        ClientNetworkSelection.setSelection(
+                packet.getWires(),
+                packet.getInputs(),
+                packet.getOutputs()
+        );
+
+        Minecraft.getInstance().setScreen(null);
+    }
+}

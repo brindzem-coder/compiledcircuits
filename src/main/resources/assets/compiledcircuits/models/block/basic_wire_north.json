@@ -1,0 +1,20 @@
+{
+  "textures": {
+    "wire": "compiledcircuits:block/basic_wire",
+    "particle": "compiledcircuits:block/basic_wire"
+  },
+  "elements": [
+    {
+      "from": [5.5, 5.5, 0],
+      "to": [10.5, 10.5, 5.5],
+      "faces": {
+        "down": { "texture": "#wire" },
+        "up": { "texture": "#wire" },
+        "north": { "texture": "#wire" },
+        "south": { "texture": "#wire" },
+        "west": { "texture": "#wire" },
+        "east": { "texture": "#wire" }
+      }
+    }
+  ]
+}

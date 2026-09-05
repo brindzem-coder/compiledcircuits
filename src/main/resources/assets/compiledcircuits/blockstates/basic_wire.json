@@ -1,0 +1,63 @@
+{
+  "multipart": [
+    {
+      "apply": {
+        "model": "compiledcircuits:block/basic_wire_center"
+      }
+    },
+
+    {
+      "when": {
+        "north": "true"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/basic_wire_north"
+      }
+    },
+
+    {
+      "when": {
+        "south": "true"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/basic_wire_south"
+      }
+    },
+
+    {
+      "when": {
+        "west": "true"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/basic_wire_west"
+      }
+    },
+
+    {
+      "when": {
+        "east": "true"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/basic_wire_east"
+      }
+    },
+
+    {
+      "when": {
+        "up": "true"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/basic_wire_up"
+      }
+    },
+
+    {
+      "when": {
+        "down": "true"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/basic_wire_down"
+      }
+    }
+  ]
+}
