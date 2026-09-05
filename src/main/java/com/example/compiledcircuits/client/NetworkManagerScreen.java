@@ -27,7 +27,7 @@ public class NetworkManagerScreen
     // -------------------------
 
     private static final int TOP = 55;
-    private static final int LIST_TOP = 72;
+    private static final int LIST_TOP = 92;
     private static final int SEARCH_WIDTH = 190;
     private static final int SEARCH_HEIGHT = 20;
     private static final int SEARCH_ROW_HEIGHT = 30;
@@ -151,6 +151,7 @@ public class NetworkManagerScreen
 
     @Override
     protected void init() {
+        clearDrag();
 
         folderPanelWidth =
                 Math.max(
@@ -588,7 +589,8 @@ public class NetworkManagerScreen
         if (isSearchMode()) {
             SearchResult result = getSearchResultAt(mouseX, mouseY);
             if (result != null) {
-                activateSearchResult(result, shift);
+                if (shift) beginSearchPaintSelection(result, mouseX, mouseY);
+                else activateSearchResult(result, false);
                 return true;
             }
             // Hidden folder/network rows must never receive search-mode clicks.
@@ -666,7 +668,57 @@ public class NetworkManagerScreen
         }
     }
 
+    private boolean searchPaintSelecting;
+    private SelectionType searchPaintSelectionType = SelectionType.NONE;
+    private final Set<Integer> searchPaintVisitedIds = new HashSet<>();
+    private double searchPaintLastX;
+    private double searchPaintLastY;
+
+    private void beginSearchPaintSelection(SearchResult result, double x, double y) {
+        searchPaintSelecting = true;
+        searchPaintSelectionType = result.type() == SearchResultType.NETWORK
+                ? SelectionType.NETWORKS : SelectionType.FOLDERS;
+        searchPaintVisitedIds.clear();
+        activateSearchResult(result, true);
+        searchPaintVisitedIds.add(result.id());
+        searchPaintLastX = x;
+        searchPaintLastY = y;
+    }
+
+    private void addSearchResultToPaintSelection(SearchResult result) {
+        if (!searchPaintSelecting || result == null) return;
+        SelectionType type = result.type() == SearchResultType.NETWORK
+                ? SelectionType.NETWORKS : SelectionType.FOLDERS;
+        // IDs are separate namespaces: ignore the other type before marking an ID visited.
+        if (type != searchPaintSelectionType || (type == SelectionType.FOLDERS && result.id() == 0)
+                || !searchPaintVisitedIds.add(result.id())) return;
+        if (selectionType != type) clearSelection();
+        selectionType = type;
+        if (type == SelectionType.NETWORKS) selectedNetworkIds.add(result.id());
+        else selectedFolderIds.add(result.id());
+        updateButtonsSafe();
+    }
+
+    private void paintSearchTo(double x, double y, boolean shift) {
+        if (shift && isSearchMode()) {
+            // Sample the travelled segment so fast movement does not skip complete rows.
+            int steps = Math.max(1, (int) Math.ceil(Math.max(Math.abs(x - searchPaintLastX),
+                    Math.abs(y - searchPaintLastY)) / 8.0D));
+            for (int i = 1; i <= steps; i++) {
+                double fraction = (double) i / steps;
+                addSearchResultToPaintSelection(getSearchResultAt(
+                        searchPaintLastX + (x - searchPaintLastX) * fraction,
+                        searchPaintLastY + (y - searchPaintLastY) * fraction));
+            }
+        }
+        searchPaintLastX = x;
+        searchPaintLastY = y;
+    }
+
     private void clearDrag() {
+        searchPaintSelecting = false;
+        searchPaintSelectionType = SelectionType.NONE;
+        searchPaintVisitedIds.clear();
         dragType = DragType.NONE;
         dragId = -1;
         dragging = false;
@@ -717,6 +769,10 @@ public class NetworkManagerScreen
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (button == 0 && searchPaintSelecting) {
+            paintSearchTo(mouseX, mouseY, Screen.hasShiftDown());
+            return true;
+        }
         if (button == 0 && shiftPaintSelecting) {
             if (Screen.hasShiftDown()) paintTo(mouseX, mouseY);
             else {
@@ -742,7 +798,7 @@ public class NetworkManagerScreen
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
-        if (button == 0 && shiftPaintSelecting) {
+        if (button == 0 && (searchPaintSelecting || shiftPaintSelecting)) {
             clearDrag();
             return true;
         }
@@ -993,11 +1049,16 @@ public class NetworkManagerScreen
 
             graphics.drawString(
                     this.font,
-                    "Networks (" + selectedNetworkIds.size() + " selected)",
+                    "Networks",
                     folderPanelWidth + 10,
                     TOP + 2,
                     0xAAAAAA
             );
+
+            graphics.drawString(font, "Folder: " + getFolderPath(selectedFolderId),
+                    folderPanelWidth + 10, TOP + 13, 0x999999, false);
+            graphics.drawString(font, "Selected networks: " + selectedNetworkIds.size(),
+                    folderPanelWidth + 10, TOP + 24, 0x999999, false);
 
             renderFolderTree(
                     graphics,
@@ -1097,6 +1158,7 @@ public class NetworkManagerScreen
     }
 
     private SearchResult getSearchResultAt(double x, double y) {
+        if (!isSearchMode()) return null;
         if (x < 10 || x > width - 10 || y < LIST_TOP) return null;
         int row = (int) ((y - LIST_TOP) / SEARCH_ROW_HEIGHT);
         int index = searchScroll + row;
@@ -1373,6 +1435,12 @@ public class NetworkManagerScreen
     // =========================================================
     // ETC
     // =========================================================
+
+    @Override
+    public void removed() {
+        clearDrag();
+        super.removed();
+    }
 
     @Override
     public boolean isPauseScreen() {
