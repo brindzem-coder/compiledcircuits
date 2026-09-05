@@ -30,6 +30,7 @@ public class NetworkManagerScreen
     private static final int LIST_TOP = 72;
     private static final int SEARCH_WIDTH = 190;
     private static final int SEARCH_HEIGHT = 20;
+    private static final int SEARCH_ROW_HEIGHT = 30;
     private static final int BOTTOM_MARGIN = 40;
 
     private static final int FOLDER_ROW_HEIGHT = 18;
@@ -79,6 +80,8 @@ public class NetworkManagerScreen
     private Button renameFolderButton;
     private Button deleteFolderButton;
     private EditBox searchBox;
+    private final List<NetworkListS2CPacket.Entry> searchResults = new ArrayList<>();
+    private int searchScroll = 0;
 
     private int selectedFolderId = 0;
     private int folderScroll = 0;
@@ -126,6 +129,7 @@ public class NetworkManagerScreen
         clearDrag();
         rebuildVisibleFolderRows();
         rebuildVisibleNetworks();
+        rebuildSearchResults();
     }
 
     private void rememberCollapsed(FolderNode node, java.util.Set<Integer> collapsed) {
@@ -153,6 +157,12 @@ public class NetworkManagerScreen
         searchBox.setHint(Component.literal("Search..."));
         searchBox.setMaxLength(64);
         searchBox.setValue(searchText);
+        searchBox.setResponder(value -> {
+            searchScroll = 0;
+            clearDrag();
+            rebuildSearchResults();
+            updateButtonsSafe();
+        });
         addRenderableWidget(searchBox);
 
         int buttonY = this.height - 28;
@@ -290,6 +300,7 @@ public class NetworkManagerScreen
                         .build()
         );
 
+        rebuildSearchResults();
         updateButtons();
         clampScrolls();
     }
@@ -478,10 +489,20 @@ public class NetworkManagerScreen
     private void clampScrolls() {
         folderScroll = Math.max(0, Math.min(folderScroll, getMaxFolderScroll()));
         networkScroll = Math.max(0, Math.min(networkScroll, getMaxNetworkScroll()));
+        clampSearchScroll();
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        if (isSearchMode()) {
+            if (mouseX >= 10 && mouseX <= width - 10
+                    && mouseY >= LIST_TOP && mouseY < height - BOTTOM_MARGIN) {
+                searchScroll += delta > 0 ? -1 : delta < 0 ? 1 : 0;
+                clampSearchScroll();
+                return true;
+            }
+            return super.mouseScrolled(mouseX, mouseY, delta);
+        }
         if (mouseY >= LIST_TOP && mouseY < this.height - BOTTOM_MARGIN) {
             int step = delta > 0 ? -1 : delta < 0 ? 1 : 0;
             if (mouseX >= 7 && mouseX < folderPanelWidth - 2) {
@@ -551,6 +572,20 @@ public class NetworkManagerScreen
         if (button != 0) return super.mouseClicked(mouseX, mouseY, button);
         clearDrag();
         boolean shift = Screen.hasShiftDown();
+        if (isSearchMode()) {
+            NetworkListS2CPacket.Entry result = getSearchResultAt(mouseX, mouseY);
+            if (result != null) {
+                selectNetworkItem(result.id(), shift);
+                return true;
+            }
+            // Hidden folder/network rows must never receive search-mode clicks.
+            if (mouseX >= 10 && mouseX <= width - 10
+                    && mouseY >= LIST_TOP && mouseY < height - BOTTOM_MARGIN) {
+                if (!shift) clearSelection();
+                return true;
+            }
+            return super.mouseClicked(mouseX, mouseY, button);
+        }
         int folderIndex = getFolderIndexAt(mouseX, mouseY);
         if (folderIndex >= 0) {
             VisibleFolderRow row = visibleFolderRows.get(folderIndex);
@@ -745,12 +780,12 @@ public class NetworkManagerScreen
     private void updateButtons() {
         boolean networks = selectionType == SelectionType.NETWORKS && !selectedNetworkIds.isEmpty();
         boolean folders = selectionType == SelectionType.FOLDERS && !selectedFolderIds.isEmpty();
-        newFolderButton.active = true;
+        newFolderButton.active = !isSearchMode();
         highlightButton.active = networks;
         renameButton.active = networks && selectedNetworkIds.size() == 1;
         decompileButton.active = networks;
-        renameFolderButton.active = folders && selectedFolderIds.size() == 1;
-        deleteFolderButton.active = folders;
+        renameFolderButton.active = !isSearchMode() && folders && selectedFolderIds.size() == 1;
+        deleteFolderButton.active = !isSearchMode() && folders;
     }
 
     private void highlightSelected() {
@@ -804,27 +839,29 @@ public class NetworkManagerScreen
                 0xAA111111
         );
 
-        /*
-         * Left folder background.
-         */
-        graphics.fill(
-                7,
-                TOP + 2,
-                folderPanelWidth - 2,
-                this.height - 37,
-                0xAA181818
-        );
+        if (!isSearchMode()) {
+            /*
+             * Left folder background.
+             */
+            graphics.fill(
+                    7,
+                    TOP + 2,
+                    folderPanelWidth - 2,
+                    this.height - 37,
+                    0xAA181818
+            );
 
-        /*
-         * Separator.
-         */
-        graphics.fill(
-                folderPanelWidth,
-                TOP + 2,
-                folderPanelWidth + 1,
-                this.height - 37,
-                0xFF555555
-        );
+            /*
+             * Separator.
+             */
+            graphics.fill(
+                    folderPanelWidth,
+                    TOP + 2,
+                    folderPanelWidth + 1,
+                    this.height - 37,
+                    0xFF555555
+            );
+        }
 
         graphics.drawCenteredString(
                 this.font,
@@ -834,33 +871,38 @@ public class NetworkManagerScreen
                 0xFFFFFF
         );
 
-        graphics.drawString(
-                this.font,
-                "Folders (" + selectedFolderIds.size() + " selected)",
-                12,
-                TOP + 2,
-                0xAAAAAA
-        );
+        if (isSearchMode()) {
+            graphics.drawString(font, "Search Results", 12, TOP + 2, 0xAAAAAA);
+            renderSearchResults(graphics, mouseX, mouseY);
+        } else {
+            graphics.drawString(
+                    this.font,
+                    "Folders (" + selectedFolderIds.size() + " selected)",
+                    12,
+                    TOP + 2,
+                    0xAAAAAA
+            );
 
-        graphics.drawString(
-                this.font,
-                "Networks (" + selectedNetworkIds.size() + " selected)",
-                folderPanelWidth + 10,
-                TOP + 2,
-                0xAAAAAA
-        );
+            graphics.drawString(
+                    this.font,
+                    "Networks (" + selectedNetworkIds.size() + " selected)",
+                    folderPanelWidth + 10,
+                    TOP + 2,
+                    0xAAAAAA
+            );
 
-        renderFolderTree(
-                graphics,
-                mouseX,
-                mouseY
-        );
+            renderFolderTree(
+                    graphics,
+                    mouseX,
+                    mouseY
+            );
 
-        renderNetworks(
-                graphics,
-                mouseX,
-                mouseY
-        );
+            renderNetworks(
+                    graphics,
+                    mouseX,
+                    mouseY
+            );
+        }
 
         if (dragging) {
             graphics.drawString(font, dragType == DragType.NETWORK
@@ -875,6 +917,92 @@ public class NetworkManagerScreen
                 mouseY,
                 partialTick
         );
+    }
+
+    private boolean isSearchMode() {
+        return searchBox != null && !searchBox.getValue().trim().isEmpty();
+    }
+
+    private void rebuildSearchResults() {
+        searchResults.clear();
+        if (!isSearchMode()) {
+            searchScroll = 0;
+            return;
+        }
+        String query = searchBox.getValue().trim().toLowerCase(java.util.Locale.ROOT);
+        for (NetworkListS2CPacket.Entry entry : entries) {
+            if (entry.name().toLowerCase(java.util.Locale.ROOT).contains(query)) searchResults.add(entry);
+        }
+        searchResults.sort(Comparator.comparingInt(NetworkListS2CPacket.Entry::id));
+        clampSearchScroll();
+    }
+
+    private int getVisibleSearchRowCount() {
+        return Math.max(1, (height - BOTTOM_MARGIN - LIST_TOP) / SEARCH_ROW_HEIGHT);
+    }
+
+    private int getMaxSearchScroll() {
+        return Math.max(0, searchResults.size() - getVisibleSearchRowCount());
+    }
+
+    private void clampSearchScroll() {
+        searchScroll = Math.max(0, Math.min(searchScroll, getMaxSearchScroll()));
+    }
+
+    private NetworkListS2CPacket.Entry getSearchResultAt(double x, double y) {
+        if (x < 10 || x > width - 10 || y < LIST_TOP) return null;
+        int row = (int) ((y - LIST_TOP) / SEARCH_ROW_HEIGHT);
+        int index = searchScroll + row;
+        if (row >= getVisibleSearchRowCount()
+                || LIST_TOP + (row + 1) * SEARCH_ROW_HEIGHT > height - BOTTOM_MARGIN
+                || index >= searchResults.size()) return null;
+        return searchResults.get(index);
+    }
+
+    private String getFolderPath(int folderId) {
+        List<String> parts = new ArrayList<>();
+        Set<Integer> visited = new HashSet<>();
+        int current = folderId;
+        while (current != 0 && visited.add(current) && visited.size() <= 1024) {
+            int id = current;
+            NetworkListS2CPacket.FolderEntry folder = folders.stream()
+                    .filter(entry -> entry.id() == id).findFirst().orElse(null);
+            if (folder == null) break;
+            parts.add(folder.name());
+            current = folder.parentId();
+        }
+        java.util.Collections.reverse(parts);
+        return parts.isEmpty() ? "/" : String.join("/", parts);
+    }
+
+    private void renderSearchResults(GuiGraphics graphics, int mouseX, int mouseY) {
+        int left = 10;
+        int right = width - 10;
+        int rowY = LIST_TOP;
+        if (searchResults.isEmpty()) {
+            graphics.drawString(font, "No results.", left + 5, rowY + 6, 0x888888, false);
+            return;
+        }
+        int end = Math.min(searchResults.size(), searchScroll + getVisibleSearchRowCount());
+        for (int i = searchScroll; i < end; i++) {
+            if (rowY + SEARCH_ROW_HEIGHT > height - BOTTOM_MARGIN) break;
+            NetworkListS2CPacket.Entry entry = searchResults.get(i);
+            boolean selected = selectedNetworkIds.contains(entry.id());
+            boolean hovered = mouseX >= left && mouseX <= right
+                    && mouseY >= rowY && mouseY < rowY + SEARCH_ROW_HEIGHT;
+            if (selected || hovered) {
+                graphics.fill(left, rowY, right, rowY + SEARCH_ROW_HEIGHT - 2,
+                        selected ? 0x663399FF : 0x33222222);
+            }
+            String title = "#" + entry.id() + "  " + entry.name();
+            graphics.drawString(font, font.plainSubstrByWidth(title, Math.max(0, right - left - 52)),
+                    left + 6, rowY + 4, 0xFFFFFF, false);
+            graphics.drawString(font, entry.powered() ? "[ON]" : "[OFF]", right - 38,
+                    rowY + 4, entry.powered() ? 0x55FF55 : 0xFF5555, false);
+            graphics.drawString(font, font.plainSubstrByWidth(getFolderPath(entry.folderId()),
+                    Math.max(0, right - left - 12)), left + 6, rowY + 17, 0x999999, false);
+            rowY += SEARCH_ROW_HEIGHT;
+        }
     }
 
     private void renderFolderTree(
