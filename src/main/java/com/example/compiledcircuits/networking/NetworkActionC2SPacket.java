@@ -317,6 +317,7 @@ public class NetworkActionC2SPacket {
     ) {
 
         data.removeNetwork(network.getId());
+        BrokenElementSync.syncRemovedNetworks(player.getServer(), java.util.List.of(network));
         updateRemovedNetworkOutputs(player, network);
         NetworkGuiSync.sendList(player);
     }

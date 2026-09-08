@@ -467,6 +467,8 @@ public final class CircuitCommands {
          * Треба повідомити vanilla blocks навколо нього,
          * щоб лампи/redstone тощо оновились.
          */
+        com.example.compiledcircuits.networking.BrokenElementSync.broadcastDimension(level);
+
         for (BlockPos outputPos : outputs) {
 
             if (!level.hasChunkAt(outputPos)) {

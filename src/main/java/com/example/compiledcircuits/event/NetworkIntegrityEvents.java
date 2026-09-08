@@ -16,6 +16,27 @@ public final class NetworkIntegrityEvents {
     private NetworkIntegrityEvents() {}
 
     @SubscribeEvent
+    public static void onPlayerLogin(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+            com.example.compiledcircuits.networking.BrokenElementSync.sendToPlayer(player);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onPlayerChangedDimension(net.minecraftforge.event.entity.player.PlayerEvent.PlayerChangedDimensionEvent event) {
+        if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+            com.example.compiledcircuits.networking.BrokenElementSync.sendToPlayer(player);
+        }
+    }
+
+    @SubscribeEvent
+    public static void onPlayerRespawn(net.minecraftforge.event.entity.player.PlayerEvent.PlayerRespawnEvent event) {
+        if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+            com.example.compiledcircuits.networking.BrokenElementSync.sendToPlayer(player);
+        }
+    }
+
+    @SubscribeEvent
     public static void onBlockBreak(BlockEvent.BreakEvent event) {
         if (event.getLevel() instanceof ServerLevel level) {
             NetworkIntegrityManager.scheduleCheck(level, event.getPos());

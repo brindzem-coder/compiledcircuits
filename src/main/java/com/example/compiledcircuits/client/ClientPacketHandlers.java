@@ -13,6 +13,10 @@ public final class ClientPacketHandlers {
     private ClientPacketHandlers() {
     }
 
+    public static void handleBrokenElements(com.example.compiledcircuits.networking.BrokenElementsS2CPacket packet) {
+        ClientBrokenElements.setBroken(packet.getDimension(), packet.getPositions());
+    }
+
     public static void openCompileNameScreen() {
         Minecraft.getInstance().setScreen(new NetworkTextEditScreen(
                 null, "Compile Network", "Network name:", "",

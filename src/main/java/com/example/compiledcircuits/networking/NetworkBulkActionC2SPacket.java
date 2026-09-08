@@ -85,6 +85,7 @@ public class NetworkBulkActionC2SPacket {
                 case DECOMPILE_NETWORKS -> {
                     List<CompiledNetwork> removed = data.removeNetworks(packet.ids);
                     success = !removed.isEmpty();
+                    BrokenElementSync.syncRemovedNetworks(player.getServer(), removed);
                     // Remove the entire selection before notifying any neighbors.
                     for (CompiledNetwork network : removed) {
                         NetworkActionC2SPacket.updateRemovedNetworkOutputs(player, network);
