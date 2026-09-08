@@ -1,18 +1,23 @@
 package com.example.compiledcircuits.client;
 
 import com.example.compiledcircuits.CompiledCircuits;
+import com.mojang.blaze3d.systems.RenderSystem;
+import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.debug.DebugRenderer;
+import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.core.BlockPos;
-import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RenderLevelStageEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
+import org.joml.Matrix4f;
 
 @Mod.EventBusSubscriber(
         modid = CompiledCircuits.MOD_ID,
@@ -21,30 +26,38 @@ import net.minecraftforge.fml.common.Mod;
 public class NetworkSelectionRenderer {
 
     /*
-     * Wire:
-     * cyan / blue
+     * Wire — cyan / blue
      */
     private static final float WIRE_R = 0.15F;
     private static final float WIRE_G = 0.75F;
     private static final float WIRE_B = 1.00F;
 
     /*
-     * Input:
-     * bright green
+     * Input — bright green
      */
     private static final float INPUT_R = 0.20F;
     private static final float INPUT_G = 1.00F;
     private static final float INPUT_B = 0.25F;
 
     /*
-     * Output:
-     * orange
+     * Output — orange
      */
     private static final float OUTPUT_R = 1.00F;
     private static final float OUTPUT_G = 0.45F;
     private static final float OUTPUT_B = 0.10F;
 
-    private static final float ALPHA = 0.22F;
+    /*
+     * Загальна прозорість.
+     *
+     * Можеш потім спробувати:
+     * 0.35F — слабше
+     * 0.45F — нормальна яскравість
+     * 0.60F — дуже яскраво
+     */
+    private static final float ALPHA = 0.45F;
+
+    private static final double MIN_OFFSET = 0.03D;
+    private static final double MAX_OFFSET = 0.97D;
 
     @SubscribeEvent
     public static void onRenderLevelStage(
@@ -60,25 +73,28 @@ public class NetworkSelectionRenderer {
             return;
         }
 
-        Minecraft minecraft = Minecraft.getInstance();
+        Minecraft minecraft =
+                Minecraft.getInstance();
 
         if (minecraft.level == null) {
             return;
         }
 
-        PoseStack poseStack = event.getPoseStack();
+        PoseStack poseStack =
+                event.getPoseStack();
 
-        Camera camera = minecraft.gameRenderer.getMainCamera();
-        Vec3 cameraPos = camera.getPosition();
+        Camera camera =
+                minecraft.gameRenderer
+                        .getMainCamera();
 
-        MultiBufferSource.BufferSource bufferSource =
-                minecraft.renderBuffers().bufferSource();
+        Vec3 cameraPos =
+                camera.getPosition();
 
         poseStack.pushPose();
 
         /*
-         * BlockPos/AABB мають world coordinates,
-         * тому переносимо систему координат відносно camera.
+         * Наші BlockPos — world coordinates.
+         * Переводимо їх відносно camera.
          */
         poseStack.translate(
                 -cameraPos.x,
@@ -86,11 +102,68 @@ public class NetworkSelectionRenderer {
                 -cameraPos.z
         );
 
-        for (BlockPos pos : ClientNetworkSelection.getWires()) {
+        /*
+         * -------------------------------------------------
+         * X-RAY RENDER STATE
+         * -------------------------------------------------
+         */
 
-            renderBox(
-                    poseStack,
-                    bufferSource,
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+
+        /*
+         * Головне:
+         * geometry НЕ перевіряється по depth buffer.
+         *
+         * Тому highlight видно крізь stone,
+         * walls та інші blocks.
+         */
+        RenderSystem.disableDepthTest();
+
+        /*
+         * Highlight також не записує свою depth
+         * у depth buffer.
+         */
+        RenderSystem.depthMask(false);
+
+        /*
+         * Малюємо обидві сторони faces.
+         */
+        RenderSystem.disableCull();
+
+        RenderSystem.setShader(
+                GameRenderer::getPositionColorShader
+        );
+
+        /*
+         * Один BufferBuilder для всього network.
+         *
+         * Це значно краще, ніж робити окремий
+         * draw call для кожного wire.
+         */
+        Tesselator tesselator =
+                Tesselator.getInstance();
+
+        BufferBuilder buffer =
+                tesselator.getBuilder();
+
+        buffer.begin(
+                VertexFormat.Mode.QUADS,
+                DefaultVertexFormat.POSITION_COLOR
+        );
+
+        Matrix4f matrix =
+                poseStack.last().pose();
+
+        /*
+         * WIRES
+         */
+        for (BlockPos pos
+                : ClientNetworkSelection.getWires()) {
+
+            addBox(
+                    buffer,
+                    matrix,
                     pos,
                     WIRE_R,
                     WIRE_G,
@@ -99,40 +172,68 @@ public class NetworkSelectionRenderer {
             );
         }
 
-        for (BlockPos pos : ClientNetworkSelection.getInputs()) {
+        /*
+         * INPUTS
+         */
+        for (BlockPos pos
+                : ClientNetworkSelection.getInputs()) {
 
-            renderBox(
-                    poseStack,
-                    bufferSource,
+            addBox(
+                    buffer,
+                    matrix,
                     pos,
                     INPUT_R,
                     INPUT_G,
                     INPUT_B,
-                    0.30F
+                    ALPHA
             );
         }
 
-        for (BlockPos pos : ClientNetworkSelection.getOutputs()) {
+        /*
+         * OUTPUTS
+         */
+        for (BlockPos pos
+                : ClientNetworkSelection.getOutputs()) {
 
-            renderBox(
-                    poseStack,
-                    bufferSource,
+            addBox(
+                    buffer,
+                    matrix,
                     pos,
                     OUTPUT_R,
                     OUTPUT_G,
                     OUTPUT_B,
-                    0.30F
+                    ALPHA
             );
         }
 
-        poseStack.popPose();
+        /*
+         * Реальний draw відбувається ТУТ,
+         * поки depth test все ще disabled.
+         */
+        BufferUploader.drawWithShader(
+                buffer.end()
+        );
 
-        bufferSource.endBatch();
+        /*
+         * -------------------------------------------------
+         * RESTORE MINECRAFT RENDER STATE
+         * -------------------------------------------------
+         */
+
+        RenderSystem.enableCull();
+
+        RenderSystem.depthMask(true);
+
+        RenderSystem.enableDepthTest();
+
+        RenderSystem.disableBlend();
+
+        poseStack.popPose();
     }
 
-    private static void renderBox(
-            PoseStack poseStack,
-            MultiBufferSource bufferSource,
+    private static void addBox(
+            BufferBuilder buffer,
+            Matrix4f matrix,
             BlockPos pos,
             float red,
             float green,
@@ -140,29 +241,301 @@ public class NetworkSelectionRenderer {
             float alpha
     ) {
 
-        /*
-         * Трохи менше за повний блок,
-         * щоб сусідні highlights не зливались
-         * в одну суцільну поверхню.
-         */
-        AABB box = new AABB(
-                pos.getX() + 0.03D,
-                pos.getY() + 0.03D,
-                pos.getZ() + 0.03D,
+        float x1 =
+                (float) (
+                        pos.getX()
+                                + MIN_OFFSET
+                );
 
-                pos.getX() + 0.97D,
-                pos.getY() + 0.97D,
-                pos.getZ() + 0.97D
+        float y1 =
+                (float) (
+                        pos.getY()
+                                + MIN_OFFSET
+                );
+
+        float z1 =
+                (float) (
+                        pos.getZ()
+                                + MIN_OFFSET
+                );
+
+        float x2 =
+                (float) (
+                        pos.getX()
+                                + MAX_OFFSET
+                );
+
+        float y2 =
+                (float) (
+                        pos.getY()
+                                + MAX_OFFSET
+                );
+
+        float z2 =
+                (float) (
+                        pos.getZ()
+                                + MAX_OFFSET
+                );
+
+        int r =
+                toColor(red);
+
+        int g =
+                toColor(green);
+
+        int b =
+                toColor(blue);
+
+        int a =
+                toColor(alpha);
+
+        /*
+         * -------------------------
+         * BOTTOM
+         * -------------------------
+         */
+
+        vertex(
+                buffer,
+                matrix,
+                x1, y1, z1,
+                r, g, b, a
         );
 
-        DebugRenderer.renderFilledBox(
-                poseStack,
-                bufferSource,
-                box,
-                red,
-                green,
-                blue,
-                alpha
+        vertex(
+                buffer,
+                matrix,
+                x2, y1, z1,
+                r, g, b, a
+        );
+
+        vertex(
+                buffer,
+                matrix,
+                x2, y1, z2,
+                r, g, b, a
+        );
+
+        vertex(
+                buffer,
+                matrix,
+                x1, y1, z2,
+                r, g, b, a
+        );
+
+        /*
+         * -------------------------
+         * TOP
+         * -------------------------
+         */
+
+        vertex(
+                buffer,
+                matrix,
+                x1, y2, z2,
+                r, g, b, a
+        );
+
+        vertex(
+                buffer,
+                matrix,
+                x2, y2, z2,
+                r, g, b, a
+        );
+
+        vertex(
+                buffer,
+                matrix,
+                x2, y2, z1,
+                r, g, b, a
+        );
+
+        vertex(
+                buffer,
+                matrix,
+                x1, y2, z1,
+                r, g, b, a
+        );
+
+        /*
+         * -------------------------
+         * NORTH
+         * -------------------------
+         */
+
+        vertex(
+                buffer,
+                matrix,
+                x1, y1, z1,
+                r, g, b, a
+        );
+
+        vertex(
+                buffer,
+                matrix,
+                x1, y2, z1,
+                r, g, b, a
+        );
+
+        vertex(
+                buffer,
+                matrix,
+                x2, y2, z1,
+                r, g, b, a
+        );
+
+        vertex(
+                buffer,
+                matrix,
+                x2, y1, z1,
+                r, g, b, a
+        );
+
+        /*
+         * -------------------------
+         * SOUTH
+         * -------------------------
+         */
+
+        vertex(
+                buffer,
+                matrix,
+                x2, y1, z2,
+                r, g, b, a
+        );
+
+        vertex(
+                buffer,
+                matrix,
+                x2, y2, z2,
+                r, g, b, a
+        );
+
+        vertex(
+                buffer,
+                matrix,
+                x1, y2, z2,
+                r, g, b, a
+        );
+
+        vertex(
+                buffer,
+                matrix,
+                x1, y1, z2,
+                r, g, b, a
+        );
+
+        /*
+         * -------------------------
+         * WEST
+         * -------------------------
+         */
+
+        vertex(
+                buffer,
+                matrix,
+                x1, y1, z2,
+                r, g, b, a
+        );
+
+        vertex(
+                buffer,
+                matrix,
+                x1, y2, z2,
+                r, g, b, a
+        );
+
+        vertex(
+                buffer,
+                matrix,
+                x1, y2, z1,
+                r, g, b, a
+        );
+
+        vertex(
+                buffer,
+                matrix,
+                x1, y1, z1,
+                r, g, b, a
+        );
+
+        /*
+         * -------------------------
+         * EAST
+         * -------------------------
+         */
+
+        vertex(
+                buffer,
+                matrix,
+                x2, y1, z1,
+                r, g, b, a
+        );
+
+        vertex(
+                buffer,
+                matrix,
+                x2, y2, z1,
+                r, g, b, a
+        );
+
+        vertex(
+                buffer,
+                matrix,
+                x2, y2, z2,
+                r, g, b, a
+        );
+
+        vertex(
+                buffer,
+                matrix,
+                x2, y1, z2,
+                r, g, b, a
+        );
+    }
+
+    private static void vertex(
+            BufferBuilder buffer,
+            Matrix4f matrix,
+            float x,
+            float y,
+            float z,
+            int red,
+            int green,
+            int blue,
+            int alpha
+    ) {
+
+        buffer.vertex(
+                        matrix,
+                        x,
+                        y,
+                        z
+                )
+                .color(
+                        red,
+                        green,
+                        blue,
+                        alpha
+                )
+                .endVertex();
+    }
+
+    private static int toColor(
+            float value
+    ) {
+
+        value =
+                Math.max(
+                        0.0F,
+                        Math.min(
+                                1.0F,
+                                value
+                        )
+                );
+
+        return Math.round(
+                value * 255.0F
         );
     }
 }
