@@ -468,6 +468,7 @@ public final class CircuitCommands {
          * щоб лампи/redstone тощо оновились.
          */
         com.example.compiledcircuits.networking.BrokenElementSync.broadcastDimension(level);
+        com.example.compiledcircuits.networking.NetworkGuiSync.broadcastBrokenList(level.getServer());
 
         for (BlockPos outputPos : outputs) {
 

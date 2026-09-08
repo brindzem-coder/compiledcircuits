@@ -7,7 +7,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 
 public final class ModNetworking {
 
-    private static final String PROTOCOL_VERSION = "6";
+    private static final String PROTOCOL_VERSION = "7";
 
     public static final SimpleChannel CHANNEL =
             NetworkRegistry.ChannelBuilder
@@ -32,6 +32,10 @@ public final class ModNetworking {
     }
 
     public static void register() {
+        CHANNEL.registerMessage(packetId++, BrokenElementListS2CPacket.class,
+                BrokenElementListS2CPacket::encode, BrokenElementListS2CPacket::decode,
+                BrokenElementListS2CPacket::handle,
+                java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));
         CHANNEL.registerMessage(
                 packetId++, BrokenElementsS2CPacket.class,
                 BrokenElementsS2CPacket::encode, BrokenElementsS2CPacket::decode,

@@ -20,6 +20,11 @@ import net.minecraftforge.fml.common.Mod;
 public class ClientSelectionEvents {
 
     @SubscribeEvent
+    public static void onLogout(net.minecraftforge.client.event.ClientPlayerNetworkEvent.LoggingOut event) {
+        ClientBrokenElementList.clear();
+    }
+
+    @SubscribeEvent
     public static void onRightClickBlock(
             PlayerInteractEvent.RightClickBlock event
     ) {

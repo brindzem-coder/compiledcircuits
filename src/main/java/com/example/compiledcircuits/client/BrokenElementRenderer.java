@@ -32,11 +32,11 @@ public final class BrokenElementRenderer {
 
     @SubscribeEvent
     public static void onRenderLevelStage(RenderLevelStageEvent event) {
-        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS
-                || ClientBrokenElements.isEmpty()) return;
+        if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS) return;
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null || !minecraft.level.dimension().location().toString()
-                .equals(ClientBrokenElements.getDimension())) return;
+        if (minecraft.level == null) return;
+        var positions = ClientBrokenElements.getRenderPositions(minecraft.level.dimension().location().toString());
+        if (positions.isEmpty()) return;
 
         Vec3 cameraPos = event.getCamera().getPosition();
         PoseStack poseStack = event.getPoseStack();
@@ -52,7 +52,7 @@ public final class BrokenElementRenderer {
             BufferBuilder buffer = Tesselator.getInstance().getBuilder();
             buffer.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
             Matrix4f matrix = poseStack.last().pose();
-            for (BlockPos pos : ClientBrokenElements.getBroken()) {
+            for (BlockPos pos : positions) {
                 addBox(buffer, matrix, pos, 1.0F, 0.05F, 0.05F, 0.55F);
             }
             BufferUploader.drawWithShader(buffer.end());

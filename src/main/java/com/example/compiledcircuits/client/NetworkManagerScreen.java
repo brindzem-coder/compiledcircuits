@@ -26,6 +26,20 @@ public class NetworkManagerScreen
     // Layout
     // -------------------------
 
+    private enum MainViewMode { NETWORKS, BROKEN }
+    private MainViewMode mainViewMode = MainViewMode.NETWORKS;
+    private Button mainViewButton;
+    private List<com.example.compiledcircuits.networking.BrokenElementListS2CPacket.Entry> brokenEntries = new ArrayList<>();
+    private int brokenScroll;
+    private final Set<Integer> brokenNetworkIds = new HashSet<>();
+    private record BrokenKey(int networkId, int elementId) {}
+    private final Set<BrokenKey> selectedBrokenKeys = new LinkedHashSet<>();
+    private boolean restoreBrokenFocus = true;
+    private boolean brokenPaintSelecting;
+    private final Set<BrokenKey> brokenPaintVisited = new HashSet<>();
+    private double brokenPaintX, brokenPaintY;
+    private static final int BROKEN_ROW_HEIGHT = 36;
+
     private static final int TOP = 55;
     private static final int LIST_TOP = 92;
     private static final int SEARCH_WIDTH = 190;
@@ -158,6 +172,7 @@ public class NetworkManagerScreen
 
     @Override
     protected void init() {
+        stopBrokenPaint();
         clearDrag();
 
         folderPanelWidth =
@@ -167,9 +182,12 @@ public class NetworkManagerScreen
                 );
 
         String searchText = searchBox == null ? "" : searchBox.getValue();
-        int totalSearchWidth = SEARCH_WIDTH + SEARCH_GAP + SEARCH_FILTER_WIDTH;
-        int searchX = (this.width - totalSearchWidth) / 2;
-        searchBox = new EditBox(this.font, searchX, 30, SEARCH_WIDTH, SEARCH_HEIGHT,
+        mainViewButton = addRenderableWidget(Button.builder(Component.literal(getMainViewButtonText()),
+                button -> toggleMainView()).bounds(8, 30, 72, 20).build());
+        int searchWidth = Math.max(40, Math.min(SEARCH_WIDTH, width - 96 - SEARCH_FILTER_WIDTH));
+        int totalSearchWidth = searchWidth + SEARCH_GAP + SEARCH_FILTER_WIDTH;
+        int searchX = Math.max(84, (this.width - totalSearchWidth) / 2);
+        searchBox = new EditBox(this.font, searchX, 30, searchWidth, SEARCH_HEIGHT,
                 Component.literal("Search"));
         searchBox.setHint(Component.literal("Search..."));
         searchBox.setMaxLength(64);
@@ -183,7 +201,7 @@ public class NetworkManagerScreen
         addRenderableWidget(searchBox);
         searchFilterButton = addRenderableWidget(Button.builder(
                         Component.literal(getSearchFilterLabel()), button -> cycleSearchFilter())
-                .bounds(searchX + SEARCH_WIDTH + SEARCH_GAP, 30, SEARCH_FILTER_WIDTH, SEARCH_HEIGHT)
+                .bounds(searchX + searchWidth + SEARCH_GAP, 30, SEARCH_FILTER_WIDTH, SEARCH_HEIGHT)
                 .build());
 
         int buttonY = this.height - 28;
@@ -324,6 +342,8 @@ public class NetworkManagerScreen
         rebuildSearchResults();
         updateButtons();
         clampScrolls();
+        onBrokenListUpdated();
+        updateWidgetVisibility();
         if (initialNavigateNetworkId != null) {
             int target = initialNavigateNetworkId;
             initialNavigateNetworkId = null;
@@ -520,6 +540,20 @@ public class NetworkManagerScreen
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        if (mainViewMode == MainViewMode.BROKEN) {
+            if (mouseX >= 10 && mouseX <= width - 10 && mouseY >= TOP && mouseY < height - BOTTOM_MARGIN) {
+                brokenScroll -= (int) Math.signum(delta);
+                clampBrokenScroll();
+                if (brokenPaintSelecting) {
+                    brokenPaintX = mouseX;
+                    brokenPaintY = mouseY;
+                    if (Screen.hasShiftDown()) paintBrokenTo(mouseX, mouseY);
+                    else stopBrokenPaint();
+                }
+                return true;
+            }
+            return super.mouseScrolled(mouseX, mouseY, delta);
+        }
         if (isSearchMode()) {
             if (mouseX >= 10 && mouseX <= width - 10
                     && mouseY >= LIST_TOP && mouseY < height - BOTTOM_MARGIN) {
@@ -595,6 +629,24 @@ public class NetworkManagerScreen
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (mainViewMode == MainViewMode.BROKEN) {
+            if (button == 0 && isInsideBrokenList(mouseX, mouseY)) {
+                var entry = getBrokenEntryAt(mouseX, mouseY);
+                stopBrokenPaint();
+                if (entry != null) {
+                    if (Screen.hasShiftDown()) toggleBrokenSelection(entry);
+                    else selectOnlyBroken(entry);
+                    if (Screen.hasShiftDown()) {
+                        brokenPaintSelecting = true;
+                        brokenPaintVisited.add(getBrokenKey(entry));
+                        brokenPaintX = mouseX;
+                        brokenPaintY = mouseY;
+                    }
+                } else if (!Screen.hasShiftDown()) clearBrokenSelection();
+                return true;
+            }
+            return super.mouseClicked(mouseX, mouseY, button);
+        }
         if (button != 0) return super.mouseClicked(mouseX, mouseY, button);
         clearDrag();
         boolean shift = Screen.hasShiftDown();
@@ -781,6 +833,14 @@ public class NetworkManagerScreen
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (mainViewMode == MainViewMode.BROKEN) {
+            if (button == 0 && brokenPaintSelecting) {
+                if (Screen.hasShiftDown()) paintBrokenTo(mouseX, mouseY);
+                else stopBrokenPaint();
+                return true;
+            }
+            return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
+        }
         if (button == 0 && searchPaintSelecting) {
             paintSearchTo(mouseX, mouseY, Screen.hasShiftDown());
             return true;
@@ -810,6 +870,8 @@ public class NetworkManagerScreen
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (button == 0) stopBrokenPaint();
+        if (mainViewMode == MainViewMode.BROKEN) return super.mouseReleased(mouseX, mouseY, button);
         if (button == 0 && (searchPaintSelecting || shiftPaintSelecting)) {
             clearDrag();
             return true;
@@ -1015,6 +1077,13 @@ public class NetworkManagerScreen
                 0xAA111111
         );
 
+        if (mainViewMode == MainViewMode.BROKEN) {
+            graphics.drawCenteredString(font, "Compiled Circuits - Network Manager", width / 2, 12, 0xFFFFFF);
+            renderBrokenMode(graphics, mouseX, mouseY);
+            super.render(graphics, mouseX, mouseY, partialTick);
+            return;
+        }
+
         if (!isSearchMode()) {
             /*
              * Left folder background.
@@ -1098,6 +1167,190 @@ public class NetworkManagerScreen
                 mouseY,
                 partialTick
         );
+    }
+
+    private String getMainViewButtonText() {
+        return mainViewMode == MainViewMode.NETWORKS ? "Networks" : "Broken";
+    }
+
+    private void toggleMainView() {
+        exitSearchMode();
+        setFocused(null);
+        mainViewMode = mainViewMode == MainViewMode.NETWORKS ? MainViewMode.BROKEN : MainViewMode.NETWORKS;
+        brokenScroll = 0;
+        clearBrokenSelection();
+        mainViewButton.setMessage(Component.literal(getMainViewButtonText()));
+        updateWidgetVisibility();
+    }
+
+    private void updateWidgetVisibility() {
+        boolean networkMode = mainViewMode == MainViewMode.NETWORKS;
+        searchBox.visible = networkMode;
+        searchBox.active = networkMode;
+        for (Button button : List.of(searchFilterButton, highlightButton, renameButton, decompileButton,
+                newFolderButton, renameFolderButton, deleteFolderButton)) {
+            button.visible = networkMode;
+            button.active = networkMode;
+        }
+        if (networkMode) updateButtons();
+    }
+
+    public void onBrokenListUpdated() {
+        brokenEntries = new ArrayList<>(ClientBrokenElementList.getEntries());
+        if (restoreBrokenFocus) {
+            restoreBrokenFocus = false;
+            for (var entry : brokenEntries) {
+                if (ClientBrokenElements.getFocused().contains(
+                        new ClientBrokenElements.FocusedBrokenPos(entry.dimension(), entry.pos()))) {
+                    selectedBrokenKeys.add(getBrokenKey(entry));
+                }
+            }
+        }
+        rebuildBrokenNetworkIds();
+        clampBrokenScroll();
+        validateBrokenSelection();
+    }
+
+    private void rebuildBrokenNetworkIds() {
+        brokenNetworkIds.clear();
+        for (var entry : brokenEntries) brokenNetworkIds.add(entry.networkId());
+    }
+
+    private boolean isNetworkBroken(int networkId) { return brokenNetworkIds.contains(networkId); }
+
+    private BrokenKey getBrokenKey(com.example.compiledcircuits.networking.BrokenElementListS2CPacket.Entry entry) {
+        return new BrokenKey(entry.networkId(), entry.elementId());
+    }
+
+    private boolean isBrokenSelected(com.example.compiledcircuits.networking.BrokenElementListS2CPacket.Entry entry) {
+        return selectedBrokenKeys.contains(getBrokenKey(entry));
+    }
+
+    private void validateBrokenSelection() {
+        Set<BrokenKey> valid = new HashSet<>();
+        for (var entry : brokenEntries) valid.add(getBrokenKey(entry));
+        selectedBrokenKeys.retainAll(valid);
+        stopBrokenPaint();
+        syncBrokenFocusToRenderer();
+    }
+
+    private void selectOnlyBroken(com.example.compiledcircuits.networking.BrokenElementListS2CPacket.Entry entry) {
+        selectedBrokenKeys.clear();
+        selectedBrokenKeys.add(getBrokenKey(entry));
+        syncBrokenFocusToRenderer();
+    }
+
+    private void toggleBrokenSelection(com.example.compiledcircuits.networking.BrokenElementListS2CPacket.Entry entry) {
+        BrokenKey key = getBrokenKey(entry);
+        if (!selectedBrokenKeys.add(key)) selectedBrokenKeys.remove(key);
+        syncBrokenFocusToRenderer();
+    }
+
+    private void stopBrokenPaint() {
+        brokenPaintSelecting = false;
+        brokenPaintVisited.clear();
+    }
+
+    private void clearBrokenSelection() {
+        selectedBrokenKeys.clear();
+        stopBrokenPaint();
+        ClientBrokenElements.clearFocused();
+    }
+
+    private void syncBrokenFocusToRenderer() {
+        Set<ClientBrokenElements.FocusedBrokenPos> focused = new LinkedHashSet<>();
+        for (var entry : brokenEntries) {
+            if (isBrokenSelected(entry)) focused.add(new ClientBrokenElements.FocusedBrokenPos(entry.dimension(), entry.pos()));
+        }
+        ClientBrokenElements.setFocused(focused);
+    }
+
+    private void paintBrokenTo(double mouseX, double mouseY) {
+        // Sample the movement so fast drags do not skip rows between mouse events.
+        int steps = Math.max(1, (int) Math.ceil(Math.max(Math.abs(mouseX - brokenPaintX), Math.abs(mouseY - brokenPaintY)) / 4));
+        for (int i = 1; i <= steps; i++) {
+            double t = (double) i / steps;
+            var entry = getBrokenEntryAt(brokenPaintX + (mouseX - brokenPaintX) * t,
+                    brokenPaintY + (mouseY - brokenPaintY) * t);
+            if (entry != null && brokenPaintVisited.add(getBrokenKey(entry))) selectedBrokenKeys.add(getBrokenKey(entry));
+        }
+        brokenPaintX = mouseX;
+        brokenPaintY = mouseY;
+        syncBrokenFocusToRenderer();
+    }
+
+    private boolean isInsideBrokenList(double mouseX, double mouseY) {
+        return mouseX >= 10 && mouseX < width - 10 && mouseY >= LIST_TOP && mouseY < height - BOTTOM_MARGIN;
+    }
+
+    private com.example.compiledcircuits.networking.BrokenElementListS2CPacket.Entry getBrokenEntryAt(double mouseX, double mouseY) {
+        if (!isInsideBrokenList(mouseX, mouseY)) return null;
+        int row = (int) ((mouseY - LIST_TOP) / BROKEN_ROW_HEIGHT);
+        // Only complete rows are rendered; the trailing space is not clickable.
+        if (row >= getVisibleBrokenRowCount()) return null;
+        int index = brokenScroll + row;
+        return index >= 0 && index < brokenEntries.size() ? brokenEntries.get(index) : null;
+    }
+
+    private String getDimensionDisplayName(String dimension) {
+        return switch (dimension) {
+            case "minecraft:overworld" -> "Overworld";
+            case "minecraft:the_nether" -> "Nether";
+            case "minecraft:the_end" -> "End";
+            default -> dimension;
+        };
+    }
+
+    private int getVisibleBrokenRowCount() {
+        return Math.max(0, (height - BOTTOM_MARGIN - LIST_TOP) / BROKEN_ROW_HEIGHT);
+    }
+
+    private void clampBrokenScroll() {
+        brokenScroll = Math.max(0, Math.min(brokenScroll,
+                Math.max(0, brokenEntries.size() - getVisibleBrokenRowCount())));
+    }
+
+    private void renderBrokenMode(GuiGraphics graphics, int mouseX, int mouseY) {
+        graphics.drawString(font, "Broken Elements", 13, TOP + 6, 0xFFFFFF, false);
+        graphics.drawString(font, "Total: " + brokenEntries.size() + " | Selected: " + selectedBrokenKeys.size(), 13, TOP + 18, 0xAAAAAA, false);
+        if (brokenEntries.isEmpty()) {
+            graphics.drawString(font, "All compiled networks are healthy.", 13, LIST_TOP + 3, 0xAAAAAA, false);
+            return;
+        }
+        graphics.enableScissor(10, LIST_TOP, Math.max(10, width - 10), Math.max(LIST_TOP, height - BOTTOM_MARGIN));
+        try {
+            for (int row = 0; row < getVisibleBrokenRowCount() && brokenScroll + row < brokenEntries.size(); row++) {
+                var entry = brokenEntries.get(brokenScroll + row);
+                int y = LIST_TOP + row * BROKEN_ROW_HEIGHT;
+                boolean selected = isBrokenSelected(entry);
+                boolean hovered = entry.equals(getBrokenEntryAt(mouseX, mouseY));
+                if (selected || hovered) {
+                    graphics.fill(10, y, width - 10, y + BROKEN_ROW_HEIGHT - 1,
+                            selected ? 0x663399FF : 0x33222222);
+                }
+                String line1 = entry.networkName() + " (#" + entry.networkId() + ") | Element #"
+                        + entry.elementId() + " | " + getBlockDisplayName(entry.blockId());
+                var pos = entry.pos();
+                String line2 = getFolderPath(entry.folderId());
+                String line3 = "X: " + pos.getX() + " Y: " + pos.getY() + " Z: " + pos.getZ()
+                        + " | " + entry.type().name() + " | " + getDimensionDisplayName(entry.dimension());
+                graphics.drawString(font, line1, 13, y + 3, 0xFFFFFF, false);
+                graphics.drawString(font, line2, 13, y + 14, 0xAAAAAA, false);
+                graphics.drawString(font, line3, 13, y + 25, 0x999999, false);
+            }
+        } finally {
+            graphics.disableScissor();
+        }
+    }
+
+    private String getBlockDisplayName(String blockId) {
+        StringBuilder result = new StringBuilder();
+        for (String part : blockId.substring(blockId.indexOf(':') + 1).split("_")) {
+            if (part.isEmpty()) continue;
+            if (result.length() > 0) result.append(' ');
+            result.append(Character.toUpperCase(part.charAt(0))).append(part.substring(1));
+        }
+        return result.toString();
     }
 
     private boolean isSearchMode() {
@@ -1404,40 +1657,19 @@ public class NetworkManagerScreen
                             ? "ON"
                             : "OFF";
 
-            graphics.drawString(
-                    this.font,
-                    "#"
-                            + entry.id()
-                            + "  "
-                            + entry.name(),
-                    left + 6,
-                    rowY + 4,
-                    0xFFFFFF,
-                    false
-            );
-
-            graphics.drawString(
-                    this.font,
-                    "[" + state + "]",
-                    this.width - 45,
-                    rowY + 4,
-                    stateColor,
-                    false
-            );
-
-            graphics.drawString(
-                    this.font,
-                    "W:"
-                            + entry.wires()
-                            + "  I:"
-                            + entry.inputs()
-                            + "  O:"
-                            + entry.outputs(),
-                    left + 6,
-                    rowY + 17,
-                    0x999999,
-                    false
-            );
+            String status = "[" + state + "]";
+            boolean broken = isNetworkBroken(entry.id());
+            int right = width - 12;
+            int stateX = right - font.width(status);
+            graphics.drawString(font, font.plainSubstrByWidth("#" + entry.id() + "  " + entry.name(),
+                    Math.max(0, stateX - left - 12)), left + 6, rowY + 4, 0xFFFFFF, false);
+            graphics.drawString(font, status, stateX, rowY + 4, stateColor, false);
+            int brokenX = right - font.width("BROKEN");
+            String counts = "W:" + entry.wires() + "  I:" + entry.inputs() + "  O:" + entry.outputs();
+            graphics.drawString(font, font.plainSubstrByWidth(counts,
+                    Math.max(0, (broken ? brokenX - 6 : right) - left - 6)),
+                    left + 6, rowY + 17, 0x999999, false);
+            if (broken) graphics.drawString(font, "BROKEN", brokenX, rowY + 17, 0xFF5555, false);
 
             rowY +=
                     NETWORK_ROW_HEIGHT;
@@ -1449,7 +1681,14 @@ public class NetworkManagerScreen
     // =========================================================
 
     @Override
+    public void onClose() {
+        ClientBrokenElements.onGuiClosed();
+        super.onClose();
+    }
+
+    @Override
     public void removed() {
+        stopBrokenPaint();
         clearDrag();
         super.removed();
     }

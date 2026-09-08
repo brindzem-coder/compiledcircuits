@@ -55,6 +55,7 @@ public final class NetworkIntegrityManager {
         if (!changed) return;
 
         data.setDirty();
+        com.example.compiledcircuits.networking.NetworkGuiSync.broadcastBrokenList(level.getServer());
         com.example.compiledcircuits.networking.BrokenElementSync.broadcastDimension(level);
         if (!wasDamaged && network.isDamaged()) {
             NetworkRuntime.networkBecameDamaged(level, network);

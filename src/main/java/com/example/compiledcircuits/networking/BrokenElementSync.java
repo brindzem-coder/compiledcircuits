@@ -41,6 +41,7 @@ public final class BrokenElementSync {
     }
 
     public static void syncRemovedNetworks(MinecraftServer server, Collection<CompiledNetwork> removed) {
+        if (!removed.isEmpty()) NetworkGuiSync.broadcastBrokenList(server);
         Set<String> dimensions = new HashSet<>();
         for (CompiledNetwork network : removed) dimensions.add(network.getDimension());
         for (ServerLevel level : server.getAllLevels()) {

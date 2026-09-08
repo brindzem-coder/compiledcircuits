@@ -13,6 +13,16 @@ public final class ClientPacketHandlers {
     private ClientPacketHandlers() {
     }
 
+    public static void handleBrokenElementList(com.example.compiledcircuits.networking.BrokenElementListS2CPacket packet) {
+        ClientBrokenElementList.setEntries(packet.getEntries());
+        java.util.Set<ClientBrokenElements.FocusedBrokenPos> valid = new java.util.HashSet<>();
+        for (var entry : packet.getEntries()) {
+            valid.add(new ClientBrokenElements.FocusedBrokenPos(entry.dimension(), entry.pos()));
+        }
+        ClientBrokenElements.retainFocused(valid);
+        if (Minecraft.getInstance().screen instanceof NetworkManagerScreen screen) screen.onBrokenListUpdated();
+    }
+
     public static void handleBrokenElements(com.example.compiledcircuits.networking.BrokenElementsS2CPacket packet) {
         ClientBrokenElements.setBroken(packet.getDimension(), packet.getPositions());
     }

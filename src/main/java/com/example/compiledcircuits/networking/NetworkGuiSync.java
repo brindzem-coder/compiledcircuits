@@ -68,11 +68,44 @@ public final class NetworkGuiSync {
         return new NetworkListS2CPacket(entries, folders);
     }
 
+    public static List<BrokenElementListS2CPacket.Entry> buildBrokenEntries(ServerPlayer player) {
+        return buildBrokenEntries(NetworkSavedData.get(player.getServer()));
+    }
+
+    public static List<BrokenElementListS2CPacket.Entry> buildBrokenEntries(NetworkSavedData data) {
+        List<BrokenElementListS2CPacket.Entry> result = new ArrayList<>();
+        for (CompiledNetwork network : data.getNetworks()) {
+            for (var broken : network.getBrokenElements()) {
+                var element = network.getElement(broken.getElementId());
+                if (element == null) continue;
+                result.add(new BrokenElementListS2CPacket.Entry(network.getId(), network.getName(),
+                        network.getFolderId(), element.getId(), network.getDimension(), element.getPos(),
+                        element.getType(), element.getBlockId(), broken.getActualBlockId(), broken.getDetectedAt()));
+            }
+        }
+        result.sort(Comparator.comparing(BrokenElementListS2CPacket.Entry::networkName, String.CASE_INSENSITIVE_ORDER)
+                .thenComparingInt(BrokenElementListS2CPacket.Entry::elementId)
+                .thenComparingInt(BrokenElementListS2CPacket.Entry::networkId));
+        return result;
+    }
+
+    public static void sendBrokenList(ServerPlayer player) {
+        ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                new BrokenElementListS2CPacket(buildBrokenEntries(player)));
+    }
+
+    public static void broadcastBrokenList(net.minecraft.server.MinecraftServer server) {
+        var packet = new BrokenElementListS2CPacket(buildBrokenEntries(NetworkSavedData.get(server)));
+        ModNetworking.CHANNEL.send(PacketDistributor.ALL.noArg(), packet);
+    }
+
     public static void sendList(ServerPlayer player) {
+        sendBrokenList(player);
         ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), buildListPacket(player));
     }
 
     public static void sendListAndNavigate(ServerPlayer player, int networkId) {
+        sendBrokenList(player);
         ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new OpenNetworkManagerAtS2CPacket(buildListPacket(player), networkId));
     }
