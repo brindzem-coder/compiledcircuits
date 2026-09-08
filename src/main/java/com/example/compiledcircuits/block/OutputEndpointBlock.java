@@ -72,7 +72,7 @@ public class OutputEndpointBlock
                         pos
                 );
 
-        if (network == null) {
+        if (network == null || network.isDamaged()) {
             return 0;
         }
 

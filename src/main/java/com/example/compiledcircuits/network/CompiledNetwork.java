@@ -30,6 +30,7 @@ public class CompiledNetwork {
     private final Set<BlockPos> inputs;
     private final Set<BlockPos> outputs;
     private final Map<Integer, CompiledCircuitElement> elements;
+    private final Map<Integer, BrokenCircuitElement> brokenElements = new LinkedHashMap<>();
 
     // Runtime state мережі
     private boolean powered;
@@ -86,6 +87,30 @@ public class CompiledNetwork {
 
     public boolean hasElementAt(BlockPos pos) {
         return getElementAt(pos) != null;
+    }
+
+    public Collection<BrokenCircuitElement> getBrokenElements() {
+        return Collections.unmodifiableCollection(brokenElements.values());
+    }
+
+    public BrokenCircuitElement getBrokenElement(int elementId) {
+        return brokenElements.get(elementId);
+    }
+
+    public boolean isElementBroken(int elementId) {
+        return brokenElements.containsKey(elementId);
+    }
+
+    public boolean isDamaged() {
+        return !brokenElements.isEmpty();
+    }
+
+    public boolean markBroken(BrokenCircuitElement broken) {
+        return brokenElements.putIfAbsent(broken.getElementId(), broken) == null;
+    }
+
+    public boolean markRepaired(int elementId) {
+        return brokenElements.remove(elementId) != null;
     }
 
     public int getId() {
@@ -150,6 +175,9 @@ public class CompiledNetwork {
         ListTag elementList = new ListTag();
         for (CompiledCircuitElement element : elements.values()) elementList.add(element.save());
         tag.put("elements", elementList);
+        ListTag brokenList = new ListTag();
+        for (BrokenCircuitElement broken : brokenElements.values()) brokenList.add(broken.save());
+        tag.put("brokenElements", brokenList);
         return tag;
     }
 
@@ -211,6 +239,11 @@ public class CompiledNetwork {
         network.powered =
                 tag.getBoolean("powered");
 
+        ListTag brokenList = tag.getList("brokenElements", Tag.TAG_COMPOUND);
+        for (int i = 0; i < brokenList.size(); i++) {
+            BrokenCircuitElement broken = BrokenCircuitElement.load(brokenList.getCompound(i));
+            network.brokenElements.put(broken.getElementId(), broken);
+        }
         return network;
     }
 

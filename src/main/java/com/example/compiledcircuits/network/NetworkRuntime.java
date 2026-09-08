@@ -1,9 +1,8 @@
 package com.example.compiledcircuits.network;
 
-import com.example.compiledcircuits.block.OutputEndpointBlock;
+import com.example.compiledcircuits.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.block.state.BlockState;
 
 public final class NetworkRuntime {
 
@@ -47,6 +46,11 @@ public final class NetworkRuntime {
          */
         data.setDirty();
 
+        // Inputs remain current, but damaged outputs are already forced LOW.
+        if (network.isDamaged()) {
+            return;
+        }
+
         /*
          * Важлива частина:
          *
@@ -57,6 +61,18 @@ public final class NetworkRuntime {
                 level,
                 network
         );
+    }
+
+    public static void networkBecameDamaged(ServerLevel level, CompiledNetwork network) {
+        notifyOutputs(level, network);
+    }
+
+    public static void networkBecameHealthy(ServerLevel level, CompiledNetwork network) {
+        network.setPowered(calculatePowered(level, network));
+        NetworkSavedData.get(level.getServer()).setDirty();
+
+        // The effective output changed from forced LOW even if powered stayed true.
+        notifyOutputs(level, network);
     }
 
     private static boolean calculatePowered(
@@ -99,23 +115,13 @@ public final class NetworkRuntime {
                 continue;
             }
 
-            BlockState outputState =
-                    level.getBlockState(
-                            outputPos
-                    );
-
-            if (!(outputState.getBlock()
-                    instanceof OutputEndpointBlock)) {
-                continue;
-            }
-
             /*
              * Повідомляємо vanilla blocks навколо Output,
              * що його redstone signal змінився.
              */
             level.updateNeighborsAt(
                     outputPos,
-                    outputState.getBlock()
+                    ModBlocks.OUTPUT_ENDPOINT.get()
             );
         }
     }
