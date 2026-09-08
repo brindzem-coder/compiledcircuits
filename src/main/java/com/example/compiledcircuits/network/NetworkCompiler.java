@@ -166,6 +166,9 @@ public final class NetworkCompiler {
          *
          * folderId = 0
          */
+        java.util.List<CompiledCircuitElement> elements = CompiledElementFactory.create(
+                level, result.wires(), result.inputs(), result.outputs());
+
         CompiledNetwork network =
                 new CompiledNetwork(
                         networkId,
@@ -174,7 +177,8 @@ public final class NetworkCompiler {
                         dimension,
                         result.wires(),
                         result.inputs(),
-                        result.outputs()
+                        result.outputs(),
+                        elements
                 );
 
         savedData.addNetwork(

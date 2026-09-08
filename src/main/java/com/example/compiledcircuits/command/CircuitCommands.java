@@ -1,6 +1,8 @@
 package com.example.compiledcircuits.command;
 
 import com.example.compiledcircuits.network.CompiledNetwork;
+import com.example.compiledcircuits.network.CompiledCircuitElement;
+import com.example.compiledcircuits.network.CompiledElementFactory;
 import com.example.compiledcircuits.network.NetworkCompiler;
 import com.example.compiledcircuits.network.NetworkSavedData;
 import com.example.compiledcircuits.network.NetworkScanner;
@@ -44,6 +46,9 @@ public final class CircuitCommands {
                                                 )
                                         )
                         )
+
+                        .then(Commands.literal("debug_elements")
+                                .executes(context -> debugElements(context.getSource())))
 
                         .then(Commands.literal("open_selected")
                                 .executes(context -> openSelectedNetwork(context.getSource())))
@@ -180,6 +185,37 @@ public final class CircuitCommands {
         return 1;
     }
 
+    private static int debugElements(CommandSourceStack source) {
+        ServerPlayer player;
+        try {
+            player = source.getPlayerOrException();
+        } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
+            source.sendFailure(Component.literal("This command must be used by a player."));
+            return 0;
+        }
+        BlockPos selectedPos = NetworkSelectionData.get(player);
+        if (selectedPos == null) {
+            source.sendFailure(Component.literal("No circuit selected."));
+            return 0;
+        }
+        CompiledNetwork network = NetworkSavedData.get(player.getServer())
+                .findNetworkContaining(player.serverLevel(), selectedPos);
+        if (network == null) {
+            source.sendFailure(Component.literal("Selected blocks do not belong to a compiled network."));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("Network #" + network.getId() + " \""
+                + network.getName() + "\" — Elements: " + network.getElements().size()), false);
+        int count = 0;
+        for (CompiledCircuitElement element : network.getElements()) {
+            if (count++ >= 20) break;
+            BlockPos pos = element.getPos();
+            source.sendSuccess(() -> Component.literal("#" + element.getId() + " " + element.getType()
+                    + " " + element.getBlockId() + " @ " + pos.getX() + " " + pos.getY() + " " + pos.getZ()), false);
+        }
+        return 1;
+    }
+
     private static int compile(
             CommandSourceStack source
     ) {
@@ -303,6 +339,9 @@ public final class CircuitCommands {
                         .location()
                         .toString();
 
+        java.util.List<CompiledCircuitElement> elements = CompiledElementFactory.create(
+                level, result.wires(), result.inputs(), result.outputs());
+
         CompiledNetwork network =
                 new CompiledNetwork(
                         networkId,
@@ -311,7 +350,8 @@ public final class CircuitCommands {
                         dimension,
                         result.wires(),
                         result.inputs(),
-                        result.outputs()
+                        result.outputs(),
+                        elements
                 );
 
         savedData.addNetwork(network);

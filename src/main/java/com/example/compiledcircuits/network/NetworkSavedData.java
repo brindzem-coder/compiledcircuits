@@ -425,6 +425,17 @@ public class NetworkSavedData extends SavedData {
         return nextNetworkId++;
     }
 
+    public record ElementLocation(CompiledNetwork network, CompiledCircuitElement element) { }
+
+    public ElementLocation findElementLocation(String dimension, BlockPos pos) {
+        for (CompiledNetwork network : networks.values()) {
+            if (!network.getDimension().equals(dimension)) continue;
+            CompiledCircuitElement element = network.getElementAt(pos);
+            if (element != null) return new ElementLocation(network, element);
+        }
+        return null;
+    }
+
     public CompiledNetwork findNetworkContaining(
             ServerLevel level,
             BlockPos pos
@@ -589,7 +600,9 @@ public class NetworkSavedData extends SavedData {
                         Tag.TAG_COMPOUND
                 );
 
+        boolean migratedLegacyData = false;
         for (int i = 0; i < list.size(); i++) {
+            if (!list.getCompound(i).contains("elements", Tag.TAG_LIST)) migratedLegacyData = true;
 
             CompiledNetwork network =
                     CompiledNetwork.load(
@@ -632,6 +645,7 @@ public class NetworkSavedData extends SavedData {
             );
         }
 
+        if (migratedLegacyData) data.setDirty();
         return data;
     }
 
