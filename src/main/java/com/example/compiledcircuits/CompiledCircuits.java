@@ -16,6 +16,9 @@ public class CompiledCircuits {
     public CompiledCircuits() {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
+        net.minecraftforge.fml.ModLoadingContext.get().registerConfig(
+                net.minecraftforge.fml.config.ModConfig.Type.SERVER,
+                com.example.compiledcircuits.config.ServerConfig.SPEC, "compiledcircuits-server.toml");
         ModBlocks.register(modEventBus);
         ModItems.register(modEventBus);
 

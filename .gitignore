@@ -23,3 +23,6 @@ run
 
 # Files from Forge MDK
 forge*changelog.txt
+
+# Isolated Stage 7 GameTest world and logs
+/run-stage7-tests/

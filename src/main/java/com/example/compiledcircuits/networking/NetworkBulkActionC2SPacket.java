@@ -20,7 +20,7 @@ import java.util.function.Supplier;
 public class NetworkBulkActionC2SPacket {
     public enum BulkAction {
         HIGHLIGHT_NETWORKS, MOVE_NETWORKS, DECOMPILE_NETWORKS,
-        MOVE_FOLDERS, DELETE_FOLDERS
+        MOVE_FOLDERS, DELETE_FOLDERS, REPAIR_NETWORKS
     }
 
     private static final int MAX_BULK_IDS = 100_000;
@@ -82,7 +82,37 @@ public class NetworkBulkActionC2SPacket {
                 case MOVE_NETWORKS -> success = data.moveNetworks(packet.ids, packet.targetFolderId);
                 case MOVE_FOLDERS -> success = data.moveFolders(packet.ids, packet.targetFolderId);
                 case DELETE_FOLDERS -> success = data.deleteFolders(packet.ids);
+                case REPAIR_NETWORKS -> {
+                    if (player.isSpectator() || !player.mayBuild() || packet.ids.size() > 1024
+                            || packet.ids.stream().anyMatch(id -> id <= 0 || data.getNetwork(id) == null)) {
+                        player.sendSystemMessage(Component.literal("Auto repair rejected: invalid networks, too many networks, or building is not allowed."));
+                        return;
+                    }
+                    int placed = 0, occupied = 0, unsupported = 0, failed = 0, correct = 0, unloaded = 0, invalid = 0;
+                    for (int id : packet.ids) {
+                        CompiledNetwork network = data.getNetwork(id);
+                        var dimension = net.minecraft.resources.ResourceLocation.tryParse(network.getDimension());
+                        var level = dimension == null ? null : player.getServer().getLevel(
+                                net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION, dimension));
+                        if (level == null) { failed += network.getBrokenElements().size(); continue; }
+                        var result = com.example.compiledcircuits.network.NetworkRepairManager.repairNetwork(level, network, player);
+                        unloaded += result.skippedUnloaded(); invalid += result.invalidState();
+                        placed += result.repaired(); occupied += result.skippedOccupied();
+                        unsupported += result.skippedUnsupported(); failed += result.failed(); correct += result.alreadyCorrect();
+                    }
+                    player.sendSystemMessage(Component.literal("[CompiledCircuits] Auto repair: placed " + placed
+                            + ", occupied " + occupied + ", unsupported " + unsupported + ", failed " + failed
+                            + ", already correct " + correct + ", unloaded " + unloaded + ", invalid state " + invalid
+                            + ". Occupied state mismatches require manual correction or removal before repair."));
+                    // END-tick integrity checks confirm repairs and refresh GUI, runtime and markers.
+                    return;
+                }
                 case DECOMPILE_NETWORKS -> {
+                    // Networks are shared; spectators cannot modify them.
+                    if (player.isSpectator() || packet.ids.stream().anyMatch(id -> id <= 0 || data.getNetwork(id) == null)) {
+                        fail(player);
+                        return;
+                    }
                     List<CompiledNetwork> removed = data.removeNetworks(packet.ids);
                     success = !removed.isEmpty();
                     BrokenElementSync.syncRemovedNetworks(player.getServer(), removed);

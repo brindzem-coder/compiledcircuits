@@ -68,6 +68,7 @@ public final class NetworkIntegrityEvents {
         // Break/explosion events can precede the actual world change.
         if (event.phase == TickEvent.Phase.END) {
             NetworkIntegrityManager.processPending(event.getServer());
+            NetworkIntegrityManager.audit(event.getServer());
         }
     }
 

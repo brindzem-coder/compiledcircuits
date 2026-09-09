@@ -17,6 +17,42 @@ public final class NetworkIntegrityManager {
     // Accessed only from server events; cleared when the server stops.
     private static final Map<ResourceKey<Level>, Set<BlockPos>> PENDING_CHECKS = new HashMap<>();
 
+    private static java.util.Iterator<CompiledNetwork> auditNetworks = java.util.Collections.emptyIterator();
+    private static java.util.Iterator<CompiledCircuitElement> auditElements = java.util.Collections.emptyIterator();
+    private static CompiledNetwork auditNetwork;
+    private static Boolean exactMode;
+    public static boolean exactIntegrityEnabled() {
+        if (exactMode == null) exactMode = com.example.compiledcircuits.config.ServerConfig.EXACT_BLOCK_STATE_INTEGRITY.get();
+        return exactMode;
+    }
+    public static void audit(MinecraftServer server) {
+        var data = NetworkSavedData.get(server);
+        try {
+            for (int slot = 0; slot < 128; slot++) {
+                if (!auditElements.hasNext()) {
+                    if (!auditNetworks.hasNext()) {
+                        auditNetworks = data.getNetworks().iterator();
+                        if (!auditNetworks.hasNext()) break;
+                    }
+                    auditNetwork = auditNetworks.next();
+                    auditElements = auditNetwork.getElements().iterator();
+                    if (!auditElements.hasNext()) continue;
+                }
+                var element = auditElements.next();
+                if (data.getNetwork(auditNetwork.getId()) != auditNetwork) {
+                    auditElements = java.util.Collections.emptyIterator();
+                    continue;
+                }
+                var id = net.minecraft.resources.ResourceLocation.tryParse(auditNetwork.getDimension());
+                var level = id == null ? null : server.getLevel(net.minecraft.resources.ResourceKey.create(
+                        net.minecraft.core.registries.Registries.DIMENSION, id));
+                if (level != null && level.hasChunkAt(element.getPos())) checkElement(level, data, auditNetwork, element);
+            }
+        } catch (java.util.ConcurrentModificationException changed) {
+            auditNetworks = java.util.Collections.emptyIterator();
+            auditElements = java.util.Collections.emptyIterator();
+        }
+    }
     private NetworkIntegrityManager() {}
 
     public static void scheduleCheck(ServerLevel level, BlockPos pos) {
@@ -24,6 +60,10 @@ public final class NetworkIntegrityManager {
     }
 
     public static void clearPending() {
+        auditNetworks = java.util.Collections.emptyIterator();
+        auditElements = java.util.Collections.emptyIterator();
+        auditNetwork = null;
+        exactMode = null;
         PENDING_CHECKS.clear();
     }
 
@@ -44,10 +84,16 @@ public final class NetworkIntegrityManager {
                 data.findElementLocation(level.dimension().location().toString(), pos);
         if (location == null || !level.hasChunkAt(pos)) return;
 
-        CompiledNetwork network = location.network();
-        CompiledCircuitElement element = location.element();
-        String actualBlockId = BuiltInRegistries.BLOCK.getKey(level.getBlockState(pos).getBlock()).toString();
-        boolean repaired = element.getBlockId().equals(actualBlockId);
+        checkElement(level, data, location.network(), location.element());
+    }
+
+    private static void checkElement(ServerLevel level, NetworkSavedData data, CompiledNetwork network, CompiledCircuitElement element) {
+        BlockPos pos = element.getPos();
+        var actual = level.getBlockState(pos);
+        String actualBlockId = BuiltInRegistries.BLOCK.getKey(actual.getBlock()).toString();
+        element.logUnresolved(network.getId());
+        boolean repaired = CompiledBlockStateMatcher.match(element, actual, exactIntegrityEnabled())
+                == CompiledBlockStateMatcher.Match.MATCH;
         boolean wasDamaged = network.isDamaged();
         boolean changed = repaired
                 ? network.markRepaired(element.getId())

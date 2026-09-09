@@ -609,6 +609,7 @@ public class NetworkSavedData extends SavedData {
                             list.getCompound(i)
                     );
 
+            if (network.needsPersistenceUpgrade()) migratedLegacyData = true;
             data.networks.put(
                     network.getId(),
                     network

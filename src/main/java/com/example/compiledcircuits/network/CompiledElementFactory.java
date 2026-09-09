@@ -1,8 +1,6 @@
 package com.example.compiledcircuits.network;
 
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
 
@@ -65,15 +63,12 @@ public final class CompiledElementFactory {
         for (ElementCandidate candidate : candidates) {
             BlockState state = level.getBlockState(candidate.pos());
 
-            ResourceLocation key =
-                    BuiltInRegistries.BLOCK.getKey(state.getBlock());
-
             result.add(
                     new CompiledCircuitElement(
                             nextId++,
                             candidate.pos(),
                             candidate.type(),
-                            key.toString()
+                            CompiledBlockStateCodec.capture(state)
                     )
             );
         }

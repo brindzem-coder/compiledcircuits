@@ -205,3 +205,22 @@ publishing {
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8' // Use the UTF-8 charset for Java compilation
 }
+
+// Stage 7 validation runs in Forge with the real registered mod blocks.
+sourceSets {
+    gametest {
+        compileClasspath += sourceSets.main.output + sourceSets.test.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.runtimeClasspath + sourceSets.test.output
+    }
+}
+configurations.gametestImplementation.extendsFrom(configurations.testImplementation)
+minecraft.runs.gameTestServer {
+    workingDirectory project.file('run-stage7-tests')
+    mods {
+        "${mod_id}" {
+            source sourceSets.test
+            source sourceSets.gametest
+        }
+    }
+}
+tasks.named('compileGametestJava').configure { dependsOn tasks.named('testClasses') }

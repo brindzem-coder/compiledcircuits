@@ -17,6 +17,8 @@ import java.util.Comparator;
 
 public class CompiledNetwork {
 
+    private boolean needsPersistenceUpgrade;
+    public boolean needsPersistenceUpgrade() { return needsPersistenceUpgrade; }
     private final int id;
 
     private String name;
@@ -244,6 +246,9 @@ public class CompiledNetwork {
             BrokenCircuitElement broken = BrokenCircuitElement.load(brokenList.getCompound(i));
             network.brokenElements.put(broken.getElementId(), broken);
         }
+        network.needsPersistenceUpgrade = !tag.contains("elements", Tag.TAG_LIST)
+                || elements.stream().anyMatch(CompiledCircuitElement::needsPersistenceUpgrade);
+        for (CompiledCircuitElement element : elements) element.logUnresolved(id);
         return network;
     }
 

@@ -29,6 +29,9 @@ public class NetworkManagerScreen
     private enum MainViewMode { NETWORKS, BROKEN }
     private MainViewMode mainViewMode = MainViewMode.NETWORKS;
     private Button mainViewButton;
+    private Button brokenSelectAllButton, brokenOpenNetworkButton, brokenDecompileButton;
+    private Button brokenRepairButton;
+    private Integer selectAllArmedNetworkId;
     private List<com.example.compiledcircuits.networking.BrokenElementListS2CPacket.Entry> brokenEntries = new ArrayList<>();
     private int brokenScroll;
     private final Set<Integer> brokenNetworkIds = new HashSet<>();
@@ -205,6 +208,15 @@ public class NetworkManagerScreen
                 .build());
 
         int buttonY = this.height - 28;
+        int actionWidth = Math.max(50, (width - 20) / 2);
+        brokenSelectAllButton = addRenderableWidget(Button.builder(Component.literal("Select All"),
+                button -> selectAllBrokenSmart()).bounds(8, buttonY - 24, actionWidth, 20).build());
+        brokenOpenNetworkButton = addRenderableWidget(Button.builder(Component.literal("Open Network"),
+                button -> openSelectedBrokenNetwork()).bounds(12 + actionWidth, buttonY - 24, actionWidth, 20).build());
+        brokenRepairButton = addRenderableWidget(Button.builder(Component.literal("Repair Network"),
+                button -> repairSelectedBrokenNetworks()).bounds(8, buttonY, actionWidth, 20).build());
+        brokenDecompileButton = addRenderableWidget(Button.builder(Component.literal("Decompile Network"),
+                button -> decompileSelectedBrokenNetworks()).bounds(12 + actionWidth, buttonY, actionWidth, 20).build());
 
         int x = folderPanelWidth + 4;
         int networkButtonWidth = (this.width - x - 16) / 3;
@@ -541,7 +553,7 @@ public class NetworkManagerScreen
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
         if (mainViewMode == MainViewMode.BROKEN) {
-            if (mouseX >= 10 && mouseX <= width - 10 && mouseY >= TOP && mouseY < height - BOTTOM_MARGIN) {
+            if (mouseX >= 10 && mouseX <= width - 10 && mouseY >= TOP && mouseY < getBrokenBottom()) {
                 brokenScroll -= (int) Math.signum(delta);
                 clampBrokenScroll();
                 if (brokenPaintSelecting) {
@@ -1193,6 +1205,7 @@ public class NetworkManagerScreen
             button.active = networkMode;
         }
         if (networkMode) updateButtons();
+        updateBrokenActionButtons();
     }
 
     public void onBrokenListUpdated() {
@@ -1229,21 +1242,84 @@ public class NetworkManagerScreen
     private void validateBrokenSelection() {
         Set<BrokenKey> valid = new HashSet<>();
         for (var entry : brokenEntries) valid.add(getBrokenKey(entry));
-        selectedBrokenKeys.retainAll(valid);
+        if (selectedBrokenKeys.retainAll(valid)) selectAllArmedNetworkId = null;
         stopBrokenPaint();
         syncBrokenFocusToRenderer();
     }
 
     private void selectOnlyBroken(com.example.compiledcircuits.networking.BrokenElementListS2CPacket.Entry entry) {
+        selectAllArmedNetworkId = null;
         selectedBrokenKeys.clear();
         selectedBrokenKeys.add(getBrokenKey(entry));
         syncBrokenFocusToRenderer();
     }
 
     private void toggleBrokenSelection(com.example.compiledcircuits.networking.BrokenElementListS2CPacket.Entry entry) {
+        selectAllArmedNetworkId = null;
         BrokenKey key = getBrokenKey(entry);
         if (!selectedBrokenKeys.add(key)) selectedBrokenKeys.remove(key);
         syncBrokenFocusToRenderer();
+    }
+
+    private Set<Integer> getSelectedBrokenNetworkIds() {
+        Set<Integer> result = new LinkedHashSet<>();
+        for (var entry : brokenEntries) if (isBrokenSelected(entry)) result.add(entry.networkId());
+        return result;
+    }
+
+    private void selectAllBrokenSmart() {
+        if (brokenEntries.isEmpty()) return;
+        stopBrokenPaint();
+        Set<Integer> networks = getSelectedBrokenNetworkIds();
+        Integer onlyNetwork = networks.size() == 1 ? networks.iterator().next() : null;
+        boolean selectWholeList = onlyNetwork == null || java.util.Objects.equals(selectAllArmedNetworkId, onlyNetwork);
+        selectedBrokenKeys.clear();
+        for (var entry : brokenEntries) {
+            if (selectWholeList || entry.networkId() == onlyNetwork) selectedBrokenKeys.add(getBrokenKey(entry));
+        }
+        selectAllArmedNetworkId = selectWholeList ? null : onlyNetwork;
+        syncBrokenFocusToRenderer();
+    }
+
+    private void openSelectedBrokenNetwork() {
+        Set<Integer> networks = getSelectedBrokenNetworkIds();
+        if (networks.size() != 1) return;
+        stopBrokenPaint();
+        selectAllArmedNetworkId = null;
+        mainViewMode = MainViewMode.NETWORKS;
+        mainViewButton.setMessage(Component.literal(getMainViewButtonText()));
+        updateWidgetVisibility();
+        navigateToNetwork(networks.iterator().next());
+    }
+
+    private void repairSelectedBrokenNetworks() {
+        Set<Integer> networks = getSelectedBrokenNetworkIds();
+        if (networks.isEmpty()) return;
+        ModNetworking.CHANNEL.sendToServer(new NetworkBulkActionC2SPacket(
+                NetworkBulkActionC2SPacket.BulkAction.REPAIR_NETWORKS, networks, 0));
+    }
+
+    private void decompileSelectedBrokenNetworks() {
+        Set<Integer> networks = getSelectedBrokenNetworkIds();
+        if (networks.isEmpty()) return;
+        ModNetworking.CHANNEL.sendToServer(new NetworkBulkActionC2SPacket(
+                NetworkBulkActionC2SPacket.BulkAction.DECOMPILE_NETWORKS, networks, 0));
+    }
+
+    private void updateBrokenActionButtons() {
+        if (brokenSelectAllButton == null || brokenOpenNetworkButton == null || brokenDecompileButton == null || brokenRepairButton == null) return;
+        boolean visible = mainViewMode == MainViewMode.BROKEN;
+        brokenSelectAllButton.visible = visible;
+        brokenOpenNetworkButton.visible = visible;
+        brokenDecompileButton.visible = visible;
+        brokenRepairButton.visible = visible;
+        int count = getSelectedBrokenNetworkIds().size();
+        brokenSelectAllButton.active = visible && !brokenEntries.isEmpty();
+        brokenOpenNetworkButton.active = visible && count == 1;
+        brokenDecompileButton.active = visible && count > 0;
+        brokenRepairButton.active = visible && count > 0;
+        brokenRepairButton.setMessage(Component.literal(count <= 1 ? "Repair Network" : "Repair Networks (" + count + ")"));
+        brokenDecompileButton.setMessage(Component.literal(count <= 1 ? "Decompile Network" : "Decompile Networks (" + count + ")"));
     }
 
     private void stopBrokenPaint() {
@@ -1252,9 +1328,11 @@ public class NetworkManagerScreen
     }
 
     private void clearBrokenSelection() {
+        selectAllArmedNetworkId = null;
         selectedBrokenKeys.clear();
         stopBrokenPaint();
         ClientBrokenElements.clearFocused();
+        updateBrokenActionButtons();
     }
 
     private void syncBrokenFocusToRenderer() {
@@ -1263,9 +1341,11 @@ public class NetworkManagerScreen
             if (isBrokenSelected(entry)) focused.add(new ClientBrokenElements.FocusedBrokenPos(entry.dimension(), entry.pos()));
         }
         ClientBrokenElements.setFocused(focused);
+        updateBrokenActionButtons();
     }
 
     private void paintBrokenTo(double mouseX, double mouseY) {
+        selectAllArmedNetworkId = null;
         // Sample the movement so fast drags do not skip rows between mouse events.
         int steps = Math.max(1, (int) Math.ceil(Math.max(Math.abs(mouseX - brokenPaintX), Math.abs(mouseY - brokenPaintY)) / 4));
         for (int i = 1; i <= steps; i++) {
@@ -1280,7 +1360,7 @@ public class NetworkManagerScreen
     }
 
     private boolean isInsideBrokenList(double mouseX, double mouseY) {
-        return mouseX >= 10 && mouseX < width - 10 && mouseY >= LIST_TOP && mouseY < height - BOTTOM_MARGIN;
+        return mouseX >= 10 && mouseX < width - 10 && mouseY >= LIST_TOP && mouseY < getBrokenBottom();
     }
 
     private com.example.compiledcircuits.networking.BrokenElementListS2CPacket.Entry getBrokenEntryAt(double mouseX, double mouseY) {
@@ -1301,8 +1381,10 @@ public class NetworkManagerScreen
         };
     }
 
+    private int getBrokenBottom() { return height - 64; }
+
     private int getVisibleBrokenRowCount() {
-        return Math.max(0, (height - BOTTOM_MARGIN - LIST_TOP) / BROKEN_ROW_HEIGHT);
+        return Math.max(0, (getBrokenBottom() - LIST_TOP) / BROKEN_ROW_HEIGHT);
     }
 
     private void clampBrokenScroll() {
@@ -1317,7 +1399,7 @@ public class NetworkManagerScreen
             graphics.drawString(font, "All compiled networks are healthy.", 13, LIST_TOP + 3, 0xAAAAAA, false);
             return;
         }
-        graphics.enableScissor(10, LIST_TOP, Math.max(10, width - 10), Math.max(LIST_TOP, height - BOTTOM_MARGIN));
+        graphics.enableScissor(10, LIST_TOP, Math.max(10, width - 10), Math.max(LIST_TOP, getBrokenBottom()));
         try {
             for (int row = 0; row < getVisibleBrokenRowCount() && brokenScroll + row < brokenEntries.size(); row++) {
                 var entry = brokenEntries.get(brokenScroll + row);
@@ -1682,6 +1764,7 @@ public class NetworkManagerScreen
 
     @Override
     public void onClose() {
+        selectAllArmedNetworkId = null;
         ClientBrokenElements.onGuiClosed();
         super.onClose();
     }
