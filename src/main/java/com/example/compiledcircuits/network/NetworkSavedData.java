@@ -1,5 +1,6 @@
 package com.example.compiledcircuits.network;
 
+import com.example.compiledcircuits.networking.CompiledElementSync;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -314,6 +315,7 @@ public class NetworkSavedData extends SavedData {
         if (ids.isEmpty() || !networks.keySet().containsAll(ids)) return List.of();
         List<CompiledNetwork> removed = new ArrayList<>();
         for (int id : new LinkedHashSet<>(ids)) removed.add(networks.remove(id));
+        for (CompiledNetwork network : removed) CompiledElementSync.markDimensionDirty(network.getDimension());
         setDirty();
         return removed;
     }
@@ -522,11 +524,9 @@ public class NetworkSavedData extends SavedData {
             CompiledNetwork network
     ) {
 
-        networks.put(
-                network.getId(),
-                network
-        );
-
+        CompiledNetwork previous = networks.put(network.getId(), network);
+        if (previous != null) CompiledElementSync.markDimensionDirty(previous.getDimension());
+        CompiledElementSync.markDimensionDirty(network.getDimension());
         setDirty();
     }
 
@@ -711,6 +711,7 @@ public class NetworkSavedData extends SavedData {
             return false;
         }
 
+        CompiledElementSync.markDimensionDirty(removed.getDimension());
         setDirty();
         return true;
     }

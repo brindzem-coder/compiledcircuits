@@ -1,0 +1,13 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "com.example.compiledcircuits.mixin.client",
+  "compatibilityLevel": "JAVA_17",
+  "refmap": "compiledcircuits.visual.refmap.json",
+  "client": [
+    "LevelChunkVisualIndexMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

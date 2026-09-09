@@ -13,6 +13,15 @@ public final class ClientPacketHandlers {
     private ClientPacketHandlers() {
     }
 
+    public static void handleCompiledElements(com.example.compiledcircuits.networking.CompiledElementPositionsS2CPacket packet,
+                                              net.minecraft.network.Connection connection) {
+        var minecraft = Minecraft.getInstance();
+        if (minecraft.getConnection() == null || minecraft.getConnection().getConnection() != connection) return;
+        var level = minecraft.level;
+        ClientCompiledElements.onLevelChanged(level, level == null ? "" : level.dimension().location().toString());
+        ClientCompiledElements.accept(packet, System.nanoTime());
+    }
+
     public static void handleBrokenElementList(com.example.compiledcircuits.networking.BrokenElementListS2CPacket packet) {
         ClientBrokenElementList.setEntries(packet.getEntries());
         java.util.Set<ClientBrokenElements.FocusedBrokenPos> valid = new java.util.HashSet<>();

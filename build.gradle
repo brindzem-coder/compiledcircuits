@@ -224,3 +224,91 @@ minecraft.runs.gameTestServer {
     }
 }
 tasks.named('compileGametestJava').configure { dependsOn tasks.named('testClasses') }
+
+// Pure Part A membership protocol/cache tests (no client world required).
+tasks.register('membershipCheck', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.example.compiledcircuits.client.ClientCompiledElementsTest'
+    workingDir = layout.buildDirectory.dir('membership-check').get().asFile
+    doFirst { workingDir.mkdirs() }
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
+}
+
+// Client-only physical index observer. The Mixin processor generates the refmap.
+dependencies { annotationProcessor 'org.spongepowered:mixin:0.8.5' }
+def visualRefmapDir = layout.buildDirectory.dir('generated/visualMixin')
+tasks.register('createVisualMixinSrg') {
+    dependsOn tasks.named('createMcpToSrg')
+    inputs.file(layout.buildDirectory.file('createMcpToSrg/output.tsrg'))
+    outputs.file(layout.buildDirectory.file('generated/visualMixin/input.srg'))
+    doLast {
+        visualRefmapDir.get().asFile.mkdirs()
+        net.minecraftforge.srgutils.IMappingFile.load(layout.buildDirectory.file('createMcpToSrg/output.tsrg').get().asFile)
+            .write(layout.buildDirectory.file('generated/visualMixin/input.srg').get().asFile.toPath(),
+                   net.minecraftforge.srgutils.IMappingFile.Format.SRG, false)
+    }
+}
+tasks.named('compileJava', JavaCompile).configure {
+    dependsOn tasks.named('createVisualMixinSrg')
+    options.annotationProcessorPath = configurations.annotationProcessor + sourceSets.main.compileClasspath
+    doFirst { visualRefmapDir.get().asFile.mkdirs() }
+    options.compilerArgs += [
+        '-AdefaultObfuscationEnv=searge',
+        "-AreobfSrgFile=${layout.buildDirectory.file('generated/visualMixin/input.srg').get().asFile}",
+        "-AoutRefMapFile=${visualRefmapDir.get().file('compiledcircuits.visual.refmap.json').asFile}"
+    ]
+}
+tasks.named('jar', Jar).configure {
+    manifest.attributes('MixinConfigs': 'compiledcircuits.visual.mixins.json')
+}
+minecraft.runs.configureEach {
+    args '-mixin.config', 'compiledcircuits.visual.mixins.json'
+    property 'mixin.env.remapRefMap', 'true'
+    property 'mixin.env.refMapRemappingFile', layout.buildDirectory.file('createSrgToMcp/output.srg').get().asFile.absolutePath
+}
+
+tasks.named('processResources').configure {
+    dependsOn tasks.named('compileJava')
+    from(visualRefmapDir) { include '*.refmap.json' }
+}
+
+// Bounded hover graph and cache regression checks.
+tasks.register('hoverCheck', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.example.compiledcircuits.client.ClientHoveredCircuitTest'
+    workingDir = layout.buildDirectory.dir('hover-check').get().asFile
+    doFirst { workingDir.mkdirs() }
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
+}
+
+tasks.register('visualPriorityCheck', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.example.compiledcircuits.client.CircuitVisualPriorityTest'
+    workingDir = layout.buildDirectory.dir('priority-check').get().asFile
+    doFirst { workingDir.mkdirs() }
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
+}
+
+tasks.register('membershipMutationCheck', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.example.compiledcircuits.networking.CompiledElementMutationTest'
+    workingDir = layout.buildDirectory.dir('mutation-check').get().asFile
+    doFirst { workingDir.mkdirs() }
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
+}
+
+tasks.register('visualScaleCheck', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.example.compiledcircuits.client.VisualScaleTest'
+    workingDir = layout.buildDirectory.dir('scale-check').get().asFile
+    doFirst { workingDir.mkdirs() }
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
+}
+tasks.register('visualChecks') {
+    dependsOn 'membershipCheck', 'hoverCheck', 'visualPriorityCheck', 'membershipMutationCheck', 'visualScaleCheck'
+}

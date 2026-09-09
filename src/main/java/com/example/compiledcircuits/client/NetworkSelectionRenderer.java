@@ -80,6 +80,8 @@ public class NetworkSelectionRenderer {
             return;
         }
 
+        var exclusions = CircuitVisualPriority.capture(minecraft.level.dimension().location().toString());
+
         PoseStack poseStack =
                 event.getPoseStack();
 
@@ -160,6 +162,7 @@ public class NetworkSelectionRenderer {
          */
         for (BlockPos pos
                 : ClientNetworkSelection.getWires()) {
+            if (exclusions.isBrokenReserved(pos)) continue;
 
             addBox(
                     buffer,
@@ -177,6 +180,7 @@ public class NetworkSelectionRenderer {
          */
         for (BlockPos pos
                 : ClientNetworkSelection.getInputs()) {
+            if (exclusions.isBrokenReserved(pos)) continue;
 
             addBox(
                     buffer,
@@ -194,6 +198,7 @@ public class NetworkSelectionRenderer {
          */
         for (BlockPos pos
                 : ClientNetworkSelection.getOutputs()) {
+            if (exclusions.isBrokenReserved(pos)) continue;
 
             addBox(
                     buffer,

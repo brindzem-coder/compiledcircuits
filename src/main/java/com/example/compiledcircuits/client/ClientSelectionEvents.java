@@ -22,6 +22,12 @@ public class ClientSelectionEvents {
     @SubscribeEvent
     public static void onLogout(net.minecraftforge.client.event.ClientPlayerNetworkEvent.LoggingOut event) {
         ClientBrokenElementList.clear();
+        ClientNetworkSelection.clear();
+    }
+
+    @SubscribeEvent
+    public static void onLevelUnload(net.minecraftforge.event.level.LevelEvent.Unload event) {
+        if (event.getLevel() == Minecraft.getInstance().level) ClientNetworkSelection.clear();
     }
 
     @SubscribeEvent
