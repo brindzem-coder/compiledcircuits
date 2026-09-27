@@ -1,5 +1,6 @@
 package com.example.compiledcircuits.network;
 
+import com.example.compiledcircuits.diagnostics.PerformanceDiagnostics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -26,6 +27,9 @@ public final class NetworkIntegrityManager {
         return exactMode;
     }
     public static void audit(MinecraftServer server) {
+        long diagnosticStart = PerformanceDiagnostics.begin();
+        PerformanceDiagnostics.add("audit.calls", 1);
+        try {
         var data = NetworkSavedData.get(server);
         try {
             for (int slot = 0; slot < 128; slot++) {
@@ -39,6 +43,7 @@ public final class NetworkIntegrityManager {
                     if (!auditElements.hasNext()) continue;
                 }
                 var element = auditElements.next();
+                PerformanceDiagnostics.add("audit.elements", 1);
                 if (data.getNetwork(auditNetwork.getId()) != auditNetwork) {
                     auditElements = java.util.Collections.emptyIterator();
                     continue;
@@ -52,11 +57,15 @@ public final class NetworkIntegrityManager {
             auditNetworks = java.util.Collections.emptyIterator();
             auditElements = java.util.Collections.emptyIterator();
         }
+
+        } finally { PerformanceDiagnostics.elapsed("audit", diagnosticStart); }
     }
     private NetworkIntegrityManager() {}
 
     public static void scheduleCheck(ServerLevel level, BlockPos pos) {
-        PENDING_CHECKS.computeIfAbsent(level.dimension(), key -> new HashSet<>()).add(pos.immutable());
+        boolean added = PENDING_CHECKS.computeIfAbsent(level.dimension(), key -> new HashSet<>()).add(pos.immutable());
+        PerformanceDiagnostics.add("pending.scheduleCalls", 1);
+        if (added) PerformanceDiagnostics.add("pending.uniqueEnqueued", 1);
     }
 
     public static void clearPending() {
@@ -68,14 +77,21 @@ public final class NetworkIntegrityManager {
     }
 
     public static void processPending(MinecraftServer server) {
+        long diagnosticStart = PerformanceDiagnostics.begin();
+        PerformanceDiagnostics.add("processPending.calls", 1);
+        try {
         if (PENDING_CHECKS.isEmpty()) return;
         Map<ResourceKey<Level>, Set<BlockPos>> pending = new HashMap<>(PENDING_CHECKS);
         PENDING_CHECKS.clear();
         for (var entry : pending.entrySet()) {
             ServerLevel level = server.getLevel(entry.getKey());
             if (level == null) continue;
+            PerformanceDiagnostics.add("processPending.positions", entry.getValue().size());
+            PerformanceDiagnostics.max("processPending.dimensionBatchPeak", entry.getValue().size());
             for (BlockPos pos : entry.getValue()) checkPosition(level, pos);
         }
+
+        } finally { PerformanceDiagnostics.elapsed("processPending", diagnosticStart); }
     }
 
     public static void checkPosition(ServerLevel level, BlockPos pos) {

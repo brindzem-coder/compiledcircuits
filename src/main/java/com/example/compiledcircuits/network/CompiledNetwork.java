@@ -1,5 +1,6 @@
 package com.example.compiledcircuits.network;
 
+import com.example.compiledcircuits.diagnostics.PerformanceDiagnostics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -82,6 +83,7 @@ public class CompiledNetwork {
 
     public CompiledCircuitElement getElementAt(BlockPos pos) {
         for (CompiledCircuitElement element : elements.values()) {
+            PerformanceDiagnostics.add("lookup.elementsVisited", 1);
             if (element.getPos().equals(pos)) return element;
         }
         return null;

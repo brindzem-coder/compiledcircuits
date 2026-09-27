@@ -1,5 +1,6 @@
 package com.example.compiledcircuits.network;
 
+import com.example.compiledcircuits.diagnostics.PerformanceDiagnostics;
 import com.example.compiledcircuits.registry.ModBlocks;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -14,11 +15,15 @@ public final class NetworkRepairManager {
     public record RepairResult(int repaired, int skippedOccupied, int skippedUnsupported, int failed, int alreadyCorrect, int skippedUnloaded, int invalidState) {}
 
     public static RepairResult repairNetwork(ServerLevel level, CompiledNetwork network, ServerPlayer player) {
+        long diagnosticStart = PerformanceDiagnostics.begin();
+        PerformanceDiagnostics.add("repair.calls", 1);
+        try {
         int repaired = 0, occupied = 0, unsupported = 0, failed = 0, correct = 0, unloaded = 0, invalid = 0;
         if (!level.dimension().location().toString().equals(network.getDimension())) {
-            return new RepairResult(0, 0, 0, network.getBrokenElements().size(), 0, 0, 0);
+            return diagnosticResult(0, 0, 0, network.getBrokenElements().size(), 0, 0, 0);
         }
         for (var broken : new ArrayList<>(network.getBrokenElements())) {
+            PerformanceDiagnostics.add("repair.elements", 1);
             var element = network.getElement(broken.getElementId());
             if (element == null) { failed++; continue; }
             var decoded = element.resolveState();
@@ -49,9 +54,21 @@ public final class NetworkRepairManager {
             NetworkIntegrityManager.scheduleCheck(level, pos);
             for (var direction : net.minecraft.core.Direction.values()) NetworkIntegrityManager.scheduleCheck(level, pos.relative(direction));
         }
-        return new RepairResult(repaired, occupied, unsupported, failed, correct, unloaded, invalid);
+        return diagnosticResult(repaired, occupied, unsupported, failed, correct, unloaded, invalid);
+
+        } finally { PerformanceDiagnostics.elapsed("repair", diagnosticStart); }
     }
 
+    private static RepairResult diagnosticResult(int repaired, int occupied, int unsupported, int failed, int correct, int unloaded, int invalid) {
+        PerformanceDiagnostics.add("repair.placements", repaired);
+        PerformanceDiagnostics.add("repair.occupied", occupied);
+        PerformanceDiagnostics.add("repair.unsupported", unsupported);
+        PerformanceDiagnostics.add("repair.failed", failed);
+        PerformanceDiagnostics.add("repair.alreadyCorrect", correct);
+        PerformanceDiagnostics.add("repair.unloaded", unloaded);
+        PerformanceDiagnostics.add("repair.invalid", invalid);
+        return new RepairResult(repaired, occupied, unsupported, failed, correct, unloaded, invalid);
+    }
     private static boolean isSupportedForAutoRepair(Block block) {
         return block == ModBlocks.BASIC_WIRE.get() || block == ModBlocks.INPUT_ENDPOINT.get()
                 || block == ModBlocks.OUTPUT_ENDPOINT.get();

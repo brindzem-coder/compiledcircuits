@@ -1,5 +1,6 @@
 package com.example.compiledcircuits.networking;
 
+import com.example.compiledcircuits.diagnostics.PerformanceDiagnostics;
 import com.example.compiledcircuits.network.NetworkSavedData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
@@ -51,6 +52,10 @@ public final class CompiledElementSync {
         }
         snapshotBytes = parts.stream().mapToLong(CompiledElementPositionsS2CPacket::encodedBytes).sum();
         snapshotBuildNanos = System.nanoTime() - started;
+        PerformanceDiagnostics.add("snapshot.builds", 1);
+        PerformanceDiagnostics.add("snapshot.buildNanos", snapshotBuildNanos);
+        PerformanceDiagnostics.add("snapshot.payloadBytesBuilt", snapshotBytes);
+        PerformanceDiagnostics.add("snapshot.partsBuilt", parts.size());
         return List.copyOf(parts);
     }
     public static void flushDirty(MinecraftServer server) {

@@ -1,5 +1,6 @@
 package com.example.compiledcircuits.network;
 
+import com.example.compiledcircuits.diagnostics.PerformanceDiagnostics;
 import com.example.compiledcircuits.block.IWireConnectable;
 import com.example.compiledcircuits.block.InputEndpointBlock;
 import com.example.compiledcircuits.block.OutputEndpointBlock;
@@ -24,6 +25,9 @@ public final class NetworkScanner {
             ServerLevel level,
             BlockPos startPos
     ) {
+        long diagnosticStart = PerformanceDiagnostics.begin();
+        PerformanceDiagnostics.add("scan.calls", 1);
+        try {
 
         Set<BlockPos> wires = new HashSet<>();
         Set<BlockPos> inputs = new HashSet<>();
@@ -33,12 +37,12 @@ public final class NetworkScanner {
         Queue<BlockPos> queue = new ArrayDeque<>();
 
         BlockState startState =
-                level.getBlockState(startPos);
+                diagnosticRead(level, startPos);
 
         if (!(startState.getBlock()
                 instanceof IWireConnectable)) {
 
-            return new ScanResult(
+            return diagnosticResult(
                     wires,
                     inputs,
                     outputs,
@@ -47,19 +51,23 @@ public final class NetworkScanner {
         }
 
         queue.add(startPos.immutable());
+        PerformanceDiagnostics.max("scan.queuePeak", queue.size());
 
         while (!queue.isEmpty()) {
 
             BlockPos currentPos =
                     queue.remove();
 
+            PerformanceDiagnostics.add("scan.queuePops", 1);
             if (!visited.add(currentPos)) {
                 continue;
             }
 
+            PerformanceDiagnostics.add("scan.visited", 1);
+            PerformanceDiagnostics.max("scan.queuePeak", queue.size());
             if (visited.size() > MAX_SCAN_SIZE) {
 
-                return new ScanResult(
+                return diagnosticResult(
                         wires,
                         inputs,
                         outputs,
@@ -68,7 +76,7 @@ public final class NetworkScanner {
             }
 
             BlockState currentState =
-                    level.getBlockState(currentPos);
+                    diagnosticRead(level, currentPos);
 
             if (!(currentState.getBlock()
                     instanceof IWireConnectable currentConnectable)) {
@@ -98,7 +106,7 @@ public final class NetworkScanner {
                         currentPos.relative(direction);
 
                 BlockState neighborState =
-                        level.getBlockState(neighborPos);
+                        diagnosticRead(level, neighborPos);
 
                 if (!(neighborState.getBlock()
                         instanceof IWireConnectable neighborConnectable)) {
@@ -123,18 +131,29 @@ public final class NetworkScanner {
                     queue.add(
                             neighborPos.immutable()
                     );
+                    PerformanceDiagnostics.max("scan.queuePeak", queue.size());
                 }
             }
         }
 
-        return new ScanResult(
+        return diagnosticResult(
                 wires,
                 inputs,
                 outputs,
                 true
         );
+
+        } finally { PerformanceDiagnostics.elapsed("scan", diagnosticStart); }
     }
 
+    private static BlockState diagnosticRead(ServerLevel level, BlockPos pos) {
+        PerformanceDiagnostics.add("scan.blockReads", 1);
+        return level.getBlockState(pos);
+    }
+    private static ScanResult diagnosticResult(Set<BlockPos> wires, Set<BlockPos> inputs, Set<BlockPos> outputs, boolean success) {
+        PerformanceDiagnostics.add(success ? "scan.success" : "scan.failure", 1);
+        return new ScanResult(wires, inputs, outputs, success);
+    }
     public record ScanResult(
             Set<BlockPos> wires,
             Set<BlockPos> inputs,

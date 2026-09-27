@@ -1,5 +1,6 @@
 package com.example.compiledcircuits.network;
 
+import com.example.compiledcircuits.diagnostics.PerformanceDiagnostics;
 import com.example.compiledcircuits.networking.CompiledElementSync;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -430,18 +431,28 @@ public class NetworkSavedData extends SavedData {
     public record ElementLocation(CompiledNetwork network, CompiledCircuitElement element) { }
 
     public ElementLocation findElementLocation(String dimension, BlockPos pos) {
+        long diagnosticStart = PerformanceDiagnostics.begin();
+        PerformanceDiagnostics.add("lookup.findElementLocation.calls", 1);
+        try {
         for (CompiledNetwork network : networks.values()) {
+            PerformanceDiagnostics.add("lookup.findElementLocation.networksVisited", 1);
             if (!network.getDimension().equals(dimension)) continue;
             CompiledCircuitElement element = network.getElementAt(pos);
-            if (element != null) return new ElementLocation(network, element);
+            if (element != null) { PerformanceDiagnostics.add("lookup.findElementLocation.hits", 1); return new ElementLocation(network, element); }
         }
+        PerformanceDiagnostics.add("lookup.findElementLocation.misses", 1);
         return null;
+
+        } finally { PerformanceDiagnostics.elapsed("lookup.findElementLocation", diagnosticStart); }
     }
 
     public CompiledNetwork findNetworkContaining(
             ServerLevel level,
             BlockPos pos
     ) {
+        long diagnosticStart = PerformanceDiagnostics.begin();
+        PerformanceDiagnostics.add("lookup.findNetworkContaining.calls", 1);
+        try {
 
         String dimension =
                 level.dimension()
@@ -449,6 +460,7 @@ public class NetworkSavedData extends SavedData {
                         .toString();
 
         for (CompiledNetwork network : networks.values()) {
+            PerformanceDiagnostics.add("lookup.findNetworkContaining.networksVisited", 1);
 
             if (!network.getDimension().equals(dimension)) {
                 continue;
@@ -458,17 +470,24 @@ public class NetworkSavedData extends SavedData {
                     || network.getInputs().contains(pos)
                     || network.getOutputs().contains(pos)) {
 
+                PerformanceDiagnostics.add("lookup.findNetworkContaining.hits", 1);
                 return network;
             }
         }
 
+        PerformanceDiagnostics.add("lookup.findNetworkContaining.misses", 1);
         return null;
+
+        } finally { PerformanceDiagnostics.elapsed("lookup.findNetworkContaining", diagnosticStart); }
     }
 
     public CompiledNetwork findConflict(
             ServerLevel level,
             NetworkScanner.ScanResult result
     ) {
+        long diagnosticStart = PerformanceDiagnostics.begin();
+        PerformanceDiagnostics.add("lookup.findConflict.calls", 1);
+        try {
 
         String dimension =
                 level.dimension()
@@ -476,6 +495,7 @@ public class NetworkSavedData extends SavedData {
                         .toString();
 
         for (CompiledNetwork network : networks.values()) {
+            PerformanceDiagnostics.add("lookup.findConflict.networksVisited", 1);
 
             if (!network.getDimension().equals(dimension)) {
                 continue;
@@ -485,6 +505,7 @@ public class NetworkSavedData extends SavedData {
                     network.getWires(),
                     result.wires()
             )) {
+                PerformanceDiagnostics.add("lookup.findConflict.hits", 1);
                 return network;
             }
 
@@ -492,6 +513,7 @@ public class NetworkSavedData extends SavedData {
                     network.getInputs(),
                     result.inputs()
             )) {
+                PerformanceDiagnostics.add("lookup.findConflict.hits", 1);
                 return network;
             }
 
@@ -499,11 +521,15 @@ public class NetworkSavedData extends SavedData {
                     network.getOutputs(),
                     result.outputs()
             )) {
+                PerformanceDiagnostics.add("lookup.findConflict.hits", 1);
                 return network;
             }
         }
 
+        PerformanceDiagnostics.add("lookup.findConflict.misses", 1);
         return null;
+
+        } finally { PerformanceDiagnostics.elapsed("lookup.findConflict", diagnosticStart); }
     }
 
     private static boolean containsAny(
@@ -512,6 +538,7 @@ public class NetworkSavedData extends SavedData {
     ) {
 
         for (BlockPos pos : second) {
+            PerformanceDiagnostics.add("lookup.conflictPositionsVisited", 1);
             if (first.contains(pos)) {
                 return true;
             }
@@ -654,6 +681,9 @@ public class NetworkSavedData extends SavedData {
             ServerLevel level,
             BlockPos pos
     ) {
+        long diagnosticStart = PerformanceDiagnostics.begin();
+        PerformanceDiagnostics.add("lookup.findNetworkByInput.calls", 1);
+        try {
 
         String dimension =
                 level.dimension()
@@ -662,6 +692,7 @@ public class NetworkSavedData extends SavedData {
 
         for (CompiledNetwork network
                 : networks.values()) {
+            PerformanceDiagnostics.add("lookup.findNetworkByInput.networksVisited", 1);
 
             if (!network.getDimension()
                     .equals(dimension)) {
@@ -669,17 +700,24 @@ public class NetworkSavedData extends SavedData {
             }
 
             if (network.getInputs().contains(pos)) {
+                PerformanceDiagnostics.add("lookup.findNetworkByInput.hits", 1);
                 return network;
             }
         }
 
+        PerformanceDiagnostics.add("lookup.findNetworkByInput.misses", 1);
         return null;
+
+        } finally { PerformanceDiagnostics.elapsed("lookup.findNetworkByInput", diagnosticStart); }
     }
 
     public CompiledNetwork findNetworkByOutput(
             ServerLevel level,
             BlockPos pos
     ) {
+        long diagnosticStart = PerformanceDiagnostics.begin();
+        PerformanceDiagnostics.add("lookup.findNetworkByOutput.calls", 1);
+        try {
 
         String dimension =
                 level.dimension()
@@ -688,6 +726,7 @@ public class NetworkSavedData extends SavedData {
 
         for (CompiledNetwork network
                 : networks.values()) {
+            PerformanceDiagnostics.add("lookup.findNetworkByOutput.networksVisited", 1);
 
             if (!network.getDimension()
                     .equals(dimension)) {
@@ -695,11 +734,15 @@ public class NetworkSavedData extends SavedData {
             }
 
             if (network.getOutputs().contains(pos)) {
+                PerformanceDiagnostics.add("lookup.findNetworkByOutput.hits", 1);
                 return network;
             }
         }
 
+        PerformanceDiagnostics.add("lookup.findNetworkByOutput.misses", 1);
         return null;
+
+        } finally { PerformanceDiagnostics.elapsed("lookup.findNetworkByOutput", diagnosticStart); }
     }
 
     public boolean removeNetwork(int id) {

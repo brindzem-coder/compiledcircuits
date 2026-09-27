@@ -1,5 +1,6 @@
 package com.example.compiledcircuits.network;
 
+import com.example.compiledcircuits.diagnostics.PerformanceDiagnostics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
@@ -23,6 +24,9 @@ public final class NetworkCompiler {
             ServerPlayer player,
             String requestedName
     ) {
+        long diagnosticStart = PerformanceDiagnostics.begin();
+        PerformanceDiagnostics.add("compile.calls", 1);
+        try {
 
         ServerLevel level =
                 player.serverLevel();
@@ -197,5 +201,6 @@ public final class NetworkCompiler {
         );
 
         return true;
+        } finally { PerformanceDiagnostics.elapsed("compile", diagnosticStart); }
     }
 }

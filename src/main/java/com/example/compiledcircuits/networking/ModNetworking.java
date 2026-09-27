@@ -1,5 +1,6 @@
 package com.example.compiledcircuits.networking;
 
+import com.example.compiledcircuits.diagnostics.PerformanceDiagnostics;
 import com.example.compiledcircuits.CompiledCircuits;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.network.NetworkRegistry;
@@ -33,12 +34,12 @@ public final class ModNetworking {
 
     public static void register() {
         CHANNEL.registerMessage(packetId++, BrokenElementListS2CPacket.class,
-                BrokenElementListS2CPacket::encode, BrokenElementListS2CPacket::decode,
+                PerformanceDiagnostics.encoder("BrokenElementListS2CPacket", BrokenElementListS2CPacket::encode), BrokenElementListS2CPacket::decode,
                 BrokenElementListS2CPacket::handle,
                 java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));
         CHANNEL.registerMessage(
                 packetId++, BrokenElementsS2CPacket.class,
-                BrokenElementsS2CPacket::encode, BrokenElementsS2CPacket::decode,
+                PerformanceDiagnostics.encoder("BrokenElementsS2CPacket", BrokenElementsS2CPacket::encode), BrokenElementsS2CPacket::decode,
                 BrokenElementsS2CPacket::handle,
                 java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));
 
@@ -46,7 +47,7 @@ public final class ModNetworking {
         CHANNEL.registerMessage(
                 packetId++,
                 NetworkListS2CPacket.class,
-                NetworkListS2CPacket::encode,
+                PerformanceDiagnostics.encoder("NetworkListS2CPacket", NetworkListS2CPacket::encode),
                 NetworkListS2CPacket::decode,
                 NetworkListS2CPacket::handle
         );
@@ -54,7 +55,7 @@ public final class ModNetworking {
         CHANNEL.registerMessage(
                 packetId++,
                 NetworkActionC2SPacket.class,
-                NetworkActionC2SPacket::encode,
+                PerformanceDiagnostics.encoder("NetworkActionC2SPacket", NetworkActionC2SPacket::encode),
                 NetworkActionC2SPacket::decode,
                 NetworkActionC2SPacket::handle
         );
@@ -62,35 +63,35 @@ public final class ModNetworking {
         CHANNEL.registerMessage(
                 packetId++,
                 NetworkHighlightS2CPacket.class,
-                NetworkHighlightS2CPacket::encode,
+                PerformanceDiagnostics.encoder("NetworkHighlightS2CPacket", NetworkHighlightS2CPacket::encode),
                 NetworkHighlightS2CPacket::decode,
                 NetworkHighlightS2CPacket::handle
         );
         CHANNEL.registerMessage(
                 packetId++,
                 NetworkBulkActionC2SPacket.class,
-                NetworkBulkActionC2SPacket::encode,
+                PerformanceDiagnostics.encoder("NetworkBulkActionC2SPacket", NetworkBulkActionC2SPacket::encode),
                 NetworkBulkActionC2SPacket::decode,
                 NetworkBulkActionC2SPacket::handle,
                 java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER)
         );
         CHANNEL.registerMessage(
                 packetId++, OpenCompileNameS2CPacket.class,
-                OpenCompileNameS2CPacket::encode, OpenCompileNameS2CPacket::decode,
+                PerformanceDiagnostics.encoder("OpenCompileNameS2CPacket", OpenCompileNameS2CPacket::encode), OpenCompileNameS2CPacket::decode,
                 OpenCompileNameS2CPacket::handle,
                 java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));
         CHANNEL.registerMessage(
                 packetId++, CompileNamedC2SPacket.class,
-                CompileNamedC2SPacket::encode, CompileNamedC2SPacket::decode,
+                PerformanceDiagnostics.encoder("CompileNamedC2SPacket", CompileNamedC2SPacket::encode), CompileNamedC2SPacket::decode,
                 CompileNamedC2SPacket::handle,
                 java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER));
         CHANNEL.registerMessage(
                 packetId++, OpenNetworkManagerAtS2CPacket.class,
-                OpenNetworkManagerAtS2CPacket::encode, OpenNetworkManagerAtS2CPacket::decode,
+                PerformanceDiagnostics.encoder("OpenNetworkManagerAtS2CPacket", OpenNetworkManagerAtS2CPacket::encode), OpenNetworkManagerAtS2CPacket::decode,
                 OpenNetworkManagerAtS2CPacket::handle,
                 java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));
         CHANNEL.registerMessage(packetId++, CompiledElementPositionsS2CPacket.class,
-                CompiledElementPositionsS2CPacket::encode, CompiledElementPositionsS2CPacket::decode,
+                PerformanceDiagnostics.encoder("CompiledElementPositionsS2CPacket", CompiledElementPositionsS2CPacket::encode), CompiledElementPositionsS2CPacket::decode,
                 CompiledElementPositionsS2CPacket::handle,
                 java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));
     }

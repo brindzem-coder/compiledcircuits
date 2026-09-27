@@ -26,3 +26,21 @@ forge*changelog.txt
 
 # Isolated Stage 7 GameTest world and logs
 /run-stage7-tests/
+
+# Local world backups (keep outside version control)
+/baseline-????-??-??/
+
+# IDE state and generated runtime directories
+/.vs/
+/logs/
+/run-data/
+
+# Raw baseline logs; JSON captures and manifests remain versioned
+/baseline-results/**/*.log
+/baseline-results/**/*.log.gz
+
+# Profiling recordings and JVM crash dumps
+*.jfr
+*.hprof
+hs_err_pid*.log
+replay_pid*.log

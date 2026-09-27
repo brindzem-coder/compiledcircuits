@@ -1,5 +1,6 @@
 package com.example.compiledcircuits.command;
 
+import com.example.compiledcircuits.diagnostics.PerformanceDiagnostics;
 import com.example.compiledcircuits.network.CompiledNetwork;
 import com.example.compiledcircuits.network.CompiledCircuitElement;
 import com.example.compiledcircuits.network.CompiledElementFactory;
@@ -216,7 +217,22 @@ public final class CircuitCommands {
         return 1;
     }
 
-    private static int compile(
+    /** Measures the synchronous command operation, including all early rejections. */
+    private static int compile(CommandSourceStack source) {
+        long started = PerformanceDiagnostics.begin();
+        PerformanceDiagnostics.add("compile.command.calls", 1);
+        String outcome = "compile.command.exceptions";
+        try {
+            int result = compileOperation(source);
+            outcome = result > 0 ? "compile.command.success" : "compile.command.rejected";
+            return result;
+        } finally {
+            PerformanceDiagnostics.elapsed("compile.command", started);
+            PerformanceDiagnostics.add(outcome, 1);
+        }
+    }
+
+    private static int compileOperation(
             CommandSourceStack source
     ) {
 
