@@ -75,13 +75,14 @@ public final class CircuitStateOutlineRenderer {
                             continue;
                         }
                         if (exclusions.suppressesOutline(pos)) continue;
+                        boolean blocked = ClientCompiledElements.isBlocked(pos);
                         boolean hovered = ClientHoveredCircuit.contains(pos);
                         if (!hovered && ClientCompiledElements.networkIdAt(pos) != null) continue;
                         LevelRenderer.renderLineBox(poses, lines,
                                 pos.getX() + 0.002, pos.getY() + 0.002, pos.getZ() + 0.002,
                                 pos.getX() + 0.998, pos.getY() + 0.998, pos.getZ() + 0.998,
-                                hovered ? 0.15F : 1.00F, hovered ? 0.85F : 0.30F,
-                                hovered ? 1.00F : 0.72F, hovered ? 0.85F : 0.70F);
+                                blocked ? 1.00F : hovered ? 0.15F : 1.00F, blocked ? 0.65F : hovered ? 0.85F : 0.30F,
+                                blocked ? 0.00F : hovered ? 1.00F : 0.72F, hovered ? 0.85F : 0.70F);
                         outlinedPositions++;
                     }
                 }

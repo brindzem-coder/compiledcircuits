@@ -20,6 +20,13 @@ public class CompiledElementPositionsPacketTest {
   for(int count:new int[]{0,-1,1000}) {
    try {new CompiledElementPositionsS2CPacket(dim,2,0,count,List.of(entry));throw new AssertionError();}catch(IllegalArgumentException expected){checks++;}
   }
+  var blockedPacket = new CompiledElementPositionsS2CPacket(dim,3,0,1,List.of(entry),List.of(BlockPos.ZERO),true);
+  var blockedBuffer = new FriendlyByteBuf(Unpooled.buffer());
+  CompiledElementPositionsS2CPacket.encode(blockedPacket,blockedBuffer);
+  check(blockedBuffer.readableBytes()==blockedPacket.encodedBytes());
+  check(CompiledElementPositionsS2CPacket.decode(blockedBuffer).equals(blockedPacket)); blockedBuffer.release();
+  try { new CompiledElementPositionsS2CPacket(dim,4,0,1,List.of(entry),List.of(entry.pos()),false); throw new AssertionError(); }
+  catch (IllegalArgumentException expected) { checks++; }
   System.out.println("Compiled membership packet checks passed: " + checks);
  }
 }

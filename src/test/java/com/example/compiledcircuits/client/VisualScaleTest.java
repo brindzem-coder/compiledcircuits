@@ -14,7 +14,7 @@ public final class VisualScaleTest {
             for (int i=0;i<size;i++) elements.add(new CompiledCircuitElement(i+1,
                     new BlockPos(i%1000-500,-64+i/1000,-17), CircuitElementType.WIRE,"compiledcircuits:basic_wire"));
             var data = new NetworkSavedData();
-            data.addNetwork(new CompiledNetwork(1,"scale",0,"minecraft:overworld",Set.of(),Set.of(),Set.of(),elements));
+            data.addNetwork(new CompiledNetwork(1,"scale",0,"minecraft:overworld",elements));
             var parts = CompiledElementSync.buildSnapshot(data,"minecraft:overworld",size);
             long buildNanos = CompiledElementSync.getSnapshotBuildNanos();
             ClientCompiledElements.clear();

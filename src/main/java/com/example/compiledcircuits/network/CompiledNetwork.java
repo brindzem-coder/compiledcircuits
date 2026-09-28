@@ -49,28 +49,62 @@ public class CompiledNetwork {
             Set<BlockPos> inputs,
             Set<BlockPos> outputs
     ) {
-        this(id, name, folderId, dimension, wires, inputs, outputs, Collections.emptyList());
+        this(id, name, folderId, dimension, wires, inputs, outputs, migrateLegacyElements(wires, inputs, outputs));
     }
 
+    /** Compatibility constructor: role sets must exactly describe the authoritative elements. */
     public CompiledNetwork(int id, String name, int folderId, String dimension,
                            Set<BlockPos> wires, Set<BlockPos> inputs, Set<BlockPos> outputs,
                            Collection<CompiledCircuitElement> elements) {
-        this.elements = new LinkedHashMap<>();
-        for (CompiledCircuitElement element : elements) {
-            if (this.elements.putIfAbsent(element.getId(), element) != null) {
-                throw new IllegalArgumentException("Duplicate compiled element ID: " + element.getId());
-            }
+        this(id, name, folderId, dimension, elements);
+        if (!this.wires.equals(wires) || !this.inputs.equals(inputs) || !this.outputs.equals(outputs)) {
+            throw new IllegalArgumentException("Role sets disagree with elements in network " + id);
         }
+    }
+
+    public CompiledNetwork(int id, String name, int folderId, String dimension,
+                           Collection<CompiledCircuitElement> elements) {
+        if (id <= 0) throw new IllegalArgumentException("Invalid network ID: " + id);
+        if (dimension == null || net.minecraft.resources.ResourceLocation.tryParse(dimension) == null)
+            throw new IllegalArgumentException("Invalid network dimension: " + dimension);
         this.id = id;
         this.name = name;
         this.folderId = folderId;
-        this.dimension = dimension;
-
-        this.wires = new HashSet<>(wires);
-        this.inputs = new HashSet<>(inputs);
-        this.outputs = new HashSet<>(outputs);
-
+        this.dimension = net.minecraft.resources.ResourceLocation.tryParse(dimension).toString();
+        this.elements = new LinkedHashMap<>();
+        Set<BlockPos> positions = new HashSet<>();
+        Set<BlockPos> wirePositions = new HashSet<>(), inputPositions = new HashSet<>(), outputPositions = new HashSet<>();
+        for (CompiledCircuitElement element : elements) {
+            if (element == null || element.getId() <= 0 || element.getType() == null)
+                throw new IllegalArgumentException("Invalid element in network " + id);
+            if (this.elements.putIfAbsent(element.getId(), element) != null)
+                throw new IllegalArgumentException("Duplicate compiled element ID: " + element.getId());
+            CircuitElementType requiredRole = switch (element.getBlockId()) {
+                case "compiledcircuits:basic_wire" -> CircuitElementType.WIRE;
+                case "compiledcircuits:input_endpoint" -> CircuitElementType.INPUT;
+                case "compiledcircuits:output_endpoint" -> CircuitElementType.OUTPUT;
+                default -> element.getType();
+            };
+            if (element.getType() != requiredRole)
+                throw new IllegalArgumentException("Block/role mismatch for element " + element.getId());
+            BlockPos pos = element.getPos().immutable();
+            if (!positions.add(pos)) throw new IllegalArgumentException("Duplicate compiled position: " + pos);
+            switch (element.getType()) {
+                case INPUT -> inputPositions.add(pos);
+                case OUTPUT -> outputPositions.add(pos);
+                default -> wirePositions.add(pos);
+            }
+        }
+        this.wires = immutablePositions(wirePositions);
+        this.inputs = immutablePositions(inputPositions);
+        this.outputs = immutablePositions(outputPositions);
         this.powered = false;
+    }
+
+    private static Set<BlockPos> immutablePositions(Set<BlockPos> positions) {
+        Set<BlockPos> copy = new HashSet<>();
+        for (BlockPos pos : positions) copy.add(pos.immutable());
+        return Collections.unmodifiableSet(copy);
     }
 
     public Collection<CompiledCircuitElement> getElements() {
@@ -186,6 +220,24 @@ public class CompiledNetwork {
     }
 
     public static CompiledNetwork load(CompoundTag tag) {
+        // Validate membership before lossy getters can substitute defaults or collapse duplicates.
+        if (!tag.contains("id", Tag.TAG_INT) || !tag.contains("dimension", Tag.TAG_STRING))
+            throw new IllegalArgumentException("Missing network ID or dimension");
+        validatePositionList(tag, "wires");
+        validatePositionList(tag, "inputs");
+        validatePositionList(tag, "outputs");
+        if (tag.contains("elements")) {
+            ListTag raw = requireCompoundList(tag, "elements");
+            for (int i = 0; i < raw.size(); i++) {
+                CompoundTag element = raw.getCompound(i);
+                if (!element.contains("id", Tag.TAG_INT) || !element.contains("pos", Tag.TAG_LONG)
+                        || !element.contains("type", Tag.TAG_STRING) || !element.contains("blockId", Tag.TAG_STRING))
+                    throw new IllegalArgumentException("Incomplete membership element " + i);
+                try { CircuitElementType.valueOf(element.getString("type")); }
+                catch (IllegalArgumentException invalid) { throw new IllegalArgumentException("Unknown membership role at element " + i); }
+            }
+        }
+
 
         int id = tag.getInt("id");
         String name = tag.getString("name");
@@ -252,6 +304,24 @@ public class CompiledNetwork {
                 || elements.stream().anyMatch(CompiledCircuitElement::needsPersistenceUpgrade);
         for (CompiledCircuitElement element : elements) element.logUnresolved(id);
         return network;
+    }
+
+    private static ListTag requireCompoundList(CompoundTag tag, String key) {
+        if (!(tag.get(key) instanceof ListTag list) || (!list.isEmpty() && list.getElementType() != Tag.TAG_COMPOUND))
+            throw new IllegalArgumentException("Invalid membership list: " + key);
+        return list;
+    }
+
+    private static void validatePositionList(CompoundTag tag, String key) {
+        ListTag list = requireCompoundList(tag, key);
+        Set<BlockPos> seen = new HashSet<>();
+        for (int i = 0; i < list.size(); i++) {
+            CompoundTag pos = list.getCompound(i);
+            if (!pos.contains("x", Tag.TAG_INT) || !pos.contains("y", Tag.TAG_INT) || !pos.contains("z", Tag.TAG_INT))
+                throw new IllegalArgumentException("Incomplete position in " + key);
+            if (!seen.add(new BlockPos(pos.getInt("x"), pos.getInt("y"), pos.getInt("z"))))
+                throw new IllegalArgumentException("Duplicate position in " + key);
+        }
     }
 
     private static List<CompiledCircuitElement> migrateLegacyElements(

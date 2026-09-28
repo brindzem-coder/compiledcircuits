@@ -29,7 +29,7 @@ public final class CompiledElementMutationTest {
         CompiledElementSync.clear();
         data.addNetwork(network(4,"minecraft:overworld"));
         CompiledElementSync.clear();
-        data.addNetwork(network(4,"minecraft:the_nether"));
+        data.replaceNetwork(network(4,"minecraft:the_nether"));
         check(dirty.equals(Set.of("minecraft:overworld","minecraft:the_nether")));
         var saved = data.save(new CompoundTag());
         CompiledElementSync.clear();

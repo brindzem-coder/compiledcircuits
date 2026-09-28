@@ -12,7 +12,7 @@ import java.util.List;
 import java.util.function.Supplier;
 
 public record CompiledElementPositionsS2CPacket(ResourceLocation dimension, long snapshotId,
-                                               int partIndex, int partCount, List<Entry> entries) {
+                                               int partIndex, int partCount, List<Entry> entries, List<BlockPos> blocked, boolean unknownReservations) {
     // Protocol limits; raising these requires matching server/client changes.
     public static final int MAX_ENTRIES = 1_000_000;
     public static final int ENTRIES_PER_PART = 4096;
@@ -25,15 +25,20 @@ public record CompiledElementPositionsS2CPacket(ResourceLocation dimension, long
             pos = pos.immutable();
         }
     }
+    public CompiledElementPositionsS2CPacket(ResourceLocation dimension, long snapshotId, int partIndex, int partCount, List<Entry> entries) {
+        this(dimension, snapshotId, partIndex, partCount, entries, List.of(), false);
+    }
     public CompiledElementPositionsS2CPacket {
         if (dimension == null || dimension.toString().length() > 256 || snapshotId <= 0
                 || partCount < 1 || partCount > MAX_PARTS || partIndex < 0 || partIndex >= partCount
-                || entries.size() > ENTRIES_PER_PART || (entries.isEmpty() && partCount != 1)) {
+                || entries.size() + blocked.size() > ENTRIES_PER_PART || (entries.isEmpty() && blocked.isEmpty() && partCount != 1)) {
             throw new IllegalArgumentException("Invalid compiled snapshot part");
         }
         entries = List.copyOf(entries);
+        blocked = blocked.stream().map(BlockPos::immutable).toList();
         var seen = new HashSet<BlockPos>();
         for (Entry entry : entries) if (!seen.add(entry.pos())) throw new IllegalArgumentException("Duplicate compiled position");
+        for (BlockPos pos : blocked) if (!seen.add(pos)) throw new IllegalArgumentException("Duplicate blocked position");
     }
     /** Encoded payload bytes, excluding the channel discriminator and transport framing. */
     public long encodedBytes() {
@@ -42,13 +47,15 @@ public record CompiledElementPositionsS2CPacket(ResourceLocation dimension, long
                 + FriendlyByteBuf.getVarIntSize(partIndex) + FriendlyByteBuf.getVarIntSize(partCount)
                 + FriendlyByteBuf.getVarIntSize(entries.size());
         for (Entry entry : entries) bytes += FriendlyByteBuf.getVarIntSize(entry.networkId()) + 8;
-        return bytes;
+        return bytes + 1 + FriendlyByteBuf.getVarIntSize(blocked.size()) + 8L * blocked.size();
     }
-    public long estimatedBytes() { return 1024L + 13L * entries.size(); }
+    public long estimatedBytes() { return 1024L + 13L * (entries.size() + blocked.size()); }
     public static void encode(CompiledElementPositionsS2CPacket packet, FriendlyByteBuf buf) {
         buf.writeResourceLocation(packet.dimension); buf.writeLong(packet.snapshotId);
         buf.writeVarInt(packet.partIndex); buf.writeVarInt(packet.partCount); buf.writeVarInt(packet.entries.size());
         for (Entry entry : packet.entries) { buf.writeVarInt(entry.networkId()); buf.writeBlockPos(entry.pos()); }
+        buf.writeBoolean(packet.unknownReservations); buf.writeVarInt(packet.blocked.size());
+        for (BlockPos pos : packet.blocked) buf.writeBlockPos(pos);
     }
     public static CompiledElementPositionsS2CPacket decode(FriendlyByteBuf buf) {
         if (buf.readableBytes() > 64 * 1024) throw new IllegalArgumentException("Compiled part exceeds byte budget");
@@ -57,7 +64,13 @@ public record CompiledElementPositionsS2CPacket(ResourceLocation dimension, long
         if (size < 0 || size > ENTRIES_PER_PART || size > buf.readableBytes() / 9) throw new IllegalArgumentException("Invalid entry count");
         var entries = new java.util.ArrayList<Entry>(size);
         for (int i = 0; i < size; i++) entries.add(new Entry(buf.readVarInt(), buf.readBlockPos()));
-        return new CompiledElementPositionsS2CPacket(dimension, id, index, count, entries);
+        boolean unknown = buf.readBoolean();
+        int blockedSize = buf.readVarInt();
+        if (blockedSize < 0 || blockedSize > ENTRIES_PER_PART - size || blockedSize > buf.readableBytes() / 8)
+            throw new IllegalArgumentException("Invalid blocked entry count");
+        var blocked = new java.util.ArrayList<BlockPos>(blockedSize);
+        for (int i = 0; i < blockedSize; i++) blocked.add(buf.readBlockPos());
+        return new CompiledElementPositionsS2CPacket(dimension, id, index, count, entries, blocked, unknown);
     }
     public static void handle(CompiledElementPositionsS2CPacket packet, Supplier<NetworkEvent.Context> supplier) {
         var context = supplier.get();

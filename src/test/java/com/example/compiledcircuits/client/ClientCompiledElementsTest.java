@@ -39,6 +39,21 @@ public class ClientCompiledElementsTest {
   check(ClientCompiledElements.positionsForNetwork(7).isEmpty());
   ClientCompiledElements.clear();ClientCompiledElements.onLevelChanged(new Object(),"minecraft:the_nether");
   check(!ClientCompiledElements.isReadyFor("minecraft:the_nether"));
+  var dim = new ResourceLocation("minecraft:the_nether");
+  ClientCompiledElements.accept(new CompiledElementPositionsS2CPacket(dim,1,0,1,
+      List.of(new CompiledElementPositionsS2CPacket.Entry(7,a))),12);
+  ClientCompiledElements.accept(new CompiledElementPositionsS2CPacket(dim,2,0,2,
+      List.of(new CompiledElementPositionsS2CPacket.Entry(8,b)),List.of(),false),13);
+  check(ClientCompiledElements.networkIdAt(a)==7);
+  ClientCompiledElements.accept(new CompiledElementPositionsS2CPacket(dim,2,1,2,List.of(),List.of(a),false),14);
+  check(ClientCompiledElements.networkIdAt(a)==null && ClientCompiledElements.isBlocked(a));
+  check(ClientCompiledElements.networkIdAt(b)==8 && !ClientCompiledElements.isBlocked(b));
+  ClientCompiledElements.accept(new CompiledElementPositionsS2CPacket(dim,3,0,1,
+      List.of(new CompiledElementPositionsS2CPacket.Entry(8,b)),List.of(),true),15);
+  check(ClientCompiledElements.isBlocked(a) && !ClientCompiledElements.isBlocked(b));
+  ClientCompiledElements.accept(new CompiledElementPositionsS2CPacket(dim,4,0,1,List.of()),16);
+  check(!ClientCompiledElements.isBlocked(a) && !ClientCompiledElements.hasBlockedMembership());
+  ClientCompiledElements.clear();check(!ClientCompiledElements.hasBlockedMembership());
   CompiledElementPositionsPacketTest.run();
   System.out.println("Compiled membership cache checks passed: " + checks);
  }

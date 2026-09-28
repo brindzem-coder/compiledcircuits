@@ -38,6 +38,12 @@ public final class CircuitCommands {
 
         dispatcher.register(
                 Commands.literal("circuit")
+                        .then(Commands.literal("conflicts").requires(source -> source.hasPermission(2))
+                                .then(Commands.literal("list").executes(context -> listConflicts(context.getSource())))
+                                .then(Commands.literal("remove")
+                                        .then(Commands.argument("record", StringArgumentType.word())
+                                                .executes(context -> removeConflict(context.getSource(),
+                                                        StringArgumentType.getString(context, "record"))))))
 
                         .then(
                                 Commands.literal("compile")
@@ -140,6 +146,30 @@ public final class CircuitCommands {
         );
     }
 
+    private static int listConflicts(CommandSourceStack source) {
+        var data = NetworkSavedData.get(source.getServer());
+        var records = data.getInvalidMembershipRecords();
+        source.sendSuccess(() -> Component.literal("Blocked saved records: " + records.size()
+                + (data.hasUnknownMembershipReservations() ? "; unknown reservation scope: new compilation blocked." : "; known positions remain reserved.")), false);
+        for (var record : records) {
+            var raw = record.getCompound("raw");
+            source.sendSuccess(() -> Component.literal(record.getString("recordId") + " | " + raw.getString("name")
+                    + " (#" + raw.getInt("id") + ") | " + record.getString("reason")), false);
+        }
+        return records.size();
+    }
+
+    private static int removeConflict(CommandSourceStack source, String recordId) {
+        var data = NetworkSavedData.get(source.getServer());
+        if (!data.removeInvalidMembershipRecord(recordId)) {
+            source.sendFailure(Component.literal("Unknown isolated record ID. Use /circuit conflicts list."));
+            return 0;
+        }
+        source.sendSuccess(() -> Component.literal("Removed isolated record " + recordId
+                + ". Other claims remain reserved; no network was automatically reactivated."), true);
+        return 1;
+    }
+
     private static int openCompileName(CommandSourceStack source) {
         ServerPlayer player;
         try {
@@ -235,6 +265,11 @@ public final class CircuitCommands {
     private static int compileOperation(
             CommandSourceStack source
     ) {
+        if (NetworkSavedData.get(source.getServer()).hasUnknownMembershipReservations()) {
+            source.sendFailure(Component.literal("Compilation blocked: unresolved saved membership records. See server log."));
+            return 0;
+        }
+
 
         ServerPlayer player;
 
@@ -323,54 +358,20 @@ public final class CircuitCommands {
                         source.getServer()
                 );
 
-        CompiledNetwork conflict =
-                savedData.findConflict(
-                        level,
-                        result
-                );
-
-        if (conflict != null) {
-
-            source.sendFailure(
-                    Component.literal(
-                            "Cannot compile: part of this circuit already belongs to "
-                                    + conflict.getName()
-                                    + " (#"
-                                    + conflict.getId()
-                                    + ")."
-                    )
-            );
-
+        final int networkId;
+        final CompiledNetwork network;
+        final String defaultName;
+        try {
+            networkId = savedData.getNextNetworkId();
+            defaultName = "Network " + networkId;
+            var elements = CompiledElementFactory.create(level, result.wires(), result.inputs(), result.outputs());
+            network = new CompiledNetwork(networkId, defaultName, 0,
+                    level.dimension().location().toString(), elements);
+            savedData.addNetwork(network);
+        } catch (IllegalArgumentException rejected) {
+            source.sendFailure(Component.literal("Cannot compile: " + rejected.getMessage()));
             return 0;
         }
-
-        int networkId =
-                savedData.getNextNetworkId();
-
-        String defaultName =
-                "Network " + networkId;
-
-        String dimension =
-                level.dimension()
-                        .location()
-                        .toString();
-
-        java.util.List<CompiledCircuitElement> elements = CompiledElementFactory.create(
-                level, result.wires(), result.inputs(), result.outputs());
-
-        CompiledNetwork network =
-                new CompiledNetwork(
-                        networkId,
-                        defaultName,
-                        0,
-                        dimension,
-                        result.wires(),
-                        result.inputs(),
-                        result.outputs(),
-                        elements
-                );
-
-        savedData.addNetwork(network);
 
         source.sendSuccess(
                 () -> Component.literal(

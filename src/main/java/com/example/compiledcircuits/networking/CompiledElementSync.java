@@ -41,14 +41,24 @@ public final class CompiledElementSync {
                 entries.add(new CompiledElementPositionsS2CPacket.Entry(network.getId(), element.getPos()));
             }
         }
-        int count = Math.max(1, (entries.size() + CompiledElementPositionsS2CPacket.ENTRIES_PER_PART - 1)
-                / CompiledElementPositionsS2CPacket.ENTRIES_PER_PART);
+        var blocked = new ArrayList<>(data.getBlockedPositions(dimension));
+        int total = entries.size() + blocked.size();
+        boolean unknownReservations = data.hasUnknownMembershipReservations();
+        if (total > CompiledElementPositionsS2CPacket.MAX_ENTRIES) {
+            // Do not let oversized corrupt data prevent healthy membership from syncing.
+            // The client conservatively treats all unowned positions as blocked instead.
+            blocked.clear(); total = entries.size(); unknownReservations = true;
+        }
+        int limit = CompiledElementPositionsS2CPacket.ENTRIES_PER_PART;
+        int count = Math.max(1, (total + limit - 1) / limit);
         var parts = new ArrayList<CompiledElementPositionsS2CPacket>(count);
         var dim = new ResourceLocation(dimension);
         for (int index = 0; index < count; index++) {
-            int start = index * CompiledElementPositionsS2CPacket.ENTRIES_PER_PART;
+            int start = index * limit, end = Math.min(total, start + limit);
             parts.add(new CompiledElementPositionsS2CPacket(dim, id, index, count,
-                    entries.subList(start, Math.min(entries.size(), start + CompiledElementPositionsS2CPacket.ENTRIES_PER_PART))));
+                    entries.subList(Math.min(start, entries.size()), Math.min(end, entries.size())),
+                    blocked.subList(Math.max(0, start - entries.size()), Math.max(0, end - entries.size())),
+                    unknownReservations));
         }
         snapshotBytes = parts.stream().mapToLong(CompiledElementPositionsS2CPacket::encodedBytes).sum();
         snapshotBuildNanos = System.nanoTime() - started;

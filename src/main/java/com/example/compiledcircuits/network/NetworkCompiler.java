@@ -27,6 +27,10 @@ public final class NetworkCompiler {
         long diagnosticStart = PerformanceDiagnostics.begin();
         PerformanceDiagnostics.add("compile.calls", 1);
         try {
+        if (NetworkSavedData.get(player.getServer()).hasUnknownMembershipReservations()) {
+            player.sendSystemMessage(Component.literal("Compilation blocked: unresolved saved membership records. See server log."));
+            return false;
+        }
 
         ServerLevel level =
                 player.serverLevel();
@@ -136,58 +140,18 @@ public final class NetworkCompiler {
                         player.getServer()
                 );
 
-        CompiledNetwork conflict =
-                savedData.findConflict(
-                        level,
-                        result
-                );
-
-        if (conflict != null) {
-
-            player.sendSystemMessage(
-                    Component.literal(
-                            "Cannot compile: part of this circuit already belongs to "
-                                    + conflict.getName()
-                                    + " (#"
-                                    + conflict.getId()
-                                    + ")."
-                    )
-            );
-
+        final int networkId;
+        final CompiledNetwork network;
+        try {
+            networkId = savedData.getNextNetworkId();
+            var elements = CompiledElementFactory.create(level, result.wires(), result.inputs(), result.outputs());
+            network = new CompiledNetwork(networkId, name, 0,
+                    level.dimension().location().toString(), elements);
+            savedData.addNetwork(network);
+        } catch (IllegalArgumentException rejected) {
+            player.sendSystemMessage(Component.literal("Cannot compile: " + rejected.getMessage()));
             return false;
         }
-
-        int networkId =
-                savedData.getNextNetworkId();
-
-        String dimension =
-                level.dimension()
-                        .location()
-                        .toString();
-
-        /*
-         * Нова network створюється у root folder.
-         *
-         * folderId = 0
-         */
-        java.util.List<CompiledCircuitElement> elements = CompiledElementFactory.create(
-                level, result.wires(), result.inputs(), result.outputs());
-
-        CompiledNetwork network =
-                new CompiledNetwork(
-                        networkId,
-                        name,
-                        0,
-                        dimension,
-                        result.wires(),
-                        result.inputs(),
-                        result.outputs(),
-                        elements
-                );
-
-        savedData.addNetwork(
-                network
-        );
 
         NetworkRuntime.inputChanged(level, network.getInputs().iterator().next());
 
