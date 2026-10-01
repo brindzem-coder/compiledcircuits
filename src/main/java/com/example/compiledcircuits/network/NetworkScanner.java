@@ -16,7 +16,7 @@ import java.util.Set;
 
 public final class NetworkScanner {
 
-    private static final int MAX_SCAN_SIZE = 50_000;
+    private static final int MAX_SCAN_SIZE = OperationLimits.ELEMENTS;
 
     private NetworkScanner() {
     }
@@ -36,6 +36,7 @@ public final class NetworkScanner {
         Set<BlockPos> visited = new HashSet<>();
         Queue<BlockPos> queue = new ArrayDeque<>();
 
+        if (!level.hasChunkAt(startPos)) return diagnosticResult(wires, inputs, outputs, false);
         BlockState startState =
                 diagnosticRead(level, startPos);
 
@@ -105,6 +106,7 @@ public final class NetworkScanner {
                 BlockPos neighborPos =
                         currentPos.relative(direction);
 
+                if (!level.hasChunkAt(neighborPos)) return diagnosticResult(wires, inputs, outputs, false);
                 BlockState neighborState =
                         diagnosticRead(level, neighborPos);
 

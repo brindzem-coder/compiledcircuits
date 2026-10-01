@@ -171,7 +171,7 @@ public class MembershipIndexGameTests {
         var level = helper.getLevel();
         var server = level.getServer();
         var data = NetworkSavedData.get(server);
-        var player = net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(level);
+        var player = new net.minecraftforge.common.util.FakePlayer(level, new com.mojang.authlib.GameProfile(java.util.UUID.randomUUID(), "membership"));
         var selection = NetworkSelectionData.get(player);
         var pos = helper.absolutePos(new BlockPos(1, 2, 1));
         var end = pos.east();
@@ -186,7 +186,7 @@ public class MembershipIndexGameTests {
             var owner = network(id, level.dimension().location().toString(), pos, CircuitElementType.WIRE);
             data.addNetwork(owner);
             var before = data.save(new CompoundTag());
-            helper.assertTrue(NetworkCompiler.findSelectedConflict(player) == owner, "GUI preflight detects cross-role conflict");
+            // The name dialog no longer performs an extra scan; admission checks the submitted request.
             helper.assertTrue(server.getCommands().getDispatcher().execute("circuit compile", player.createCommandSourceStack()) == 0, "command rejects cross-role conflict");
             helper.assertTrue(!NetworkCompiler.compileSelected(player, "conflicting GUI"), "GUI admission rejects cross-role conflict");
             helper.assertTrue(before.equals(data.save(new CompoundTag())) && data.getNetwork(id) == owner, "both entry points preserve data and counter");
@@ -312,7 +312,7 @@ public class MembershipIndexGameTests {
             var dispatcher = level.getServer().getCommands().getDispatcher();
             var admin = level.getServer().createCommandSourceStack();
             helper.assertTrue(dispatcher.execute("circuit conflicts list", admin) == 2, "administrator can inspect isolated records");
-            var fake = net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(level).createCommandSourceStack().withPermission(0);
+            var fake = new net.minecraftforge.common.util.FakePlayer(level, new com.mojang.authlib.GameProfile(java.util.UUID.randomUUID(), "membership")).createCommandSourceStack().withPermission(0);
             try { dispatcher.execute("circuit conflicts remove " + before.get(0).getString("recordId"), fake); throw new AssertionError("non-admin removal"); }
             catch (com.mojang.brigadier.exceptions.CommandSyntaxException expected) { }
             helper.assertTrue(dispatcher.execute("circuit conflicts remove " + before.get(0).getString("recordId"), admin) == 1, "administrator removes one explicit record");

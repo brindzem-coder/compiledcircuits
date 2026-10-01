@@ -8,7 +8,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 
 public final class ModNetworking {
 
-    private static final String PROTOCOL_VERSION = "10";
+    private static final String PROTOCOL_VERSION = "11";
 
     public static final SimpleChannel CHANNEL =
             NetworkRegistry.ChannelBuilder
@@ -49,7 +49,8 @@ public final class ModNetworking {
                 NetworkListS2CPacket.class,
                 PerformanceDiagnostics.encoder("NetworkListS2CPacket", NetworkListS2CPacket::encode),
                 NetworkListS2CPacket::decode,
-                NetworkListS2CPacket::handle
+                NetworkListS2CPacket::handle,
+                java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT)
         );
 
         CHANNEL.registerMessage(
@@ -57,7 +58,8 @@ public final class ModNetworking {
                 NetworkActionC2SPacket.class,
                 PerformanceDiagnostics.encoder("NetworkActionC2SPacket", NetworkActionC2SPacket::encode),
                 NetworkActionC2SPacket::decode,
-                NetworkActionC2SPacket::handle
+                NetworkActionC2SPacket::handle,
+                java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER)
         );
 
         CHANNEL.registerMessage(
@@ -65,7 +67,8 @@ public final class ModNetworking {
                 NetworkHighlightS2CPacket.class,
                 PerformanceDiagnostics.encoder("NetworkHighlightS2CPacket", NetworkHighlightS2CPacket::encode),
                 NetworkHighlightS2CPacket::decode,
-                NetworkHighlightS2CPacket::handle
+                NetworkHighlightS2CPacket::handle,
+                java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT)
         );
         CHANNEL.registerMessage(
                 packetId++,

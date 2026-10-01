@@ -15,6 +15,11 @@ public final class NetworkRepairManager {
     public record RepairResult(int repaired, int skippedOccupied, int skippedUnsupported, int failed, int alreadyCorrect, int skippedUnloaded, int invalidState) {}
 
     public static RepairResult repairNetwork(ServerLevel level, CompiledNetwork network, ServerPlayer player) {
+        if (!NetworkOperations.authorizeDirectRepair(player, network))
+            return new RepairResult(0,0,0,network.getBrokenElements().size(),0,0,0);
+        return repairAuthorized(level,network,player);
+    }
+    static RepairResult repairAuthorized(ServerLevel level, CompiledNetwork network, ServerPlayer player) {
         long diagnosticStart = PerformanceDiagnostics.begin();
         PerformanceDiagnostics.add("repair.calls", 1);
         try {
@@ -23,6 +28,9 @@ public final class NetworkRepairManager {
             return diagnosticResult(0, 0, 0, network.getBrokenElements().size(), 0, 0, 0);
         }
         for (var broken : new ArrayList<>(network.getBrokenElements())) {
+            if (!NetworkOperations.canModify(player) || NetworkSavedData.get(level.getServer()).getNetwork(network.getId()) != network) {
+                failed++; continue;
+            }
             PerformanceDiagnostics.add("repair.elements", 1);
             var element = network.getElement(broken.getElementId());
             if (element == null) { failed++; continue; }
@@ -49,7 +57,12 @@ public final class NetworkRepairManager {
             var restored = decoded.state().orElseGet(expected::defaultBlockState);
             if (expected == ModBlocks.BASIC_WIRE.get()) restored = Block.updateFromNeighbourShapes(restored, level, pos);
             if (!restored.is(expected)) { failed++; continue; }
-            if (!level.setBlock(pos, restored, Block.UPDATE_ALL)) { failed++; continue; }
+            if (!restored.canSurvive(level, pos)
+                    || !level.isUnobstructed(restored, pos, net.minecraft.world.phys.shapes.CollisionContext.empty())
+                    || !ProtectedRepairPlacement.place(level, pos, restored, player,
+                    () -> NetworkOperations.canModify(player) && NetworkSavedData.get(level.getServer()).getNetwork(network.getId()) == network)) {
+                failed++; continue;
+            }
             repaired++;
             NetworkIntegrityManager.scheduleCheck(level, pos);
             for (var direction : net.minecraft.core.Direction.values()) NetworkIntegrityManager.scheduleCheck(level, pos.relative(direction));

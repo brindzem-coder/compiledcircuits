@@ -64,6 +64,28 @@ public class NetworkSavedData extends SavedData {
         boolean changed = reservationsChanged; reservationsChanged = false; return changed;
     }
 
+    public long getIsolationWorkSize() {
+        long size = invalidMembershipRecords.size();
+        if (size > OperationLimits.IDS) return Long.MAX_VALUE;
+        for (var record : invalidMembershipRecords) {
+            var raw = record.getCompound("raw");
+            for (String field : List.of("elements", "wires", "inputs", "outputs")) {
+                size += raw.getList(field, Tag.TAG_COMPOUND).size();
+                if (size > OperationLimits.ELEMENTS) return size;
+            }
+        }
+        return size;
+    }
+    public int getInvalidMembershipRecordCount() { return invalidMembershipRecords.size(); }
+    public List<String> getInvalidMembershipSummaries() {
+        return invalidMembershipRecords.stream().map(record -> {
+            var raw = record.getCompound("raw");
+            String name = raw.getString("name"), reason = record.getString("reason");
+            return record.getString("recordId") + " | " + name.substring(0, Math.min(name.length(), 64))
+                    + " (#" + raw.getInt("id") + ") | " + reason.substring(0, Math.min(reason.length(), 512));
+        }).toList();
+    }
+
     public boolean hasInvalidMembershipRecords() { return !invalidMembershipRecords.isEmpty(); }
 
     /** Defensive copies: callers cannot edit the stored evidence/reservations. */

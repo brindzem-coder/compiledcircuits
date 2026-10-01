@@ -29,7 +29,7 @@ public class NetworkTextEditScreen
             String initialValue,
             Consumer<String> onSave
     ) {
-        this(parent, title, label, initialValue, onSave, 256);
+        this(parent, title, label, initialValue, onSave, com.example.compiledcircuits.network.OperationLimits.NAME);
     }
 
     public NetworkTextEditScreen(Screen parent, String title, String label, String initialValue,

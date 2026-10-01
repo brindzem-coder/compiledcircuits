@@ -1,137 +1,55 @@
 package com.example.compiledcircuits.networking;
-
-import com.example.compiledcircuits.network.CompiledNetwork;
-import com.example.compiledcircuits.network.NetworkSavedData;
+import com.example.compiledcircuits.network.*;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
 import net.minecraftforge.network.PacketDistributor;
-
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.ArrayList;
+import java.util.*;
 import java.util.function.Supplier;
-
 public class NetworkBulkActionC2SPacket {
-    public enum BulkAction {
-        HIGHLIGHT_NETWORKS, MOVE_NETWORKS, DECOMPILE_NETWORKS,
-        MOVE_FOLDERS, DELETE_FOLDERS, REPAIR_NETWORKS
-    }
-
-    private static final int MAX_BULK_IDS = 100_000;
+    public enum BulkAction { HIGHLIGHT_NETWORKS, MOVE_NETWORKS, DECOMPILE_NETWORKS, MOVE_FOLDERS, DELETE_FOLDERS, REPAIR_NETWORKS }
     private final BulkAction action;
     private final List<Integer> ids;
     private final int targetFolderId;
-
-    public NetworkBulkActionC2SPacket(BulkAction action, Collection<Integer> ids, int targetFolderId) {
-        if (ids.size() > MAX_BULK_IDS) throw new IllegalArgumentException("Too many IDs");
-        this.action = action;
-        this.ids = List.copyOf(new LinkedHashSet<>(ids));
-        this.targetFolderId = targetFolderId;
+    public NetworkBulkActionC2SPacket(BulkAction action, Collection<Integer> ids, int target) {
+        if (action == null || ids == null || ids.isEmpty() || ids.size() > OperationLimits.IDS || target < 0)
+            throw new IllegalArgumentException("Invalid bulk request");
+        for (Integer id : ids) if (id == null || id <= 0) throw new IllegalArgumentException("Invalid target ID");
+        this.action = action; this.ids = List.copyOf(new LinkedHashSet<>(ids)); targetFolderId = target;
     }
-
-    public static void encode(NetworkBulkActionC2SPacket packet, FriendlyByteBuf buf) {
-        buf.writeEnum(packet.action);
-        buf.writeVarInt(packet.ids.size());
-        for (int id : packet.ids) buf.writeVarInt(id);
-        buf.writeVarInt(packet.targetFolderId);
+    public static void encode(NetworkBulkActionC2SPacket p, FriendlyByteBuf buf) {
+        buf.writeEnum(p.action); buf.writeVarInt(p.ids.size()); for (int id:p.ids) buf.writeVarInt(id); buf.writeVarInt(p.targetFolderId);
     }
-
     public static NetworkBulkActionC2SPacket decode(FriendlyByteBuf buf) {
-        BulkAction action = buf.readEnum(BulkAction.class);
-        int size = buf.readVarInt();
-        if (size < 0 || size > MAX_BULK_IDS || size >= buf.readableBytes()) {
-            throw new IllegalArgumentException("Invalid bulk ID count");
-        }
-        List<Integer> ids = new ArrayList<>(size);
-        for (int i = 0; i < size; i++) ids.add(buf.readVarInt());
+        var action = buf.readEnum(BulkAction.class); int size = buf.readVarInt();
+        if (size <= 0 || size > OperationLimits.IDS || size >= buf.readableBytes()) throw new IllegalArgumentException("Invalid raw bulk size");
+        List<Integer> ids = new ArrayList<>(size); for(int i=0;i<size;i++) ids.add(buf.readVarInt());
         return new NetworkBulkActionC2SPacket(action, ids, buf.readVarInt());
     }
-
+    public static NetworkOperations.Result execute(NetworkBulkActionC2SPacket packet, ServerPlayer player) {
+        var action = switch(packet.action) {
+            case HIGHLIGHT_NETWORKS -> NetworkOperations.Action.HIGHLIGHT;
+            case DECOMPILE_NETWORKS -> NetworkOperations.Action.DECOMPILE;
+            case REPAIR_NETWORKS -> NetworkOperations.Action.REPAIR;
+            default -> NetworkOperations.Action.valueOf(packet.action.name());
+        };
+        return NetworkOperations.execute(player == null ? null : player.createCommandSourceStack(), action, packet.ids, packet.targetFolderId, "");
+    }
     public static void handle(NetworkBulkActionC2SPacket packet, Supplier<NetworkEvent.Context> supplier) {
-        NetworkEvent.Context context = supplier.get();
+        var context = supplier.get();
+        if (context.getDirection() != net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER) {
+            context.setPacketHandled(true); return;
+        }
         context.enqueueWork(() -> {
-            ServerPlayer player = context.getSender();
-            if (player == null) return;
-            NetworkSavedData data = NetworkSavedData.get(player.getServer());
-            if (packet.ids.isEmpty() || packet.ids.size() > MAX_BULK_IDS) {
-                fail(player);
-                return;
-            }
-            boolean success;
-            switch (packet.action) {
-                case HIGHLIGHT_NETWORKS -> {
-                    List<CompiledNetwork> networks = new ArrayList<>();
-                    for (int id : packet.ids) {
-                        CompiledNetwork network = data.getNetwork(id);
-                        if (network == null) {
-                            fail(player);
-                            return;
-                        }
-                        networks.add(network);
-                    }
-                    ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                            buildHighlight(networks));
-                    return;
-                }
-                case MOVE_NETWORKS -> success = data.moveNetworks(packet.ids, packet.targetFolderId);
-                case MOVE_FOLDERS -> success = data.moveFolders(packet.ids, packet.targetFolderId);
-                case DELETE_FOLDERS -> success = data.deleteFolders(packet.ids);
-                case REPAIR_NETWORKS -> {
-                    if (player.isSpectator() || !player.mayBuild() || packet.ids.size() > 1024
-                            || packet.ids.stream().anyMatch(id -> id <= 0 || data.getNetwork(id) == null)) {
-                        player.sendSystemMessage(Component.literal("Auto repair rejected: invalid networks, too many networks, or building is not allowed."));
-                        return;
-                    }
-                    int placed = 0, occupied = 0, unsupported = 0, failed = 0, correct = 0, unloaded = 0, invalid = 0;
-                    for (int id : packet.ids) {
-                        CompiledNetwork network = data.getNetwork(id);
-                        var dimension = net.minecraft.resources.ResourceLocation.tryParse(network.getDimension());
-                        var level = dimension == null ? null : player.getServer().getLevel(
-                                net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION, dimension));
-                        if (level == null) { failed += network.getBrokenElements().size(); continue; }
-                        var result = com.example.compiledcircuits.network.NetworkRepairManager.repairNetwork(level, network, player);
-                        unloaded += result.skippedUnloaded(); invalid += result.invalidState();
-                        placed += result.repaired(); occupied += result.skippedOccupied();
-                        unsupported += result.skippedUnsupported(); failed += result.failed(); correct += result.alreadyCorrect();
-                    }
-                    player.sendSystemMessage(Component.literal("[CompiledCircuits] Auto repair: placed " + placed
-                            + ", occupied " + occupied + ", unsupported " + unsupported + ", failed " + failed
-                            + ", already correct " + correct + ", unloaded " + unloaded + ", invalid state " + invalid
-                            + ". Occupied state mismatches require manual correction or removal before repair."));
-                    // END-tick integrity checks confirm repairs and refresh GUI, runtime and markers.
-                    return;
-                }
-                case DECOMPILE_NETWORKS -> {
-                    // Networks are shared; spectators cannot modify them.
-                    if (player.isSpectator() || packet.ids.stream().anyMatch(id -> id <= 0 || data.getNetwork(id) == null)) {
-                        fail(player);
-                        return;
-                    }
-                    List<CompiledNetwork> removed = data.removeNetworks(packet.ids);
-                    success = !removed.isEmpty();
-                    BrokenElementSync.syncRemovedNetworks(player.getServer(), removed);
-                    // Remove the entire selection before notifying any neighbors.
-                    for (CompiledNetwork network : removed) {
-                        NetworkActionC2SPacket.updateRemovedNetworkOutputs(player, network);
-                    }
-                }
-                default -> throw new IllegalStateException("Unknown bulk action");
-            }
-            if (!success) {
-                fail(player);
-                return;
-            }
-            NetworkGuiSync.sendList(player);
+            var player = context.getSender(); if (player == null) return;
+            var result = execute(packet,player); NetworkOperations.reply(player.createCommandSourceStack(),result);
+            if (!result.success()) return;
+            if (packet.action == BulkAction.HIGHLIGHT_NETWORKS) ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),buildHighlight(result.networks()));
+            else if (packet.action != BulkAction.REPAIR_NETWORKS) NetworkGuiSync.sendList(player);
         });
         context.setPacketHandled(true);
     }
-
     static NetworkHighlightS2CPacket buildHighlight(Collection<CompiledNetwork> networks) {
         Set<BlockPos> wires = new HashSet<>();
         Set<BlockPos> inputs = new HashSet<>();
@@ -144,10 +62,4 @@ public class NetworkBulkActionC2SPacket {
         return new NetworkHighlightS2CPacket(wires, inputs, outputs);
     }
 
-    private static void fail(ServerPlayer player) {
-        player.sendSystemMessage(Component.literal(
-                "Could not apply bulk action. Nothing changed. Check that items exist, folders are empty for deletion, "
-                        + "and the destination has no name conflicts or folder cycles."));
-        NetworkGuiSync.sendList(player);
-    }
 }

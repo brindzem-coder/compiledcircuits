@@ -42,7 +42,7 @@ public class DiagnosticsGameTests {
             // Exercise actual command paths, not a synthetic timer invocation.
             helper.assertTrue(dispatcher.execute("circuit compile", source) == 0, "console compilation rejected");
             var level = helper.getLevel();
-            var player = net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(level);
+            var player = new net.minecraftforge.common.util.FakePlayer(level, new com.mojang.authlib.GameProfile(java.util.UUID.randomUUID(), "diagnostics"));
             var selection = com.example.compiledcircuits.network.NetworkSelectionData.get(player);
             var data = com.example.compiledcircuits.network.NetworkSavedData.get(server);
             var pos = helper.absolutePos(new net.minecraft.core.BlockPos(1, 2, 1));

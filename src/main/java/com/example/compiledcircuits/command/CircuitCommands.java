@@ -4,7 +4,8 @@ import com.example.compiledcircuits.diagnostics.PerformanceDiagnostics;
 import com.example.compiledcircuits.network.CompiledNetwork;
 import com.example.compiledcircuits.network.CompiledCircuitElement;
 import com.example.compiledcircuits.network.CompiledElementFactory;
-import com.example.compiledcircuits.network.NetworkCompiler;
+import com.example.compiledcircuits.network.NetworkOperations;
+import java.util.List;
 import com.example.compiledcircuits.network.NetworkSavedData;
 import com.example.compiledcircuits.network.NetworkScanner;
 import com.example.compiledcircuits.network.NetworkSelectionData;
@@ -146,668 +147,82 @@ public final class CircuitCommands {
         );
     }
 
+    private static NetworkOperations.Result request(CommandSourceStack source, NetworkOperations.Action action,
+                                                     List<Integer> ids, int target, String value) {
+        return NetworkOperations.execute(source, action, ids, target, value);
+    }
     private static int listConflicts(CommandSourceStack source) {
+        var result = request(source, NetworkOperations.Action.LIST_CONFLICTS, List.of(), 0, "");
+        if (!result.success()) return NetworkOperations.reply(source,result);
         var data = NetworkSavedData.get(source.getServer());
-        var records = data.getInvalidMembershipRecords();
-        source.sendSuccess(() -> Component.literal("Blocked saved records: " + records.size()
-                + (data.hasUnknownMembershipReservations() ? "; unknown reservation scope: new compilation blocked." : "; known positions remain reserved.")), false);
-        for (var record : records) {
-            var raw = record.getCompound("raw");
-            source.sendSuccess(() -> Component.literal(record.getString("recordId") + " | " + raw.getString("name")
-                    + " (#" + raw.getInt("id") + ") | " + record.getString("reason")), false);
-        }
-        return records.size();
+        source.sendSuccess(() -> Component.literal("Blocked saved records: " + data.getInvalidMembershipRecordCount()),false);
+        for (String line : data.getInvalidMembershipSummaries()) source.sendSuccess(() -> Component.literal(line),false);
+        return data.getInvalidMembershipRecordCount();
     }
-
-    private static int removeConflict(CommandSourceStack source, String recordId) {
-        var data = NetworkSavedData.get(source.getServer());
-        if (!data.removeInvalidMembershipRecord(recordId)) {
-            source.sendFailure(Component.literal("Unknown isolated record ID. Use /circuit conflicts list."));
-            return 0;
-        }
-        source.sendSuccess(() -> Component.literal("Removed isolated record " + recordId
-                + ". Other claims remain reserved; no network was automatically reactivated."), true);
-        return 1;
+    private static int removeConflict(CommandSourceStack source, String record) {
+        return NetworkOperations.reply(source,request(source,NetworkOperations.Action.REMOVE_CONFLICT,List.of(),0,record));
     }
-
     private static int openCompileName(CommandSourceStack source) {
-        ServerPlayer player;
-        try {
-            player = source.getPlayerOrException();
-        } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
-            source.sendFailure(Component.literal("This command must be used by a player."));
-            return 0;
-        }
-        if (NetworkSelectionData.get(player) == null) {
-            source.sendFailure(Component.literal("No circuit selected."));
-            return 0;
-        }
-        CompiledNetwork conflict = NetworkCompiler.findSelectedConflict(player);
-        if (conflict != null) {
-            source.sendFailure(Component.literal("Cannot compile: part of this circuit already belongs to "
-                    + conflict.getName() + " (#" + conflict.getId() + ")."));
-            return 0;
-        }
-        ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                new OpenCompileNameS2CPacket());
+        var result = request(source,NetworkOperations.Action.OPEN_COMPILE,List.of(),0,"");
+        if (!result.success()) return NetworkOperations.reply(source,result);
+        var player = (ServerPlayer)source.getEntity();
+        ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),new OpenCompileNameS2CPacket());
         return 1;
     }
-
     private static int openSelectedNetwork(CommandSourceStack source) {
-        ServerPlayer player;
-        try {
-            player = source.getPlayerOrException();
-        } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
-            source.sendFailure(Component.literal("This command must be used by a player."));
-            return 0;
-        }
-        BlockPos selectedPos = NetworkSelectionData.get(player);
-        if (selectedPos == null) {
-            source.sendFailure(Component.literal("No circuit selected."));
-            return 0;
-        }
-        CompiledNetwork network = NetworkSavedData.get(player.getServer())
-                .findNetworkContaining(player.serverLevel(), selectedPos);
-        if (network == null) {
-            source.sendFailure(Component.literal("Selected blocks do not belong to a compiled network."));
-            return 0;
-        }
-        NetworkGuiSync.sendListAndNavigate(player, network.getId());
+        var result = request(source,NetworkOperations.Action.SELECTED,List.of(),0,"");
+        if (!result.success()) return NetworkOperations.reply(source,result);
+        NetworkGuiSync.sendListAndNavigate((ServerPlayer)source.getEntity(),result.networks().get(0).getId());
         return 1;
     }
-
     private static int debugElements(CommandSourceStack source) {
-        ServerPlayer player;
-        try {
-            player = source.getPlayerOrException();
-        } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
-            source.sendFailure(Component.literal("This command must be used by a player."));
-            return 0;
-        }
-        BlockPos selectedPos = NetworkSelectionData.get(player);
-        if (selectedPos == null) {
-            source.sendFailure(Component.literal("No circuit selected."));
-            return 0;
-        }
-        CompiledNetwork network = NetworkSavedData.get(player.getServer())
-                .findNetworkContaining(player.serverLevel(), selectedPos);
-        if (network == null) {
-            source.sendFailure(Component.literal("Selected blocks do not belong to a compiled network."));
-            return 0;
-        }
-        source.sendSuccess(() -> Component.literal("Network #" + network.getId() + " \""
-                + network.getName() + "\" — Elements: " + network.getElements().size()), false);
-        int count = 0;
-        for (CompiledCircuitElement element : network.getElements()) {
-            if (count++ >= 20) break;
-            BlockPos pos = element.getPos();
-            source.sendSuccess(() -> Component.literal("#" + element.getId() + " " + element.getType()
-                    + " " + element.getBlockId() + " @ " + pos.getX() + " " + pos.getY() + " " + pos.getZ()), false);
+        var result = request(source,NetworkOperations.Action.DEBUG,List.of(),0,"");
+        if (!result.success()) return NetworkOperations.reply(source,result);
+        var network = result.networks().get(0);
+        source.sendSuccess(() -> Component.literal("Network #" + network.getId() + " " + network.getName()),false);
+        int count=0;
+        for (var e:network.getElements()) {
+            if (count++ >=20) break;
+            source.sendSuccess(() -> Component.literal("#"+e.getId()+" "+e.getType()+" "+e.getBlockId()+" @ "+e.getPos().toShortString()),false);
         }
         return 1;
     }
-
-    /** Measures the synchronous command operation, including all early rejections. */
     private static int compile(CommandSourceStack source) {
-        long started = PerformanceDiagnostics.begin();
-        PerformanceDiagnostics.add("compile.command.calls", 1);
-        String outcome = "compile.command.exceptions";
+        long started=PerformanceDiagnostics.begin(); PerformanceDiagnostics.add("compile.command.calls",1);
+        String outcome="compile.command.exceptions";
         try {
-            int result = compileOperation(source);
-            outcome = result > 0 ? "compile.command.success" : "compile.command.rejected";
+            int result=NetworkOperations.reply(source,request(source,NetworkOperations.Action.COMPILE,List.of(),0,null));
+            outcome=result>0?"compile.command.success":"compile.command.rejected";
             return result;
-        } finally {
-            PerformanceDiagnostics.elapsed("compile.command", started);
-            PerformanceDiagnostics.add(outcome, 1);
-        }
+        } finally { PerformanceDiagnostics.elapsed("compile.command",started); PerformanceDiagnostics.add(outcome,1); }
     }
-
-    private static int compileOperation(
-            CommandSourceStack source
-    ) {
-        if (NetworkSavedData.get(source.getServer()).hasUnknownMembershipReservations()) {
-            source.sendFailure(Component.literal("Compilation blocked: unresolved saved membership records. See server log."));
-            return 0;
-        }
-
-
-        ServerPlayer player;
-
-        try {
-            player = source.getPlayerOrException();
-        } catch (Exception e) {
-
-            source.sendFailure(
-                    Component.literal(
-                            "This command must be used by a player."
-                    )
-            );
-
-            return 0;
-        }
-
-        BlockPos startPos =
-                NetworkSelectionData.get(player);
-
-        if (startPos == null) {
-
-            source.sendFailure(
-                    Component.literal(
-                            "No network selected. Use the Network Selector first."
-                    )
-            );
-
-            return 0;
-        }
-
-        ServerLevel level =
-                player.serverLevel();
-
-        NetworkScanner.ScanResult result =
-                NetworkScanner.scan(
-                        level,
-                        startPos
-                );
-
-        if (!result.success()) {
-
-            source.sendFailure(
-                    Component.literal(
-                            "Network scan failed."
-                    )
-            );
-
-            return 0;
-        }
-
-        if (result.totalSize() == 0) {
-
-            source.sendFailure(
-                    Component.literal(
-                            "Selected network is empty."
-                    )
-            );
-
-            return 0;
-        }
-
-        if (result.inputs().isEmpty()) {
-
-            source.sendFailure(
-                    Component.literal(
-                            "Network has no Input Endpoint."
-                    )
-            );
-
-            return 0;
-        }
-
-        if (result.outputs().isEmpty()) {
-
-            source.sendFailure(
-                    Component.literal(
-                            "Network has no Output Endpoint."
-                    )
-            );
-
-            return 0;
-        }
-
-        NetworkSavedData savedData =
-                NetworkSavedData.get(
-                        source.getServer()
-                );
-
-        final int networkId;
-        final CompiledNetwork network;
-        final String defaultName;
-        try {
-            networkId = savedData.getNextNetworkId();
-            defaultName = "Network " + networkId;
-            var elements = CompiledElementFactory.create(level, result.wires(), result.inputs(), result.outputs());
-            network = new CompiledNetwork(networkId, defaultName, 0,
-                    level.dimension().location().toString(), elements);
-            savedData.addNetwork(network);
-        } catch (IllegalArgumentException rejected) {
-            source.sendFailure(Component.literal("Cannot compile: " + rejected.getMessage()));
-            return 0;
-        }
-
-        source.sendSuccess(
-                () -> Component.literal(
-                        "Compiled "
-                                + defaultName
-                                + ": "
-                                + result.wires().size()
-                                + " wires, "
-                                + result.inputs().size()
-                                + " inputs, "
-                                + result.outputs().size()
-                                + " outputs."
-                ),
-                false
-        );
-
+    private static int decompile(CommandSourceStack source) {
+        if (!(source.getEntity() instanceof ServerPlayer player))
+            return NetworkOperations.reply(source,request(source,NetworkOperations.Action.DECOMPILE,List.of(),0,""));
+        var pos=NetworkSelectionData.get(player);
+        var network=pos==null?null:NetworkSavedData.get(source.getServer()).findNetworkContaining(player.serverLevel(),pos);
+        return NetworkOperations.reply(source,request(source,NetworkOperations.Action.DECOMPILE,
+                network==null?List.of():List.of(network.getId()),0,""));
+    }
+    private static int listNetworks(CommandSourceStack source) {
+        var result=request(source,NetworkOperations.Action.LIST,List.of(),0,"");
+        if (!result.success()) return NetworkOperations.reply(source,result);
+        var data=NetworkSavedData.get(source.getServer());
+        var networks=new java.util.ArrayList<>(data.getNetworks()); networks.sort(java.util.Comparator.comparingInt(CompiledNetwork::getId));
+        source.sendSuccess(() -> Component.literal("Compiled networks: "+networks.size()),false);
+        for (var n:networks) source.sendSuccess(() -> Component.literal("#"+n.getId()+" "+n.getName()+" ["+(n.isPowered()?"ON":"OFF")
+                +"] folder="+data.getFolderPath(n.getFolderId())+" wires="+n.getWires().size()+" inputs="+n.getInputs().size()+" outputs="+n.getOutputs().size()),false);
         return 1;
     }
-
-    private static int decompile(
-            CommandSourceStack source
-    ) {
-
-        ServerPlayer player;
-
-        try {
-
-            player =
-                    source.getPlayerOrException();
-
-        } catch (Exception e) {
-
-            source.sendFailure(
-                    Component.literal(
-                            "This command must be used by a player."
-                    )
-            );
-
-            return 0;
-        }
-
-        BlockPos selectedPos =
-                NetworkSelectionData.get(player);
-
-        if (selectedPos == null) {
-
-            source.sendFailure(
-                    Component.literal(
-                            "No network selected. Use the Network Selector first."
-                    )
-            );
-
-            return 0;
-        }
-
-        ServerLevel level =
-                player.serverLevel();
-
-        NetworkSavedData savedData =
-                NetworkSavedData.get(
-                        source.getServer()
-                );
-
-        CompiledNetwork network =
-                savedData.findNetworkContaining(
-                        level,
-                        selectedPos
-                );
-
-        if (network == null) {
-
-            source.sendFailure(
-                    Component.literal(
-                            "The selected element does not belong to a compiled network."
-                    )
-            );
-
-            return 0;
-        }
-
-        int id = network.getId();
-        String name = network.getName();
-
-        /*
-         * Перед видаленням мережі запам'ятовуємо outputs,
-         * бо після removeNetwork() вони вже не матимуть
-         * network signal.
-         */
-        java.util.Set<BlockPos> outputs =
-                new java.util.HashSet<>(
-                        network.getOutputs()
-                );
-
-        boolean removed =
-                savedData.removeNetwork(id);
-
-        if (!removed) {
-
-            source.sendFailure(
-                    Component.literal(
-                            "Failed to decompile network."
-                    )
-            );
-
-            return 0;
-        }
-
-        /*
-         * Output після decompile тепер повертає 0.
-         * Треба повідомити vanilla blocks навколо нього,
-         * щоб лампи/redstone тощо оновились.
-         */
-        com.example.compiledcircuits.networking.BrokenElementSync.broadcastDimension(level);
-        com.example.compiledcircuits.networking.NetworkGuiSync.broadcastBrokenList(level.getServer());
-
-        for (BlockPos outputPos : outputs) {
-
-            if (!level.hasChunkAt(outputPos)) {
-                continue;
-            }
-
-            BlockState outputState =
-                    level.getBlockState(outputPos);
-
-            level.updateNeighborsAt(
-                    outputPos,
-                    outputState.getBlock()
-            );
-        }
-
-        source.sendSuccess(
-                () -> Component.literal(
-                        "Decompiled "
-                                + name
-                                + " (#"
-                                + id
-                                + ")."
-                ),
-                false
-        );
-
-        return 1;
+    private static int renameNetwork(CommandSourceStack source,int id,String name) {
+        return NetworkOperations.reply(source,request(source,NetworkOperations.Action.RENAME_NETWORK,List.of(id),0,name));
     }
-
-    private static int listNetworks(
-            CommandSourceStack source
-    ) {
-
-        NetworkSavedData savedData =
-                NetworkSavedData.get(
-                        source.getServer()
-                );
-
-        java.util.List<CompiledNetwork> networks =
-                new java.util.ArrayList<>(
-                        savedData.getNetworks()
-                );
-
-        if (networks.isEmpty()) {
-
-            source.sendSuccess(
-                    () -> Component.literal(
-                            "No compiled networks."
-                    ),
-                    false
-            );
-
-            return 1;
-        }
-
-        /*
-         * Поки сортуємо по ID.
-         */
-        networks.sort(
-                java.util.Comparator.comparingInt(
-                        CompiledNetwork::getId
-                )
-        );
-
-        source.sendSuccess(
-                () -> Component.literal(
-                        "Compiled networks: "
-                                + networks.size()
-                ),
-                false
-        );
-
-        for (CompiledNetwork network : networks) {
-
-            String folder =
-                    network.getFolderId() == 0
-                            ? "/"
-                            : savedData.getFolderPath(network.getFolderId());
-
-            String state =
-                    network.isPowered()
-                            ? "ON"
-                            : "OFF";
-
-            source.sendSuccess(
-                    () -> Component.literal(
-                            "#"
-                                    + network.getId()
-                                    + "  "
-                                    + network.getName()
-                                    + "  [" + state + "]"
-                                    + "  folder=" + folder
-                                    + "  wires="
-                                    + network.getWires().size()
-                                    + "  inputs="
-                                    + network.getInputs().size()
-                                    + "  outputs="
-                                    + network.getOutputs().size()
-                    ),
-                    false
-            );
-        }
-
-        return 1;
+    private static int moveNetworkToFolder(CommandSourceStack source,int id,String path) {
+        return NetworkOperations.reply(source,request(source,NetworkOperations.Action.MOVE_PATH,List.of(id),0,path));
     }
-
-    private static int renameNetwork(
-            CommandSourceStack source,
-            int id,
-            String newName
-    ) {
-
-        newName = newName.trim();
-
-        if (newName.isEmpty()) {
-
-            source.sendFailure(
-                    Component.literal(
-                            "Network name cannot be empty."
-                    )
-            );
-
-            return 0;
-        }
-
-        if (newName.length() > 64) {
-
-            source.sendFailure(
-                    Component.literal(
-                            "Network name is too long. Maximum length is 64 characters."
-                    )
-            );
-
-            return 0;
-        }
-
-        NetworkSavedData savedData =
-                NetworkSavedData.get(
-                        source.getServer()
-                );
-
-        CompiledNetwork network =
-                savedData.getNetwork(id);
-
-        if (network == null) {
-
-            source.sendFailure(
-                    Component.literal(
-                            "Network #"
-                                    + id
-                                    + " does not exist."
-                    )
-            );
-
-            return 0;
-        }
-
-        String oldName =
-                network.getName();
-
-        network.setName(newName);
-
-        savedData.setDirty();
-
-        String finalNewName = newName;
-
-        source.sendSuccess(
-                () -> Component.literal(
-                        "Renamed network #"
-                                + id
-                                + " from \""
-                                + oldName
-                                + "\" to \""
-                                + finalNewName
-                                + "\"."
-                ),
-                false
-        );
-
-        return 1;
-    }
-
-    private static int moveNetworkToFolder(
-            CommandSourceStack source,
-            int id,
-            String path
-    ) {
-
-        path = normalizeFolderPath(path);
-
-        if (path.equalsIgnoreCase("root")) {
-            path = "";
-        }
-
-        if (path.length() > 256) {
-
-            source.sendFailure(
-                    Component.literal(
-                            "Folder path is too long. Maximum length is 256 characters."
-                    )
-            );
-
-            return 0;
-        }
-
-        NetworkSavedData savedData =
-                NetworkSavedData.get(
-                        source.getServer()
-                );
-
-        CompiledNetwork network =
-                savedData.getNetwork(id);
-
-        if (network == null) {
-
-            source.sendFailure(
-                    Component.literal(
-                            "Network #"
-                                    + id
-                                    + " does not exist."
-                    )
-            );
-
-            return 0;
-        }
-
-        int folderId = savedData.findFolderByPath(path);
-        if (!savedData.moveNetwork(id, folderId)) {
-            source.sendFailure(Component.literal("Folder does not exist. Create it in the Network Manager first."));
-            return 0;
-        }
-
-        savedData.setDirty();
-
-        String displayedPath =
-                path.isEmpty()
-                        ? "/"
-                        : path;
-
-        source.sendSuccess(
-                () -> Component.literal(
-                        "Moved network #"
-                                + id
-                                + " ("
-                                + network.getName()
-                                + ") to folder "
-                                + displayedPath
-                                + "."
-                ),
-                false
-        );
-
-        return 1;
-    }
-
-    private static String normalizeFolderPath(
-            String path
-    ) {
-
-        path = path.trim();
-
-        /*
-         * Дозволяємо користувачу писати:
-         *
-         * CPU\ALU
-         *
-         * або:
-         *
-         * CPU/ALU
-         */
-
-        path = path.replace('\\', '/');
-
-        /*
-         * Прибираємо повторні /
-         *
-         * CPU///ALU
-         *
-         * →
-         *
-         * CPU/ALU
-         */
-        while (path.contains("//")) {
-            path = path.replace("//", "/");
-        }
-
-        /*
-         * Прибираємо / на початку.
-         */
-        while (path.startsWith("/")) {
-            path = path.substring(1);
-        }
-
-        /*
-         * Прибираємо / в кінці.
-         */
-        while (path.endsWith("/")) {
-            path = path.substring(
-                    0,
-                    path.length() - 1
-            );
-        }
-
-        return path;
-    }
-
     private static int openGui(CommandSourceStack source) {
-
-        ServerPlayer player;
-
-        try {
-            player = source.getPlayerOrException();
-        } catch (Exception e) {
-            source.sendFailure(
-                    Component.literal("This command must be used by a player.")
-            );
-            return 0;
-        }
-
-        NetworkGuiSync.sendList(player);
-
-        return 1;
+        var result=request(source,NetworkOperations.Action.GUI,List.of(),0,"");
+        if (!result.success()) return NetworkOperations.reply(source,result);
+        NetworkGuiSync.sendList((ServerPlayer)source.getEntity()); return 1;
     }
 }
