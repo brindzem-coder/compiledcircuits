@@ -63,8 +63,12 @@ public final class NetworkIntegrityManager {
     private NetworkIntegrityManager() {}
 
     public static void scheduleCheck(ServerLevel level, BlockPos pos) {
-        boolean added = PENDING_CHECKS.computeIfAbsent(level.dimension(), key -> new HashSet<>()).add(pos.immutable());
         PerformanceDiagnostics.add("pending.scheduleCalls", 1);
+        if (NetworkSavedData.get(level.getServer()).findElementLocation(level.dimension().location().toString(), pos) == null) {
+            PerformanceDiagnostics.add("pending.unownedSkipped", 1);
+            return;
+        }
+        boolean added = PENDING_CHECKS.computeIfAbsent(level.dimension(), key -> new HashSet<>()).add(pos.immutable());
         if (added) PerformanceDiagnostics.add("pending.uniqueEnqueued", 1);
     }
 

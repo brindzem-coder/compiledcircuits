@@ -33,6 +33,7 @@ public class CompiledNetwork {
     private final Set<BlockPos> inputs;
     private final Set<BlockPos> outputs;
     private final Map<Integer, CompiledCircuitElement> elements;
+    private final Map<BlockPos, CompiledCircuitElement> elementsByPosition = new java.util.HashMap<>();
     private final Map<Integer, BrokenCircuitElement> brokenElements = new LinkedHashMap<>();
 
     // Runtime state мережі
@@ -72,7 +73,6 @@ public class CompiledNetwork {
         this.folderId = folderId;
         this.dimension = net.minecraft.resources.ResourceLocation.tryParse(dimension).toString();
         this.elements = new LinkedHashMap<>();
-        Set<BlockPos> positions = new HashSet<>();
         Set<BlockPos> wirePositions = new HashSet<>(), inputPositions = new HashSet<>(), outputPositions = new HashSet<>();
         for (CompiledCircuitElement element : elements) {
             if (element == null || element.getId() <= 0 || element.getType() == null)
@@ -88,7 +88,7 @@ public class CompiledNetwork {
             if (element.getType() != requiredRole)
                 throw new IllegalArgumentException("Block/role mismatch for element " + element.getId());
             BlockPos pos = element.getPos().immutable();
-            if (!positions.add(pos)) throw new IllegalArgumentException("Duplicate compiled position: " + pos);
+            if (elementsByPosition.putIfAbsent(pos, element) != null) throw new IllegalArgumentException("Duplicate compiled position: " + pos);
             switch (element.getType()) {
                 case INPUT -> inputPositions.add(pos);
                 case OUTPUT -> outputPositions.add(pos);
@@ -116,11 +116,8 @@ public class CompiledNetwork {
     }
 
     public CompiledCircuitElement getElementAt(BlockPos pos) {
-        for (CompiledCircuitElement element : elements.values()) {
-            PerformanceDiagnostics.add("lookup.elementsVisited", 1);
-            if (element.getPos().equals(pos)) return element;
-        }
-        return null;
+        PerformanceDiagnostics.add("lookup.localElement.indexProbes", 1);
+        return elementsByPosition.get(pos);
     }
 
     public boolean hasElementAt(BlockPos pos) {

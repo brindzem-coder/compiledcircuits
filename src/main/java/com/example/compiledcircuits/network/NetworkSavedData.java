@@ -521,55 +521,25 @@ public class NetworkSavedData extends SavedData {
     }
 
 
-    public ElementLocation findElementLocation(String dimension, BlockPos pos) {
-        long diagnosticStart = PerformanceDiagnostics.begin();
-        PerformanceDiagnostics.add("lookup.findElementLocation.calls", 1);
+    private ElementLocation lookup(String metric, String dimension, BlockPos pos, CircuitElementType role) {
+        long started = PerformanceDiagnostics.begin();
+        PerformanceDiagnostics.add(metric + ".calls", 1);
         try {
-        for (CompiledNetwork network : networks.values()) {
-            PerformanceDiagnostics.add("lookup.findElementLocation.networksVisited", 1);
-            if (!network.getDimension().equals(dimension)) continue;
-            CompiledCircuitElement element = network.getElementAt(pos);
-            if (element != null) { PerformanceDiagnostics.add("lookup.findElementLocation.hits", 1); return new ElementLocation(network, element); }
-        }
-        PerformanceDiagnostics.add("lookup.findElementLocation.misses", 1);
-        return null;
-
-        } finally { PerformanceDiagnostics.elapsed("lookup.findElementLocation", diagnosticStart); }
+            PerformanceDiagnostics.add(metric + ".indexProbes", 1);
+            ElementLocation location = findIndexedElementLocation(dimension, pos);
+            if (location != null && role != null && location.element().getType() != role) location = null;
+            PerformanceDiagnostics.add(metric + (location == null ? ".misses" : ".hits"), 1);
+            return location;
+        } finally { PerformanceDiagnostics.elapsed(metric, started); }
     }
 
-    public CompiledNetwork findNetworkContaining(
-            ServerLevel level,
-            BlockPos pos
-    ) {
-        long diagnosticStart = PerformanceDiagnostics.begin();
-        PerformanceDiagnostics.add("lookup.findNetworkContaining.calls", 1);
-        try {
+    public ElementLocation findElementLocation(String dimension, BlockPos pos) {
+        return lookup("lookup.findElementLocation", dimension, pos, null);
+    }
 
-        String dimension =
-                level.dimension()
-                        .location()
-                        .toString();
-
-        for (CompiledNetwork network : networks.values()) {
-            PerformanceDiagnostics.add("lookup.findNetworkContaining.networksVisited", 1);
-
-            if (!network.getDimension().equals(dimension)) {
-                continue;
-            }
-
-            if (network.getWires().contains(pos)
-                    || network.getInputs().contains(pos)
-                    || network.getOutputs().contains(pos)) {
-
-                PerformanceDiagnostics.add("lookup.findNetworkContaining.hits", 1);
-                return network;
-            }
-        }
-
-        PerformanceDiagnostics.add("lookup.findNetworkContaining.misses", 1);
-        return null;
-
-        } finally { PerformanceDiagnostics.elapsed("lookup.findNetworkContaining", diagnosticStart); }
+    public CompiledNetwork findNetworkContaining(ServerLevel level, BlockPos pos) {
+        var location = lookup("lookup.findNetworkContaining", level.dimension().location().toString(), pos, null);
+        return location == null ? null : location.network();
     }
 
     public CompiledNetwork findConflict(
@@ -848,72 +818,14 @@ public class NetworkSavedData extends SavedData {
         return data;
     }
 
-    public CompiledNetwork findNetworkByInput(
-            ServerLevel level,
-            BlockPos pos
-    ) {
-        long diagnosticStart = PerformanceDiagnostics.begin();
-        PerformanceDiagnostics.add("lookup.findNetworkByInput.calls", 1);
-        try {
-
-        String dimension =
-                level.dimension()
-                        .location()
-                        .toString();
-
-        for (CompiledNetwork network
-                : networks.values()) {
-            PerformanceDiagnostics.add("lookup.findNetworkByInput.networksVisited", 1);
-
-            if (!network.getDimension()
-                    .equals(dimension)) {
-                continue;
-            }
-
-            if (network.getInputs().contains(pos)) {
-                PerformanceDiagnostics.add("lookup.findNetworkByInput.hits", 1);
-                return network;
-            }
-        }
-
-        PerformanceDiagnostics.add("lookup.findNetworkByInput.misses", 1);
-        return null;
-
-        } finally { PerformanceDiagnostics.elapsed("lookup.findNetworkByInput", diagnosticStart); }
+    public CompiledNetwork findNetworkByInput(ServerLevel level, BlockPos pos) {
+        var location = lookup("lookup.findNetworkByInput", level.dimension().location().toString(), pos, CircuitElementType.INPUT);
+        return location == null ? null : location.network();
     }
 
-    public CompiledNetwork findNetworkByOutput(
-            ServerLevel level,
-            BlockPos pos
-    ) {
-        long diagnosticStart = PerformanceDiagnostics.begin();
-        PerformanceDiagnostics.add("lookup.findNetworkByOutput.calls", 1);
-        try {
-
-        String dimension =
-                level.dimension()
-                        .location()
-                        .toString();
-
-        for (CompiledNetwork network
-                : networks.values()) {
-            PerformanceDiagnostics.add("lookup.findNetworkByOutput.networksVisited", 1);
-
-            if (!network.getDimension()
-                    .equals(dimension)) {
-                continue;
-            }
-
-            if (network.getOutputs().contains(pos)) {
-                PerformanceDiagnostics.add("lookup.findNetworkByOutput.hits", 1);
-                return network;
-            }
-        }
-
-        PerformanceDiagnostics.add("lookup.findNetworkByOutput.misses", 1);
-        return null;
-
-        } finally { PerformanceDiagnostics.elapsed("lookup.findNetworkByOutput", diagnosticStart); }
+    public CompiledNetwork findNetworkByOutput(ServerLevel level, BlockPos pos) {
+        var location = lookup("lookup.findNetworkByOutput", level.dimension().location().toString(), pos, CircuitElementType.OUTPUT);
+        return location == null ? null : location.network();
     }
 
     public boolean removeNetwork(int id) {

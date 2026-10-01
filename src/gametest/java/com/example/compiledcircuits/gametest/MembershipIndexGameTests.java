@@ -33,6 +33,17 @@ public class MembershipIndexGameTests {
                 expected.add(new NetworkSavedData.ElementLocation(network, element));
         }
         var actual = data.getMembershipOwners(dimension, pos);
+        var indexed = data.findElementLocation(dimension, pos);
+        helper.assertTrue(Objects.equals(indexed, expected.size() == 1 ? expected.get(0) : null), "public lookup agrees with reference scan");
+        var level = helper.getLevel().getServer().getLevel(net.minecraft.resources.ResourceKey.create(
+                net.minecraft.core.registries.Registries.DIMENSION, new net.minecraft.resources.ResourceLocation(dimension)));
+        if (level != null) {
+            var owner = indexed == null ? null : indexed.network();
+            helper.assertTrue(data.findNetworkContaining(level, pos) == owner, "containing lookup agrees with scan");
+            helper.assertTrue(data.findNetworkByInput(level, pos) == (indexed != null && indexed.element().getType() == CircuitElementType.INPUT ? owner : null), "input role filter");
+            helper.assertTrue(data.findNetworkByOutput(level, pos) == (indexed != null && indexed.element().getType() == CircuitElementType.OUTPUT ? owner : null), "output role filter");
+            if (indexed != null) helper.assertTrue(owner.getElementAt(pos) == indexed.element(), "local index agrees");
+        }
         helper.assertTrue(actual.size() == expected.size() && actual.containsAll(expected), "index agrees with full scan");
         helper.assertTrue(Objects.equals(data.findIndexedElementLocation(dimension, pos),
                 expected.size() == 1 ? expected.get(0) : null), "unique-owner query");
