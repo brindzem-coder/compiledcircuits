@@ -191,8 +191,10 @@ public final class CircuitCommands {
         long started=PerformanceDiagnostics.begin(); PerformanceDiagnostics.add("compile.command.calls",1);
         String outcome="compile.command.exceptions";
         try {
-            int result=NetworkOperations.reply(source,request(source,NetworkOperations.Action.COMPILE,List.of(),0,null));
-            outcome=result>0?"compile.command.success":"compile.command.rejected";
+            var response=request(source,NetworkOperations.Action.COMPILE,List.of(),0,null);
+            int result=NetworkOperations.reply(source,response);
+            outcome=response.code()==NetworkOperations.Code.QUEUED?"compile.command.queued"
+                    : result>0?"compile.command.success":"compile.command.rejected";
             return result;
         } finally { PerformanceDiagnostics.elapsed("compile.command",started); PerformanceDiagnostics.add(outcome,1); }
     }

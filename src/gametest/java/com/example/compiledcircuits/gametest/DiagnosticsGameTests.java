@@ -58,11 +58,9 @@ public class DiagnosticsGameTests {
                 level.setBlock(neighbor, com.example.compiledcircuits.registry.ModBlocks.OUTPUT_ENDPOINT.get().defaultBlockState(), 3);
                 com.example.compiledcircuits.network.NetworkSelectionData.set(player, pos);
                 helper.assertTrue(dispatcher.execute("circuit compile", playerSource) == 1, "command compile succeeds");
-                var created = data.findNetworkContaining(level, pos);
-                helper.assertTrue(created != null && created.getElements().size() == 2, "network committed");
-                createdId = created.getId();
-                helper.assertTrue(dispatcher.execute("circuit compile", playerSource) == 0, "duplicate rejected");
-                helper.assertTrue(data.getNetwork(createdId) == created, "rejection preserves network");
+                helper.assertTrue(data.findNetworkContaining(level, pos) == null, "queued job has no early membership");
+                helper.assertTrue(dispatcher.execute("circuit compile", playerSource) == 0, "duplicate job is busy");
+                com.example.compiledcircuits.network.CompilationJobs.stop(server);
             } finally {
                 if (createdId >= 0) data.removeNetwork(createdId);
                 level.setBlock(pos, oldInput, 3);
@@ -82,10 +80,10 @@ public class DiagnosticsGameTests {
             var json = JsonParser.parseString(Files.readString(report)).getAsJsonObject();
             var counters = json.getAsJsonObject("counters");
             helper.assertTrue(counters.get("compile.command.calls").getAsLong() == 4, "all command attempts counted");
-            helper.assertTrue(counters.get("compile.command.success").getAsLong() == 1, "successful compile counted");
+            helper.assertTrue(counters.get("compile.command.queued").getAsLong() == 1, "queued request counted separately from completion");
             helper.assertTrue(counters.get("compile.command.rejected").getAsLong() == 3, "early and conflict rejections counted");
             helper.assertTrue(!counters.has("compile.command.exceptions"), "no unexpected compile exceptions");
-            helper.assertTrue(counters.get("compile.command.nanos").getAsLong() >= counters.get("scan.nanos").getAsLong(), "full timer includes scan");
+            helper.assertTrue(counters.get("compile.command.nanos").getAsLong() > 0 && !counters.has("compile.completed"), "request timer is not mislabeled as completed asynchronous work");
             helper.assertTrue(counters.get("test.counter").getAsLong() == 5, "stopped counters frozen");
             helper.assertTrue(counters.get("test.peak").getAsLong() == 7, "peak aggregation");
             helper.assertTrue(counters.get("encode.test.calls").getAsLong() == 1, "only active encodes counted");

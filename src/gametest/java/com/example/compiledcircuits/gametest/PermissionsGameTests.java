@@ -204,7 +204,7 @@ public class PermissionsGameTests {
             storage.set("compiledcircuits_networks",data);
             NetworkSelectionData.set(p,h.absolutePos(new BlockPos(1,2,1)));
             commands.execute("ccperf reset",console);commands.execute("ccperf start",console);
-            for(int i=0;i<4;i++) h.assertTrue(NetworkOperations.execute(p.createCommandSourceStack(),NetworkOperations.Action.COMPILE,List.of(),0,"empty").code()==NetworkOperations.Code.INVALID_ARGUMENT,"scan budget at boundary");
+            for(int i=0;i<4;i++) h.assertTrue(NetworkOperations.execute(p.createCommandSourceStack(),NetworkOperations.Action.COMPILE,List.of(),0,"empty").code()==NetworkOperations.Code.INVALID_START,"scan budget at boundary");
             h.assertTrue(NetworkOperations.execute(p.createCommandSourceStack(),NetworkOperations.Action.COMPILE,List.of(),0,"empty").code()==NetworkOperations.Code.RATE_LIMITED,"work quota rejects fifth full scan");
             commands.execute("ccperf stop",console);
             var last=com.example.compiledcircuits.diagnostics.PerformanceDiagnostics.class.getDeclaredField("last");last.setAccessible(true);

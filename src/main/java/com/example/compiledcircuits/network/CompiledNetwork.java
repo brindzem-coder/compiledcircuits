@@ -20,7 +20,13 @@ public class CompiledNetwork {
 
     private boolean needsPersistenceUpgrade;
     public boolean needsPersistenceUpgrade() { return needsPersistenceUpgrade; }
-    private final int id;
+    private int id;
+    private boolean published = true;
+    boolean isPublished() { return published; }
+    void publish(int id) {
+        if (published || id <= 0) throw new IllegalStateException("Invalid publication");
+        this.id = id; if (name == null) name = "Network " + id; published = true;
+    }
 
     private String name;
 
@@ -33,7 +39,7 @@ public class CompiledNetwork {
     private final Set<BlockPos> inputs;
     private final Set<BlockPos> outputs;
     private final Map<Integer, CompiledCircuitElement> elements;
-    private final Map<BlockPos, CompiledCircuitElement> elementsByPosition = new java.util.HashMap<>();
+    private final Map<BlockPos, CompiledCircuitElement> elementsByPosition;
     private final Map<Integer, BrokenCircuitElement> brokenElements = new LinkedHashMap<>();
 
     // Runtime state мережі
@@ -84,6 +90,7 @@ public class CompiledNetwork {
         this.folderId = folderId;
         this.dimension = net.minecraft.resources.ResourceLocation.tryParse(dimension).toString();
         this.elements = new LinkedHashMap<>();
+        this.elementsByPosition = new java.util.HashMap<>();
         Set<BlockPos> wirePositions = new HashSet<>(), inputPositions = new HashSet<>(), outputPositions = new HashSet<>();
         for (CompiledCircuitElement element : elements) {
             if (element == null || element.getId() <= 0 || element.getType() == null)
@@ -110,6 +117,38 @@ public class CompiledNetwork {
         this.inputs = immutablePositions(inputPositions);
         this.outputs = immutablePositions(outputPositions);
         this.powered = false;
+    }
+
+    /** Private job storage: ownership is transferred without an O(N) copy at publication. */
+    static final class Builder {
+        private final Map<Integer, CompiledCircuitElement> elements = new LinkedHashMap<>();
+        private final Map<BlockPos, CompiledCircuitElement> positions = new java.util.HashMap<>();
+        private final Set<BlockPos> wires = new HashSet<>(), inputs = new HashSet<>(), outputs = new HashSet<>();
+        private boolean sealed;
+        void add(CompiledCircuitElement element) {
+            if (sealed || element.getId() != elements.size() + 1 || positions.containsKey(element.getPos()))
+                throw new IllegalArgumentException("Invalid staged element");
+            elements.put(element.getId(), element); positions.put(element.getPos(), element);
+            switch (element.getType()) {
+                case INPUT -> inputs.add(element.getPos());
+                case OUTPUT -> outputs.add(element.getPos());
+                default -> wires.add(element.getPos());
+            }
+        }
+        boolean inputsEmpty() { return inputs.isEmpty(); }
+        boolean outputsEmpty() { return outputs.isEmpty(); }
+        CompiledNetwork seal(String name, String dimension) {
+            if (sealed || inputs.isEmpty() || outputs.isEmpty()) throw new IllegalArgumentException("Missing endpoints");
+            sealed = true; return new CompiledNetwork(this, name, dimension);
+        }
+    }
+    private CompiledNetwork(Builder builder, String name, String dimension) {
+        this.id = 0; this.published = false; this.name = name;
+        this.dimension = new net.minecraft.resources.ResourceLocation(dimension).toString();
+        this.elements = builder.elements; this.elementsByPosition = builder.positions;
+        this.wires = Collections.unmodifiableSet(builder.wires);
+        this.inputs = Collections.unmodifiableSet(builder.inputs);
+        this.outputs = Collections.unmodifiableSet(builder.outputs);
     }
 
     private static Set<BlockPos> immutablePositions(Set<BlockPos> positions) {

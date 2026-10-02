@@ -193,7 +193,8 @@ public class MembershipIndexGameTests {
             data.removeNetwork(id);
             id = data.getNextNetworkId();
             helper.assertTrue(NetworkCompiler.compileSelected(player, "GUI success"), "GUI valid admission succeeds");
-            helper.assertTrue(data.getNetwork(id) != null && data.getNetwork(id).getElements().size() == 2, "GUI commits complete membership");
+            helper.assertTrue(data.getNetwork(id) == null && com.example.compiledcircuits.network.CompilationJobs.isBusy(player), "GUI queues without early publication; completion covered by compilation job tests");
+            com.example.compiledcircuits.network.CompilationJobs.stop(server);
         } finally {
             data.removeNetwork(id);
             level.setBlock(pos, oldStart, 3);

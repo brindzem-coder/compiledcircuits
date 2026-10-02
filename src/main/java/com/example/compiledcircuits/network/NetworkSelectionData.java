@@ -20,6 +20,7 @@ public final class NetworkSelectionData {
             ServerPlayer player,
             BlockPos pos
     ) {
+        CompilationJobs.cancel(player);
         CompoundTag data = player.getPersistentData();
 
         data.putBoolean(KEY_HAS_SELECTION, true);
@@ -45,6 +46,7 @@ public final class NetworkSelectionData {
     }
 
     public static void clear(ServerPlayer player) {
+        CompilationJobs.cancel(player);
 
         CompoundTag data = player.getPersistentData();
 

@@ -127,6 +127,46 @@ public class NetworkSavedData extends SavedData {
         public AdmissionException(String message) { super(message); }
     }
 
+    /** Hidden membership and runtime entries are prepared one bounded unit at a time. */
+    final class PreparedAdmission {
+        final CompiledNetwork candidate;
+        final MembershipReservations originalReservations = reservations;
+        final NetworkRuntime.Prepared preparedRuntime;
+        private int staged;
+        private java.util.Iterator<CompiledCircuitElement> rollback;
+        PreparedAdmission(CompiledNetwork candidate) {
+            this.candidate = candidate; preparedRuntime = runtime.prepare(candidate);
+        }
+        void stage(CompiledCircuitElement element) {
+            requireMutationThread();
+            if (reservations != originalReservations || reservations.unknown
+                    || !reservations.at(candidate.getDimension(), element.getPos()).isEmpty())
+                throw new AdmissionException("Saved membership reservations changed or block this position.");
+            membership.stage(candidate, element); staged++;
+            preparedRuntime.add(element);
+        }
+        void publish() {
+            requireMutationThread();
+            if (reservations != originalReservations || reservations.unknown || staged != candidate.getElements().size())
+                throw new AdmissionException("Admission changed during compilation.");
+            int id = getNextNetworkId();
+            if (networks.containsKey(id) || reservations.networkIds.contains(id)) throw new AdmissionException("Network ID is reserved.");
+            networks.put(id, candidate);
+            candidate.publish(id);
+            preparedRuntime.publish();
+            nextNetworkId = id == Integer.MAX_VALUE ? 0 : id + 1;
+            setDirty(); CompiledElementSync.markDimensionDirty(candidate.getDimension());
+        }
+        void beginRollback() { rollback = candidate.getElements().iterator(); preparedRuntime.beginRollback(); }
+        boolean rollbackNext() {
+            if (staged > 0) { membership.unstage(candidate, rollback.next()); staged--; return true; }
+            return preparedRuntime.rollbackNext();
+        }
+    }
+    PreparedAdmission prepareCompilation(CompiledNetwork candidate) {
+        requireMutationThread(); requireResolvedMembership(); return new PreparedAdmission(candidate);
+    }
+
     public NetworkSavedData() {
     }
 

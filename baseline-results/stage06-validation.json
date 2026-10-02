@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-02",
+  "baseCommit": "2bd117d",
+  "command": "gradlew.bat build visualChecks runGameTestServer --offline --console=plain",
+  "gradle": "8.8",
+  "java": "17.0.17+10",
+  "minecraft": "1.20.1",
+  "forge": "47.4.10",
+  "requiredGameTestsPassed": 30,
+  "forbiddenChunkLoadEvents": 0,
+  "forcedTicketsChanged": false,
+  "packagedServerMixinAndRefmapVerified": true,
+  "testBlocksAbsentFromJar": true,
+  "largestGcPauseMsDuringMaximumCapture": 50.709,
+  "manualStage06Acceptance": "pending",
+  "log": "stage06-validation.log",
+  "reports": [
+    "stage06-safety.json",
+    "stage06-maximum.json"
+  ]
+}

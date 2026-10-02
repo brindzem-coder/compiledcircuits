@@ -24,6 +24,8 @@ public final class NetworkIntegrityEvents {
 
     @SubscribeEvent
     public static void onPlayerChangedDimension(net.minecraftforge.event.entity.player.PlayerEvent.PlayerChangedDimensionEvent event) {
+        if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player)
+            com.example.compiledcircuits.network.CompilationJobs.cancel(player);
         if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
             com.example.compiledcircuits.networking.BrokenElementSync.sendToPlayer(player);
         }
@@ -72,6 +74,7 @@ public final class NetworkIntegrityEvents {
     public static void onServerTick(TickEvent.ServerTickEvent event) {
         // Break/explosion events can precede the actual world change.
         if (event.phase == TickEvent.Phase.END) {
+            com.example.compiledcircuits.network.CompilationJobs.tick(event.getServer());
             NetworkIntegrityManager.processPending(event.getServer());
             NetworkIntegrityManager.audit(event.getServer());
             com.example.compiledcircuits.network.NetworkRuntime.tick(event.getServer());
@@ -80,6 +83,7 @@ public final class NetworkIntegrityEvents {
 
     @SubscribeEvent
     public static void onServerStopped(ServerStoppedEvent event) {
+        com.example.compiledcircuits.network.CompilationJobs.stop(event.getServer());
         com.example.compiledcircuits.network.NetworkRuntime.stop(event.getServer());
         NetworkIntegrityManager.clearPending();
     }

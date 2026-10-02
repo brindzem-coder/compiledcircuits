@@ -60,21 +60,47 @@ public final class NetworkRuntime {
         Entry entry = new Entry(network);
         entries.put(network, entry);
         network.runtimeState(false, false);
-        for (var element : network.getElements()) {
-            var key = new ChunkKey(network.getDimension(), RuntimeSignalReader.chunk(element.getPos()));
-            entry.parts.computeIfAbsent(key, k -> new Part()).elements.add(element);
-            if (element.getType() == CircuitElementType.INPUT) {
-                var dependencies = RuntimeSignalReader.dependencyChunks(element.getPos());
-                for (long chunk : dependencies)
-                    entry.parts.computeIfAbsent(new ChunkKey(network.getDimension(), chunk), k -> new Part()).input = true;
-            }
-            if (element.getType() == CircuitElementType.OUTPUT) for (Direction direction : Direction.values())
-                entry.parts.computeIfAbsent(new ChunkKey(network.getDimension(), RuntimeSignalReader.chunk(element.getPos().relative(direction))), k -> new Part());
-        }
+        for (var element : network.getElements()) prepareElement(entry, element);
         entry.parts.forEach((key, part) -> chunks.computeIfAbsent(key, k -> new IdentityHashMap<>()).put(entry, part));
         entry.outputs = network.getOutputs().iterator();
         queue.add(entry);
     }
+    private void prepareElement(Entry entry, CompiledCircuitElement element) {
+        var network = entry.network;
+        var key = new ChunkKey(network.getDimension(), RuntimeSignalReader.chunk(element.getPos()));
+        entry.parts.computeIfAbsent(key, k -> new Part()).elements.add(element);
+        if (element.getType() == CircuitElementType.INPUT) {
+            var dependencies = RuntimeSignalReader.dependencyChunks(element.getPos());
+            for (long chunk : dependencies)
+                entry.parts.computeIfAbsent(new ChunkKey(network.getDimension(), chunk), k -> new Part()).input = true;
+        }
+        if (element.getType() == CircuitElementType.OUTPUT) for (Direction direction : Direction.values())
+            entry.parts.computeIfAbsent(new ChunkKey(network.getDimension(), RuntimeSignalReader.chunk(element.getPos().relative(direction))), k -> new Part());
+    }
+    final class Prepared {
+        private final Entry entry;
+        private Iterator<Map.Entry<ChunkKey, Part>> parts;
+        Prepared(CompiledNetwork network) { entry = new Entry(network); }
+        void add(CompiledCircuitElement element) { prepareElement(entry, element); }
+        boolean indexNext() {
+            if (parts == null) parts = entry.parts.entrySet().iterator();
+            if (!parts.hasNext()) return false;
+            var item = parts.next();
+            chunks.computeIfAbsent(item.getKey(), k -> new IdentityHashMap<>()).put(entry, item.getValue());
+            return true;
+        }
+        void publish() {
+            entries.put(entry.network, entry); entry.outputs = entry.network.getOutputs().iterator(); queue.add(entry);
+        }
+        void beginRollback() { parts = entry.parts.entrySet().iterator(); }
+        boolean rollbackNext() {
+            if (!parts.hasNext()) return false;
+            var key = parts.next().getKey(); var bucket = chunks.get(key);
+            if (bucket != null) { bucket.remove(entry); if (bucket.isEmpty()) { chunks.remove(key); loading.remove(key); } }
+            return true;
+        }
+    }
+    Prepared prepare(CompiledNetwork network) { return new Prepared(network); }
     void remove(CompiledNetwork network) {
         Entry entry = entries.remove(network);
         network.runtimeState(false, false);
@@ -89,8 +115,9 @@ public final class NetworkRuntime {
     }
     public static boolean isChunkAvailable(ServerLevel level, long pos) {
         var runtime = NetworkSavedData.get(level.getServer()).runtime();
-        return !runtime.unloading.contains(new ChunkKey(level.dimension().location().toString(), pos))
-                && level.getChunkSource().getChunkNow(ChunkPos.getX(pos), ChunkPos.getZ(pos)) != null;
+        var chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(pos), ChunkPos.getZ(pos));
+        return chunk != null && chunk.getFullStatus().isOrAfter(net.minecraft.server.level.FullChunkStatus.FULL)
+                && !runtime.unloading.contains(new ChunkKey(level.dimension().location().toString(), pos));
     }
     public static void chunkChanged(ServerLevel level, long pos, boolean loaded) {
         // Forge unload is on the server thread; load may precede FULL promotion.
@@ -98,6 +125,7 @@ public final class NetworkRuntime {
             level.getServer().execute(() -> chunkChanged(level, pos, loaded));
             return;
         }
+        CompilationJobs.chunkChanged(level, pos);
         var runtime = NetworkSavedData.get(level.getServer()).runtime();
         var key = new ChunkKey(level.dimension().location().toString(), pos);
         if (loaded) runtime.unloading.remove(key);
@@ -108,6 +136,7 @@ public final class NetworkRuntime {
         PerformanceDiagnostics.add("runtime.chunkAffectedNetworks", affected.size());
         for (var item : affected.entrySet()) {
             Entry entry = item.getKey(); Part part = item.getValue();
+            if (!entry.network.isPublished()) continue;
             if (loaded && (part.input || !part.elements.isEmpty())) entry.waiting.add(key);
             else entry.waiting.remove(key);
             if ((loaded && !part.elements.isEmpty()) || part.input) {
@@ -161,6 +190,7 @@ public final class NetworkRuntime {
             }
             var affected = runtime.chunks.get(key);
             if (affected != null) affected.forEach((entry, part) -> {
+                if (!entry.network.isPublished()) return;
                 entry.waiting.remove(key);
                 if (part.input || !part.elements.isEmpty()) {
                     entry.partsToCheck.add(part); runtime.resetInputs(entry);

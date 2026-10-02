@@ -4,6 +4,6 @@
   "package": "com.example.compiledcircuits.mixin.server",
   "compatibilityLevel": "JAVA_17",
   "refmap": "compiledcircuits.visual.refmap.json",
-  "mixins": ["ChunkMapRuntimeMixin"],
+  "mixins": ["ChunkMapRuntimeMixin", "LevelChunkCompilationMixin"],
   "injectors": {"defaultRequire": 1}
 }

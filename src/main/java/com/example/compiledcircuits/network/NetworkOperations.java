@@ -15,9 +15,10 @@ public final class NetworkOperations {
     public enum Action { COMPILE, OPEN_COMPILE, DECOMPILE, RENAME_NETWORK, MOVE_NETWORKS, MOVE_PATH,
         CREATE_FOLDER, RENAME_FOLDER, MOVE_FOLDERS, DELETE_FOLDERS, REPAIR, HIGHLIGHT,
         LIST, GUI, SELECTED, DEBUG, LIST_CONFLICTS, REMOVE_CONFLICT }
-    public enum Code { OK, FORBIDDEN, NOT_FOUND, INVALID_ARGUMENT, CONFLICT, RATE_LIMITED }
+    public enum Code { OK, QUEUED, FORBIDDEN, NOT_FOUND, INVALID_ARGUMENT, CONFLICT, RATE_LIMITED,
+        INVALID_START, INCOMPLETE_UNLOADED, TOO_LARGE, CHANGED_DURING_SCAN, BUSY, TIMEOUT, CANCELLED }
     public record Result(Code code, String message, List<CompiledNetwork> networks) {
-        public boolean success() { return code == Code.OK; }
+        public boolean success() { return code == Code.OK || code == Code.QUEUED; }
     }
     private static Result result(Code code, String message) { return new Result(code, message, List.of()); }
     private static Result ok(String message) { return result(Code.OK, message); }
@@ -27,7 +28,10 @@ public final class NetworkOperations {
     public static boolean canModify(ServerPlayer player) {
         return player != null && !player.isRemoved() && !player.isSpectator() && player.mayBuild();
     }
-    public static void forget(Object actor) { budgets.remove(actor); }
+    public static void forget(Object actor) {
+        if (actor instanceof ServerPlayer player) CompilationJobs.cancel(player);
+        budgets.remove(actor);
+    }
     public static void clear() { budgets.clear(); }
     private static Object actor(CommandSourceStack source) {
         return source.getEntity() instanceof ServerPlayer p ? p : source.getServer();
@@ -212,17 +216,6 @@ public final class NetworkOperations {
         var pos = NetworkSelectionData.get(player);
         if (pos == null) return result(Code.NOT_FOUND, "No circuit selected.");
         Result rate = charge(source, OperationLimits.ELEMENTS, false); if (rate != null) return rate;
-        var scan = NetworkScanner.scan(player.serverLevel(), pos);
-        if (!scan.success() || scan.totalSize() == 0 || scan.inputs().isEmpty() || scan.outputs().isEmpty())
-            return result(Code.INVALID_ARGUMENT, "Circuit must be loaded, within scan limits, and contain an input and output.");
-        try {
-            int id = data.getNextNetworkId();
-            var n = new CompiledNetwork(id, name == null ? "Network " + id : name.trim(), 0,
-                    player.serverLevel().dimension().location().toString(),
-                    CompiledElementFactory.create(player.serverLevel(), scan.wires(), scan.inputs(), scan.outputs()));
-            data.addNetwork(n);
-            NetworkRuntime.inputChanged(player.serverLevel(), n.getInputs().iterator().next());
-            return new Result(Code.OK, "Compiled " + n.getName() + " (#" + id + ").", List.of(n));
-        } catch (IllegalArgumentException invalid) { return result(Code.CONFLICT, invalid.getMessage()); }
+        return CompilationJobs.submit(source, player, data, pos, name);
     }
 }

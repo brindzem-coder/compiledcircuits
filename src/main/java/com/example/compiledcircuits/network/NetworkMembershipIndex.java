@@ -70,7 +70,19 @@ final class NetworkMembershipIndex {
         }
     }
 
+    void stage(CompiledNetwork network, CompiledCircuitElement element) {
+        Key key = new Key(network.getDimension(), element.getPos());
+        if (claims.containsKey(key)) throw new NetworkSavedData.AdmissionException("Position already claimed: " + element.getPos());
+        claims.put(key, List.of(new NetworkSavedData.ElementLocation(network, element)));
+    }
+    void unstage(CompiledNetwork network, CompiledCircuitElement element) {
+        Key key = new Key(network.getDimension(), element.getPos());
+        var value = claims.get(key);
+        if (value != null && value.size() == 1 && value.get(0).network() == network) claims.remove(key);
+    }
+
     List<NetworkSavedData.ElementLocation> owners(String dimension, BlockPos position) {
-        return claims.getOrDefault(new Key(dimension, position), List.of());
+        var owners = claims.getOrDefault(new Key(dimension, position), List.of());
+        return owners.isEmpty() || owners.get(0).network().isPublished() ? owners : List.of();
     }
 }
