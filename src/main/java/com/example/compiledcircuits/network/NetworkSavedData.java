@@ -22,6 +22,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
 public class NetworkSavedData extends SavedData {
+    private final NetworkRuntime runtime = new NetworkRuntime(this);
+    NetworkRuntime runtime() { return runtime; }
+
 
     private static final String DATA_NAME =
             "compiledcircuits_networks";
@@ -410,7 +413,7 @@ public class NetworkSavedData extends SavedData {
         if (ids.isEmpty() || !networks.keySet().containsAll(ids)) return List.of();
         List<CompiledNetwork> removed = new ArrayList<>();
         for (int id : new LinkedHashSet<>(ids)) removed.add(networks.remove(id));
-        for (CompiledNetwork network : removed) membership.remove(network);
+        for (CompiledNetwork network : removed) { membership.remove(network); runtime.remove(network); }
         for (CompiledNetwork network : removed) CompiledElementSync.markDimensionDirty(network.getDimension());
         setDirty();
         return removed;
@@ -509,7 +512,7 @@ public class NetworkSavedData extends SavedData {
             MinecraftServer server
     ) {
 
-        return server
+        NetworkSavedData data = server
                 .overworld()
                 .getDataStorage()
                 .computeIfAbsent(
@@ -517,6 +520,8 @@ public class NetworkSavedData extends SavedData {
                         NetworkSavedData::new,
                         DATA_NAME
                 );
+        data.runtime.bind(server);
+        return data;
     }
 
     /** Preview only. A successful admission commits the ID; rejection never consumes it. */
@@ -638,6 +643,8 @@ public class NetworkSavedData extends SavedData {
         // Validation and preparation completed. No callbacks until data and index agree.
         for (var network : ordered) networks.put(network.getId(), network);
         commitMembership.run();
+        if (previous != null) runtime.remove(previous);
+        for (var network : ordered) runtime.add(network);
         nextNetworkId = committedNextId;
         setDirty();
         if (previous != null) CompiledElementSync.markDimensionDirty(previous.getDimension());
@@ -831,6 +838,7 @@ public class NetworkSavedData extends SavedData {
 
         for (CompiledNetwork network : data.networks.values()) {
             data.membership.add(network);
+            data.runtime.add(network);
             if (data.nextNetworkId != 0 && network.getId() >= data.nextNetworkId) {
                 data.nextNetworkId = network.getId() == Integer.MAX_VALUE ? 0 : network.getId() + 1;
                 migratedLegacyData = true;
@@ -861,6 +869,7 @@ public class NetworkSavedData extends SavedData {
         }
 
         membership.remove(removed);
+        runtime.remove(removed);
         CompiledElementSync.markDimensionDirty(removed.getDimension());
         setDirty();
         return true;

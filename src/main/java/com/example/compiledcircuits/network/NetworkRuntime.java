@@ -1,128 +1,277 @@
 package com.example.compiledcircuits.network;
 
+import com.example.compiledcircuits.diagnostics.PerformanceDiagnostics;
 import com.example.compiledcircuits.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.ChunkPos;
+import java.util.*;
 
+/** Server-owned derived state. Every world read and neighbor callback runs in drain, never a load hook. */
 public final class NetworkRuntime {
-
-    private NetworkRuntime() {
+    public static final int WORK_PER_TICK = 2048;
+    public static final int LOAD_RETRIES_PER_TICK = 128;
+    private final NetworkSavedData data;
+    private MinecraftServer server;
+    private final Map<CompiledNetwork, Entry> entries = new IdentityHashMap<>();
+    private final Map<ChunkKey, Map<Entry, Part>> chunks = new HashMap<>();
+    private final LinkedHashSet<ChunkKey> unloading = new LinkedHashSet<>();
+    private final LinkedHashSet<ChunkKey> loading = new LinkedHashSet<>();
+    private final LinkedHashSet<Entry> queue = new LinkedHashSet<>();
+    private record Retired(String dimension, Iterator<BlockPos> outputs) {}
+    private final ArrayDeque<Retired> retired = new ArrayDeque<>();
+    private boolean draining;
+    private int budgetTick = Integer.MIN_VALUE, remaining;
+    private record ChunkKey(String dimension, long pos) {}
+    private static final class Part {
+        final List<CompiledCircuitElement> elements = new ArrayList<>();
+        boolean input;
     }
-
-    public static void inputChanged(
-            ServerLevel level,
-            BlockPos inputPos
-    ) {
-
-        NetworkSavedData data =
-                NetworkSavedData.get(
-                        level.getServer()
-                );
-
-        CompiledNetwork network =
-                data.findNetworkByInput(
-                        level,
-                        inputPos
-                );
-
-        if (network == null) {
+    private static final class Entry {
+        final CompiledNetwork network;
+        final String dimension;
+        ResourceKey<Level> levelKey;
+        final Map<ChunkKey, Part> parts = new HashMap<>();
+        Iterator<CompiledCircuitElement> initial;
+        final LinkedHashSet<CompiledCircuitElement> checks = new LinkedHashSet<>();
+        final LinkedHashSet<Part> partsToCheck = new LinkedHashSet<>();
+        Iterator<CompiledCircuitElement> loadedChecks = Collections.emptyIterator();
+        int startedAt = -1;
+        boolean firstReady;
+        Iterator<BlockPos> inputs;
+        Iterator<BlockPos> outputs = Collections.emptyIterator();
+        boolean dirtyInputs = true, inputOr, available;
+        final Set<ChunkKey> waiting = new HashSet<>();
+        Entry(CompiledNetwork network) {
+            this.network = network;
+            dimension = network.getDimension();
+            initial = network.getElements().iterator();
+        }
+    }
+    NetworkRuntime(NetworkSavedData data) { this.data = data; }
+    void bind(MinecraftServer server) { this.server = server; }
+    void add(CompiledNetwork network) {
+        Entry entry = new Entry(network);
+        entries.put(network, entry);
+        network.runtimeState(false, false);
+        for (var element : network.getElements()) {
+            var key = new ChunkKey(network.getDimension(), RuntimeSignalReader.chunk(element.getPos()));
+            entry.parts.computeIfAbsent(key, k -> new Part()).elements.add(element);
+            if (element.getType() == CircuitElementType.INPUT) {
+                var dependencies = RuntimeSignalReader.dependencyChunks(element.getPos());
+                for (long chunk : dependencies)
+                    entry.parts.computeIfAbsent(new ChunkKey(network.getDimension(), chunk), k -> new Part()).input = true;
+            }
+            if (element.getType() == CircuitElementType.OUTPUT) for (Direction direction : Direction.values())
+                entry.parts.computeIfAbsent(new ChunkKey(network.getDimension(), RuntimeSignalReader.chunk(element.getPos().relative(direction))), k -> new Part());
+        }
+        entry.parts.forEach((key, part) -> chunks.computeIfAbsent(key, k -> new IdentityHashMap<>()).put(entry, part));
+        entry.outputs = network.getOutputs().iterator();
+        queue.add(entry);
+    }
+    void remove(CompiledNetwork network) {
+        Entry entry = entries.remove(network);
+        network.runtimeState(false, false);
+        if (entry == null) return;
+        queue.remove(entry);
+        if (!network.getOutputs().isEmpty()) retired.addLast(new Retired(network.getDimension(), network.getOutputs().iterator()));
+        entry.parts.forEach((key, part) -> {
+            var bucket = chunks.get(key);
+            bucket.remove(entry);
+            if (bucket.isEmpty()) { chunks.remove(key); loading.remove(key); }
+        });
+    }
+    public static boolean isChunkAvailable(ServerLevel level, long pos) {
+        var runtime = NetworkSavedData.get(level.getServer()).runtime();
+        return !runtime.unloading.contains(new ChunkKey(level.dimension().location().toString(), pos))
+                && level.getChunkSource().getChunkNow(ChunkPos.getX(pos), ChunkPos.getZ(pos)) != null;
+    }
+    public static void chunkChanged(ServerLevel level, long pos, boolean loaded) {
+        // Forge unload is on the server thread; load may precede FULL promotion.
+        if (!level.getServer().isSameThread()) {
+            level.getServer().execute(() -> chunkChanged(level, pos, loaded));
             return;
         }
-
-        boolean newPowered =
-                calculatePowered(
-                        level,
-                        network
-                );
-
-        if (network.isPowered() == newPowered) {
-            return;
-        }
-
-        network.setPowered(newPowered);
-
-        /*
-         * Зберігаємо новий стан.
-         */
-        data.setDirty();
-
-        // Inputs remain current, but damaged outputs are already forced LOW.
-        if (network.isDamaged()) {
-            return;
-        }
-
-        /*
-         * Важлива частина:
-         *
-         * Ми НЕ оновлюємо wires.
-         * Одразу повідомляємо тільки outputs.
-         */
-        notifyOutputs(
-                level,
-                network
-        );
-    }
-
-    public static void networkBecameDamaged(ServerLevel level, CompiledNetwork network) {
-        notifyOutputs(level, network);
-    }
-
-    public static void networkBecameHealthy(ServerLevel level, CompiledNetwork network) {
-        network.setPowered(calculatePowered(level, network));
-        NetworkSavedData.get(level.getServer()).setDirty();
-
-        // The effective output changed from forced LOW even if powered stayed true.
-        notifyOutputs(level, network);
-    }
-
-    private static boolean calculatePowered(
-            ServerLevel level,
-            CompiledNetwork network
-    ) {
-
-        /*
-         * Базова семантика:
-         *
-         * будь-який Input > 0
-         *        ↓
-         * Network = HIGH
-         */
-        for (BlockPos inputPos
-                : network.getInputs()) {
-
-            int signal =
-                    level.getBestNeighborSignal(
-                            inputPos
-                    );
-
-            if (signal > 0) {
-                return true;
+        var runtime = NetworkSavedData.get(level.getServer()).runtime();
+        var key = new ChunkKey(level.dimension().location().toString(), pos);
+        if (loaded) runtime.unloading.remove(key);
+        var affected = runtime.chunks.get(key);
+        if (affected == null) return;
+        if (loaded) { runtime.unloading.remove(key); runtime.loading.add(key); }
+        else { runtime.loading.remove(key); runtime.unloading.add(key); }
+        PerformanceDiagnostics.add("runtime.chunkAffectedNetworks", affected.size());
+        for (var item : affected.entrySet()) {
+            Entry entry = item.getKey(); Part part = item.getValue();
+            if (loaded && (part.input || !part.elements.isEmpty())) entry.waiting.add(key);
+            else entry.waiting.remove(key);
+            if ((loaded && !part.elements.isEmpty()) || part.input) {
+                int before = entry.network.getEffectiveSignal();
+                entry.network.runtimeState(false, false);
+                runtime.resetInputs(entry);
+                if (loaded) entry.partsToCheck.add(part);
+                if (before != 0 || loaded) entry.outputs = entry.network.getOutputs().iterator();
+                runtime.queue.add(entry);
             }
         }
-
-        return false;
+        // No world access here: especially not getBlockState or neighborChanged.
     }
-
-    private static void notifyOutputs(
-            ServerLevel level,
-            CompiledNetwork network
-    ) {
-
-        for (BlockPos outputPos
-                : network.getOutputs()) {
-
-            if (!level.hasChunkAt(outputPos)) {
-                continue;
+    private void resetInputs(Entry entry) { entry.dirtyInputs = true; entry.inputs = null; }
+    public static void inputChanged(ServerLevel level, BlockPos inputPos) {
+        var data = NetworkSavedData.get(level.getServer());
+        var network = data.findNetworkByInput(level, inputPos);
+        if (network == null) return;
+        var runtime = data.runtime(); var entry = runtime.entries.get(network);
+        if (entry == null) return;
+        runtime.resetInputs(entry); runtime.queue.add(entry); runtime.drain();
+    }
+    public static void elementChanged(ServerLevel level, CompiledNetwork network, CompiledCircuitElement element) {
+        var runtime = NetworkSavedData.get(level.getServer()).runtime(); var entry = runtime.entries.get(network);
+        if (entry == null) return;
+        int before = network.getEffectiveSignal();
+        network.runtimeState(false, false);
+        entry.checks.add(element); runtime.resetInputs(entry);
+        if (before != 0) entry.outputs = network.getOutputs().iterator();
+        runtime.queue.add(entry);
+    }
+    public static void networkBecameDamaged(ServerLevel level, CompiledNetwork network) { integrityChanged(level, network); }
+    public static void networkBecameHealthy(ServerLevel level, CompiledNetwork network) { integrityChanged(level, network); }
+    private static void integrityChanged(ServerLevel level, CompiledNetwork network) {
+        var runtime = NetworkSavedData.get(level.getServer()).runtime(); var entry = runtime.entries.get(network);
+        if (entry == null) return;
+        network.runtimeState(false, false);
+        entry.outputs = network.getOutputs().iterator(); runtime.resetInputs(entry);
+        runtime.queue.add(entry);
+        // Integrity callbacks can occur during initial validation. Never recurse into drain.
+    }
+    public static void tick(MinecraftServer server) {
+        var runtime = NetworkSavedData.get(server).runtime();
+        int retries = Math.min(LOAD_RETRIES_PER_TICK, runtime.loading.size());
+        while (retries-- > 0) {
+            var iterator = runtime.loading.iterator();
+            ChunkKey key = iterator.next(); iterator.remove();
+            var level = server.getLevel(ResourceKey.create(Registries.DIMENSION, new ResourceLocation(key.dimension)));
+            if (level == null || level.getChunkSource().getChunkNow(ChunkPos.getX(key.pos), ChunkPos.getZ(key.pos)) == null) {
+                runtime.loading.add(key); continue;
             }
-
-            /*
-             * Повідомляємо vanilla blocks навколо Output,
-             * що його redstone signal змінився.
-             */
-            level.updateNeighborsAt(
-                    outputPos,
-                    ModBlocks.OUTPUT_ENDPOINT.get()
-            );
+            var affected = runtime.chunks.get(key);
+            if (affected != null) affected.forEach((entry, part) -> {
+                entry.waiting.remove(key);
+                if (part.input || !part.elements.isEmpty()) {
+                    entry.partsToCheck.add(part); runtime.resetInputs(entry);
+                    entry.network.runtimeState(false, false);
+                }
+                entry.outputs = entry.network.getOutputs().iterator(); runtime.queue.add(entry);
+            });
         }
+        // Retain unload tombstones across replace/remove until the chunk is truly gone.
+        int cleanup = Math.min(LOAD_RETRIES_PER_TICK, runtime.unloading.size());
+        while (cleanup-- > 0) {
+            var iterator = runtime.unloading.iterator(); var key = iterator.next(); iterator.remove();
+            var level = server.getLevel(ResourceKey.create(Registries.DIMENSION, new ResourceLocation(key.dimension)));
+            if (level != null && level.getChunkSource().getChunkNow(ChunkPos.getX(key.pos), ChunkPos.getZ(key.pos)) != null)
+                runtime.unloading.add(key);
+        }
+        runtime.drain();
+    }
+    public static void flush(MinecraftServer server) { NetworkSavedData.get(server).runtime().drain(); }
+    private void drain() {
+        if (server == null || draining) return;
+        int tick = server.getTickCount();
+        if (budgetTick != tick) { budgetTick = tick; remaining = WORK_PER_TICK; }
+        draining = true;
+        long start = PerformanceDiagnostics.begin();
+        try {
+            while (remaining > 0 && (!queue.isEmpty() || !retired.isEmpty())) {
+                if (!retired.isEmpty()) {
+                    var old = retired.removeFirst();
+                    var level = server.getLevel(ResourceKey.create(Registries.DIMENSION, new ResourceLocation(old.dimension)));
+                    BlockPos pos = old.outputs.next();
+                    remaining--; PerformanceDiagnostics.add("runtime.workUnits", 1);
+                    if (level != null) notifyOutput(level, pos);
+                    if (old.outputs.hasNext()) retired.addLast(old);
+                    if (remaining == 0) break;
+                }
+                if (queue.isEmpty()) continue;
+                var iterator = queue.iterator(); Entry entry = iterator.next(); iterator.remove();
+                if (data.getNetwork(entry.network.getId()) != entry.network) continue;
+                remaining--; PerformanceDiagnostics.add("runtime.workUnits", 1);
+                if (entry.levelKey == null) entry.levelKey = ResourceKey.create(Registries.DIMENSION, new ResourceLocation(entry.dimension));
+                ServerLevel level = server.getLevel(entry.levelKey);
+                if (level == null) { entry.network.runtimeState(false, false); continue; }
+                step(level, entry);
+                if (entry.initial.hasNext() || entry.loadedChecks.hasNext() || !entry.partsToCheck.isEmpty() || !entry.checks.isEmpty() || entry.dirtyInputs || entry.outputs.hasNext()) queue.add(entry);
+            }
+            PerformanceDiagnostics.max("runtime.queuePeak", queue.size() + retired.size());
+            PerformanceDiagnostics.max("runtime.workPerTickPeak", WORK_PER_TICK - remaining);
+        } finally { draining = false; PerformanceDiagnostics.elapsed("runtime", start); }
+    }
+    private void step(ServerLevel level, Entry entry) {
+        // Notifications are iterative; reentrant input callbacks only invalidate/enqueue work.
+        if (level.captureBlockSnapshots || level.restoringBlockSnapshots) return;
+        if (entry.startedAt < 0) entry.startedAt = server.getTickCount();
+        if (entry.outputs.hasNext()) { notifyOutput(level, entry.outputs.next()); return; }
+        if (entry.initial.hasNext()) { check(level, entry, entry.initial.next()); return; }
+        if (entry.loadedChecks.hasNext()) { check(level, entry, entry.loadedChecks.next()); return; }
+        if (!entry.partsToCheck.isEmpty()) {
+            var iterator = entry.partsToCheck.iterator(); var part = iterator.next(); iterator.remove();
+            entry.loadedChecks = part.elements.iterator(); return;
+        }
+        if (!entry.checks.isEmpty()) {
+            var iterator = entry.checks.iterator(); var element = iterator.next(); iterator.remove();
+            check(level, entry, element); return;
+        }
+        if (!entry.dirtyInputs) return;
+        if (entry.inputs == null) {
+            entry.inputs = entry.network.getInputs().iterator(); entry.inputOr = false; entry.available = true;
+        }
+        if (entry.inputs.hasNext()) {
+            BlockPos pos = entry.inputs.next();
+            boolean loaded = isChunkAvailable(level, RuntimeSignalReader.chunk(pos));
+            entry.available &= loaded;
+            if (loaded) {
+                RuntimeSignalReader reader = new RuntimeSignalReader(level);
+                entry.inputOr |= reader.readInput(pos) > 0;
+                entry.available &= reader.available();
+                PerformanceDiagnostics.add("runtime.inputReads", 1);
+            }
+            return;
+        }
+        entry.dirtyInputs = false;
+        int before = entry.network.getEffectiveSignal();
+        if (entry.network.isPowered() != entry.inputOr) { entry.network.setPowered(entry.inputOr); data.setDirty(); }
+        entry.network.runtimeState(entry.waiting.isEmpty(), entry.available);
+        if (before != entry.network.getEffectiveSignal()) entry.outputs = entry.network.getOutputs().iterator();
+        if (!entry.firstReady && entry.waiting.isEmpty() && entry.available) {
+            entry.firstReady = true;
+            PerformanceDiagnostics.max("runtime.initializationTicksPeak", server.getTickCount() - entry.startedAt);
+        }
+        PerformanceDiagnostics.add("runtime.reconciliations", 1);
+    }
+    private void check(ServerLevel level, Entry entry, CompiledCircuitElement element) {
+        if (isChunkAvailable(level, RuntimeSignalReader.chunk(element.getPos()))) {
+            PerformanceDiagnostics.add("runtime.integrityReads", 1);
+            NetworkIntegrityManager.checkElement(level, data, entry.network, element);
+        }
+    }
+    public static void notifyOutput(ServerLevel level, BlockPos pos) {
+        if (!isChunkAvailable(level, RuntimeSignalReader.chunk(pos))) return;
+        for (Direction direction : Direction.values()) {
+            BlockPos neighbor = pos.relative(direction);
+            if (isChunkAvailable(level, RuntimeSignalReader.chunk(neighbor)))
+                level.neighborChanged(neighbor, ModBlocks.OUTPUT_ENDPOINT.get(), pos);
+        }
+        PerformanceDiagnostics.add("runtime.outputNotifications", 1);
+    }
+    public static void stop(MinecraftServer server) {
+        var runtime = NetworkSavedData.get(server).runtime();
+        for (var network : runtime.entries.keySet()) network.runtimeState(false, false);
+        runtime.queue.clear(); runtime.retired.clear(); runtime.loading.clear(); runtime.unloading.clear();
+        runtime.entries.clear(); runtime.chunks.clear(); runtime.server = null;
     }
 }

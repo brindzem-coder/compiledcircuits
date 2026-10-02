@@ -1129,7 +1129,7 @@ public class NetworkManagerScreen
         );
 
         if (isSearchMode()) {
-            graphics.drawString(font, "Search Results", 12, TOP + 2, 0xAAAAAA);
+            graphics.drawString(font, "Search Results (last output)", 12, TOP + 2, 0xAAAAAA);
             renderSearchResults(graphics, mouseX, mouseY);
         } else {
             graphics.drawString(
@@ -1142,7 +1142,7 @@ public class NetworkManagerScreen
 
             graphics.drawString(
                     this.font,
-                    "Networks",
+                    "Networks (last output)",
                     folderPanelWidth + 10,
                     TOP + 2,
                     0xAAAAAA
@@ -1561,7 +1561,7 @@ public class NetworkManagerScreen
             graphics.drawString(font, font.plainSubstrByWidth(title, Math.max(0, nameRight - nameX)),
                     nameX, rowY + 4, 0xFFFFFF, false);
             if (network && result.network() != null) {
-                boolean powered = result.network().powered();
+                boolean powered = result.network().powered() && !isNetworkBroken(result.network().id());
                 graphics.drawString(font, powered ? "[ON]" : "[OFF]", right - 38,
                         rowY + 4, powered ? 0x55FF55 : 0xFF5555, false);
             }
@@ -1730,12 +1730,12 @@ public class NetworkManagerScreen
             }
 
             int stateColor =
-                    entry.powered()
+                    entry.powered() && !isNetworkBroken(entry.id())
                             ? 0x55FF55
                             : 0xFF5555;
 
             String state =
-                    entry.powered()
+                    entry.powered() && !isNetworkBroken(entry.id())
                             ? "ON"
                             : "OFF";
 

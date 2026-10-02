@@ -51,7 +51,7 @@ public final class NetworkIntegrityManager {
                 var id = net.minecraft.resources.ResourceLocation.tryParse(auditNetwork.getDimension());
                 var level = id == null ? null : server.getLevel(net.minecraft.resources.ResourceKey.create(
                         net.minecraft.core.registries.Registries.DIMENSION, id));
-                if (level != null && level.hasChunkAt(element.getPos())) checkElement(level, data, auditNetwork, element);
+                if (level != null && NetworkRuntime.isChunkAvailable(level, RuntimeSignalReader.chunk(element.getPos()))) checkElement(level, data, auditNetwork, element);
             }
         } catch (java.util.ConcurrentModificationException changed) {
             auditNetworks = java.util.Collections.emptyIterator();
@@ -64,10 +64,12 @@ public final class NetworkIntegrityManager {
 
     public static void scheduleCheck(ServerLevel level, BlockPos pos) {
         PerformanceDiagnostics.add("pending.scheduleCalls", 1);
-        if (NetworkSavedData.get(level.getServer()).findElementLocation(level.dimension().location().toString(), pos) == null) {
+        var location = NetworkSavedData.get(level.getServer()).findElementLocation(level.dimension().location().toString(), pos);
+        if (location == null) {
             PerformanceDiagnostics.add("pending.unownedSkipped", 1);
             return;
         }
+        NetworkRuntime.elementChanged(level, location.network(), location.element());
         boolean added = PENDING_CHECKS.computeIfAbsent(level.dimension(), key -> new HashSet<>()).add(pos.immutable());
         if (added) PerformanceDiagnostics.add("pending.uniqueEnqueued", 1);
     }
@@ -102,12 +104,13 @@ public final class NetworkIntegrityManager {
         NetworkSavedData data = NetworkSavedData.get(level.getServer());
         NetworkSavedData.ElementLocation location =
                 data.findElementLocation(level.dimension().location().toString(), pos);
-        if (location == null || !level.hasChunkAt(pos)) return;
+        if (location == null || !NetworkRuntime.isChunkAvailable(level, RuntimeSignalReader.chunk(pos))) return;
 
         checkElement(level, data, location.network(), location.element());
     }
 
-    private static void checkElement(ServerLevel level, NetworkSavedData data, CompiledNetwork network, CompiledCircuitElement element) {
+    static void checkElement(ServerLevel level, NetworkSavedData data, CompiledNetwork network, CompiledCircuitElement element) {
+        if (level.captureBlockSnapshots || level.restoringBlockSnapshots) return;
         BlockPos pos = element.getPos();
         var actual = level.getBlockState(pos);
         String actualBlockId = BuiltInRegistries.BLOCK.getKey(actual.getBlock()).toString();

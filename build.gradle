@@ -86,9 +86,17 @@ minecraft {
             property 'forge.enabledGameTestNamespaces', mod_id
         }
 
+        client2 {
+            parent runs.client
+            workingDirectory project.file('run_client2')
+            args '--username', 'Dev2'
+        }
         server {
             property 'forge.enabledGameTestNamespaces', mod_id
             args '--nogui'
+            workingDirectory project.file('run')
+            // Автоматично робить усіх гравців операторами серверами при вході (для тестів):
+            property 'forge.force_op', 'true'
         }
 
         // This run config launches GameTestServer and runs all registered gametests, then exits.
@@ -260,10 +268,10 @@ tasks.named('compileJava', JavaCompile).configure {
     ]
 }
 tasks.named('jar', Jar).configure {
-    manifest.attributes('MixinConfigs': 'compiledcircuits.visual.mixins.json')
+    manifest.attributes('MixinConfigs': 'compiledcircuits.visual.mixins.json,compiledcircuits.runtime.mixins.json')
 }
 minecraft.runs.configureEach {
-    args '-mixin.config', 'compiledcircuits.visual.mixins.json'
+    args '-mixin.config', 'compiledcircuits.visual.mixins.json', '-mixin.config', 'compiledcircuits.runtime.mixins.json'
     property 'mixin.env.remapRefMap', 'true'
     property 'mixin.env.refMapRemappingFile', layout.buildDirectory.file('createSrgToMcp/output.srg').get().asFile.absolutePath
 }

@@ -36,7 +36,7 @@ public final class NetworkGuiSync {
                             network.getName(),
                             network.getFolderId(),
                             network.getDimension(),
-                            network.isPowered(),
+                            network.getEffectiveSignal() > 0,
                             network.getWires().size(),
                             network.getInputs().size(),
                             network.getOutputs().size()

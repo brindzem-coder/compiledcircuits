@@ -305,7 +305,9 @@ public class MembershipIndexGameTests {
             storage.set("compiledcircuits_networks", isolated);
             level.setBlock(pos, output, 3); level.setBlock(healthyPos, output, 3);
             helper.assertTrue(output.getSignal(level, pos, net.minecraft.core.Direction.UP) == 0, "isolated powered output is LOW");
-            helper.assertTrue(output.getSignal(level, healthyPos, net.minecraft.core.Direction.UP) == 15, "healthy powered output continues");
+            helper.assertTrue(output.getSignal(level, healthyPos, net.minecraft.core.Direction.UP) == 0, "unverified saved HIGH stays LOW");
+            NetworkRuntime.tick(level.getServer());
+            helper.assertTrue(isolated.getNetwork(1003) != null && output.getSignal(level, healthyPos, net.minecraft.core.Direction.UP) == 0, "healthy output with no HIGH inputs remains active and LOW");
             var before = isolated.getInvalidMembershipRecords();
             NetworkIntegrityManager.checkPosition(level, pos);
             helper.assertTrue(isolated.getInvalidMembershipRecords().equals(before) && isolated.getNetwork(1001) == null, "repair cannot activate isolated record");

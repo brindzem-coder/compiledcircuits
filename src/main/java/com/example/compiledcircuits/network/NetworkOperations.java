@@ -181,7 +181,7 @@ public final class NetworkOperations {
                 var removed = data.removeNetworks(ids); success = !removed.isEmpty();
                 if (success) {
                     BrokenElementSync.syncRemovedNetworks(source.getServer(), removed);
-                    for (var n : removed) notifyRemoved(source.getServer(), n);
+                    NetworkRuntime.flush(source.getServer());
                 }
             }
             case REPAIR -> {
@@ -221,13 +221,8 @@ public final class NetworkOperations {
                     player.serverLevel().dimension().location().toString(),
                     CompiledElementFactory.create(player.serverLevel(), scan.wires(), scan.inputs(), scan.outputs()));
             data.addNetwork(n);
-            if (name != null) NetworkRuntime.inputChanged(player.serverLevel(), n.getInputs().iterator().next());
+            NetworkRuntime.inputChanged(player.serverLevel(), n.getInputs().iterator().next());
             return new Result(Code.OK, "Compiled " + n.getName() + " (#" + id + ").", List.of(n));
         } catch (IllegalArgumentException invalid) { return result(Code.CONFLICT, invalid.getMessage()); }
-    }
-    private static void notifyRemoved(MinecraftServer server, CompiledNetwork network) {
-        var level = server.getLevel(ResourceKey.create(Registries.DIMENSION, new ResourceLocation(network.getDimension())));
-        if (level == null) return;
-        for (var pos : network.getOutputs()) if (level.hasChunkAt(pos)) level.updateNeighborsAt(pos, level.getBlockState(pos).getBlock());
     }
 }

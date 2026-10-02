@@ -38,6 +38,17 @@ public class CompiledNetwork {
 
     // Runtime state мережі
     private boolean powered;
+    // Never persisted: saved input OR is not an authorization to emit power.
+    private boolean runtimeReady;
+    private boolean inputsAvailable;
+    public int getEffectiveSignal() { return runtimeReady && inputsAvailable && !isDamaged() && powered ? 15 : 0; }
+    public String getRuntimeStatus() {
+        if (isDamaged()) return "DAMAGED";
+        if (!runtimeReady) return "INITIALIZING";
+        return inputsAvailable ? "READY" : "UNAVAILABLE";
+    }
+    void runtimeState(boolean ready, boolean available) { runtimeReady = ready; inputsAvailable = available; }
+
 
     private int folderId;
 

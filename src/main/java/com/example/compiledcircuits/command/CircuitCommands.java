@@ -210,7 +210,7 @@ public final class CircuitCommands {
         var data=NetworkSavedData.get(source.getServer());
         var networks=new java.util.ArrayList<>(data.getNetworks()); networks.sort(java.util.Comparator.comparingInt(CompiledNetwork::getId));
         source.sendSuccess(() -> Component.literal("Compiled networks: "+networks.size()),false);
-        for (var n:networks) source.sendSuccess(() -> Component.literal("#"+n.getId()+" "+n.getName()+" ["+(n.isPowered()?"ON":"OFF")
+        for (var n:networks) source.sendSuccess(() -> Component.literal("#"+n.getId()+" "+n.getName()+" ["+(n.getEffectiveSignal() > 0?"ON":"OFF")
                 +"] folder="+data.getFolderPath(n.getFolderId())+" wires="+n.getWires().size()+" inputs="+n.getInputs().size()+" outputs="+n.getOutputs().size()),false);
         return 1;
     }

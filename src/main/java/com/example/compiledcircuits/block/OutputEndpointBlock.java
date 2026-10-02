@@ -57,6 +57,7 @@ public class OutputEndpointBlock
             BlockPos pos
     ) {
 
+        if (level instanceof com.example.compiledcircuits.network.RuntimeSignalReader reader) level = reader.level();
         if (!(level instanceof ServerLevel serverLevel)) {
             return 0;
         }
@@ -76,8 +77,6 @@ public class OutputEndpointBlock
             return 0;
         }
 
-        return network.isPowered()
-                ? 15
-                : 0;
+        return network.getEffectiveSignal();
     }
 }

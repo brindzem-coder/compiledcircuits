@@ -64,16 +64,23 @@ public final class NetworkIntegrityEvents {
     }
 
     @SubscribeEvent
+    public static void onChunkLoad(net.minecraftforge.event.level.ChunkEvent.Load event) {
+        if (event.getLevel() instanceof ServerLevel level)
+            com.example.compiledcircuits.network.NetworkRuntime.chunkChanged(level, event.getChunk().getPos().toLong(), true);
+    }
+    @SubscribeEvent
     public static void onServerTick(TickEvent.ServerTickEvent event) {
         // Break/explosion events can precede the actual world change.
         if (event.phase == TickEvent.Phase.END) {
             NetworkIntegrityManager.processPending(event.getServer());
             NetworkIntegrityManager.audit(event.getServer());
+            com.example.compiledcircuits.network.NetworkRuntime.tick(event.getServer());
         }
     }
 
     @SubscribeEvent
     public static void onServerStopped(ServerStoppedEvent event) {
+        com.example.compiledcircuits.network.NetworkRuntime.stop(event.getServer());
         NetworkIntegrityManager.clearPending();
     }
 }
