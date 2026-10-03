@@ -44,6 +44,12 @@ public final class PerformanceDiagnostics {
         if (s == null || Thread.currentThread() != s.owner) return;
         synchronized (s) { if (active == s) s.counters.merge(metric, value, Long::sum); }
     }
+    /** Last observed queue state, distinct from accumulated counters and peaks. */
+    public static void gauge(String metric, long value) {
+        Session s=active;
+        if(s==null || Thread.currentThread()!=s.owner)return;
+        synchronized(s){if(active==s)s.counters.put(metric,value);}
+    }
     public static void max(String metric, long value) {
         Session s = active;
         if (s == null || Thread.currentThread() != s.owner) return;

@@ -21,7 +21,10 @@ public class CompiledNetwork {
     private boolean needsPersistenceUpgrade;
     public boolean needsPersistenceUpgrade() { return needsPersistenceUpgrade; }
     private int id;
-    private boolean published = true;
+    private boolean published = true, retired;
+    boolean isRetired() { return retired; }
+    void retire() { retired = true; published = false; runtimeReady = false; }
+    void reactivate() { retired = false; published = true; }
     boolean isPublished() { return published; }
     void publish(int id) {
         if (published || id <= 0) throw new IllegalStateException("Invalid publication");
@@ -40,16 +43,23 @@ public class CompiledNetwork {
     private final Set<BlockPos> outputs;
     private final Map<Integer, CompiledCircuitElement> elements;
     private final Map<BlockPos, CompiledCircuitElement> elementsByPosition;
-    private final Map<Integer, BrokenCircuitElement> brokenElements = new LinkedHashMap<>();
+    private PersistentIntMap<BrokenCircuitElement> brokenElements = new PersistentIntMap<>();
+    private boolean savedIntegrityPending;
+    boolean savedIntegrityPending() { return savedIntegrityPending; }
+    void integrityConfirmed() { savedIntegrityPending = false; }
+    private java.util.function.BooleanSupplier integrityGuard = () -> false;
+    void integrityGuard(java.util.function.BooleanSupplier guard) { integrityGuard = guard; }
+    public boolean isIntegrityPending() { return savedIntegrityPending || integrityGuard.getAsBoolean(); }
 
     // Runtime state мережі
     private boolean powered;
     // Never persisted: saved input OR is not an authorization to emit power.
     private boolean runtimeReady;
     private boolean inputsAvailable;
-    public int getEffectiveSignal() { return runtimeReady && inputsAvailable && !isDamaged() && powered ? 15 : 0; }
+    public int getEffectiveSignal() { return runtimeReady && inputsAvailable && !isIntegrityPending() && !isDamaged() && powered ? 15 : 0; }
     public String getRuntimeStatus() {
         if (isDamaged()) return "DAMAGED";
+        if (isIntegrityPending()) return "INTEGRITY_PENDING";
         if (!runtimeReady) return "INITIALIZING";
         return inputsAvailable ? "READY" : "UNAVAILABLE";
     }
@@ -183,7 +193,7 @@ public class CompiledNetwork {
     }
 
     public boolean isElementBroken(int elementId) {
-        return brokenElements.containsKey(elementId);
+        return brokenElements.get(elementId) != null;
     }
 
     public boolean isDamaged() {
@@ -191,11 +201,13 @@ public class CompiledNetwork {
     }
 
     public boolean markBroken(BrokenCircuitElement broken) {
-        return brokenElements.putIfAbsent(broken.getElementId(), broken) == null;
+        if (brokenElements.get(broken.getElementId()) != null) return false;
+        brokenElements = brokenElements.put(broken.getElementId(), broken); return true;
     }
 
     public boolean markRepaired(int elementId) {
-        return brokenElements.remove(elementId) != null;
+        if (brokenElements.get(elementId) == null) return false;
+        brokenElements = brokenElements.remove(elementId); return true;
     }
 
     public int getId() {
@@ -263,6 +275,7 @@ public class CompiledNetwork {
         ListTag brokenList = new ListTag();
         for (BrokenCircuitElement broken : brokenElements.values()) brokenList.add(broken.save());
         tag.put("brokenElements", brokenList);
+        tag.putBoolean("integrityUnverified", isIntegrityPending());
         return tag;
     }
 
@@ -342,10 +355,11 @@ public class CompiledNetwork {
         network.powered =
                 tag.getBoolean("powered");
 
+        network.savedIntegrityPending = tag.getBoolean("integrityUnverified");
         ListTag brokenList = tag.getList("brokenElements", Tag.TAG_COMPOUND);
         for (int i = 0; i < brokenList.size(); i++) {
             BrokenCircuitElement broken = BrokenCircuitElement.load(brokenList.getCompound(i));
-            network.brokenElements.put(broken.getElementId(), broken);
+            network.markBroken(broken);
         }
         network.needsPersistenceUpgrade = !tag.contains("elements", Tag.TAG_LIST)
                 || elements.stream().anyMatch(CompiledCircuitElement::needsPersistenceUpgrade);

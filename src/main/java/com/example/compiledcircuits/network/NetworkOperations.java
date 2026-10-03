@@ -29,7 +29,7 @@ public final class NetworkOperations {
         return player != null && !player.isRemoved() && !player.isSpectator() && player.mayBuild();
     }
     public static void forget(Object actor) {
-        if (actor instanceof ServerPlayer player) CompilationJobs.cancel(player);
+        if (actor instanceof ServerPlayer player) { CompilationJobs.cancel(player); RepairJobs.cancel(player); }
         budgets.remove(actor);
     }
     public static void clear() { budgets.clear(); }
@@ -182,34 +182,17 @@ public final class NetworkOperations {
             case MOVE_FOLDERS -> success = data.moveFolders(ids, target);
             case DELETE_FOLDERS -> success = data.deleteFolders(ids);
             case DECOMPILE -> {
+                if(!data.canRetireNetworks(networks))return result(Code.BUSY,"Decompile cleanup queue is full; retry after pending work completes.");
                 var removed = data.removeNetworks(ids); success = !removed.isEmpty();
                 if (success) {
-                    BrokenElementSync.syncRemovedNetworks(source.getServer(), removed);
-                    NetworkRuntime.flush(source.getServer());
+                    DamageNotifications.removed(source.getServer(), removed);
+                    // Output callbacks run in the shared runtime budget at tick END.
                 }
             }
-            case REPAIR -> {
-                int placed=0, occupied=0, unsupported=0, failed=0, correct=0, unloaded=0, invalid=0;
-                for (var n : networks) {
-                    if (!canModify(player) || data.getNetwork(n.getId()) != n) return result(Code.FORBIDDEN, "Repair stopped after " + placed + " placements: actor or membership changed.");
-                    var level = source.getServer().getLevel(ResourceKey.create(Registries.DIMENSION, new ResourceLocation(n.getDimension())));
-                    if (level == null) { unloaded += n.getBrokenElements().size(); continue; }
-                    var r = NetworkRepairManager.repairAuthorized(level, n, player);
-                    placed += r.repaired(); occupied += r.skippedOccupied(); unsupported += r.skippedUnsupported();
-                    failed += r.failed(); correct += r.alreadyCorrect(); unloaded += r.skippedUnloaded(); invalid += r.invalidState();
-                }
-                return ok("Auto repair: placed " + placed + ", occupied " + occupied + ", unsupported " + unsupported
-                        + ", failed/protected " + failed + ", already correct " + correct + ", unloaded " + unloaded + ", invalid state " + invalid + ".");
-            }
+            case REPAIR -> { return RepairJobs.submit(source,player,data,networks); }
             default -> { return result(Code.INVALID_ARGUMENT, "Unsupported operation."); }
         }
         return success ? ok("Operation completed.") : result(Code.CONFLICT, "Invalid destination, nonempty folder, duplicate name or folder cycle. Nothing changed.");
-    }
-    static boolean authorizeDirectRepair(ServerPlayer player, CompiledNetwork network) {
-        if (!canModify(player) || !player.getServer().isSameThread()) return false;
-        var data = NetworkSavedData.get(player.getServer());
-        if (data.getNetwork(network.getId()) != network || network.getElements().size() > OperationLimits.ELEMENTS) return false;
-        return charge(player.createCommandSourceStack(), network.getElements().size(), true) == null;
     }
     private static Result compile(CommandSourceStack source, ServerPlayer player, NetworkSavedData data, String name) {
         if (data.hasUnknownMembershipReservations()) return result(Code.CONFLICT, "Unresolved saved membership records.");

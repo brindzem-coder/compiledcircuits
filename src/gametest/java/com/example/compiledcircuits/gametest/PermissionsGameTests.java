@@ -127,48 +127,48 @@ public class PermissionsGameTests {
         }
         h.succeed();
     }
-    @GameTest(template="empty",timeoutTicks=100)
+    @GameTest(template="empty",batch="protected_repair",timeoutTicks=160)
     public static void protectedRepair(GameTestHelper h) {
-        var level=h.getLevel(); var server=level.getServer(); var storage=server.overworld().getDataStorage();
+        var level=h.getLevel();var server=level.getServer();var storage=server.overworld().getDataStorage();
         var original=NetworkSavedData.get(server);var data=new NetworkSavedData();var p=player(h);
         var pos=h.absolutePos(new BlockPos(1,2,1));var old=level.getBlockState(pos);
-        var state=ModBlocks.INPUT_ENDPOINT.get().defaultBlockState();
-        boolean[] saw={false};
-        Consumer<BlockEvent.EntityPlaceEvent> deny=event->{
-            if(event.getEntity()==p && event.getPos().equals(pos)) {
-                saw[0]=true;
-                h.assertTrue(event.getBlockSnapshot().getReplacedBlock().isAir() && event.getPlacedBlock().is(ModBlocks.INPUT_ENDPOINT.get()),"Forge event observes old snapshot and tentative new state");
-                event.setCanceled(true);
-            }
-        };
-        try {
-            storage.set("compiledcircuits_networks",data);
-            level.setBlock(pos,state,3);
-            var n=new CompiledNetwork(1,"repair",0,"minecraft:overworld",CompiledElementFactory.create(level,Set.of(),Set.of(pos),Set.of()));
-            data.addNetwork(n);level.setBlock(pos,Blocks.AIR.defaultBlockState(),3);NetworkIntegrityManager.checkPosition(level,pos);
-            var inventory=p.getInventory().save(new ListTag()); var before=data.save(new CompoundTag());data.setDirty(false);
-            MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGHEST,false,BlockEvent.EntityPlaceEvent.class,deny);
-            var denied=NetworkRepairManager.repairNetwork(level,n,p);
-            h.assertTrue(saw[0] && denied.repaired()==0 && denied.failed()==1,"canceled placement not counted as repaired");
-            h.assertTrue(level.getBlockState(pos).isAir() && inventory.equals(p.getInventory().save(new ListTag())),"canceled block and inventory unchanged");
-            h.assertTrue(before.equals(data.save(new CompoundTag())) && !data.isDirty(),"canceled repair leaves saved state unchanged");
-            h.assertTrue(!level.captureBlockSnapshots && !level.restoringBlockSnapshots && level.capturedBlockSnapshots.isEmpty(),"Forge capture state restored");
-            MinecraftForge.EVENT_BUS.unregister(deny);
-            Consumer<BlockEvent.EntityPlaceEvent> revoke=event->{if(event.getEntity()==p)p.getAbilities().mayBuild=false;};
-            MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGHEST,false,BlockEvent.EntityPlaceEvent.class,revoke);
-            try {
-                var stopped=NetworkRepairManager.repairNetwork(level,n,p);
-                h.assertTrue(stopped.repaired()==0 && level.getBlockState(pos).isAir(),"permission loss during placement rolls it back");
-            } finally {MinecraftForge.EVENT_BUS.unregister(revoke);p.getAbilities().mayBuild=true;}
-
-            var allowed=NetworkRepairManager.repairNetwork(level,n,p);
-            h.assertTrue(allowed.repaired()==1 && level.getBlockState(pos).equals(state),"normal player repair still works");
-            NetworkIntegrityManager.processPending(server);h.assertTrue(!n.isDamaged(),"successful repair confirmed");
-        } finally {
-            MinecraftForge.EVENT_BUS.unregister(deny);NetworkIntegrityManager.clearPending();NetworkOperations.forget(p);
+        var state=ModBlocks.INPUT_ENDPOINT.get().defaultBlockState();boolean[] saw={false};
+        Consumer<BlockEvent.EntityPlaceEvent> deny=event->{if(event.getEntity()==p&&event.getPos().equals(pos)){
+            saw[0]=true;h.assertTrue(event.getBlockSnapshot().getReplacedBlock().isAir()&&event.getPlacedBlock().is(ModBlocks.INPUT_ENDPOINT.get()),"event observes tentative placement");event.setCanceled(true);
+        }};
+        Consumer<BlockEvent.EntityPlaceEvent> revoke=event->{if(event.getEntity()==p)p.getAbilities().mayBuild=false;};
+        storage.set("compiledcircuits_networks",data);level.setBlock(pos,state,3);
+        var n=new CompiledNetwork(1,"repair",0,"minecraft:overworld",CompiledElementFactory.create(level,Set.of(),Set.of(pos),Set.of()));
+        data.addNetwork(n);level.setBlock(pos,Blocks.AIR.defaultBlockState(),3);NetworkIntegrityManager.checkPosition(level,pos);
+        var inventory=p.getInventory().save(new ListTag());final CompoundTag[] before={null};
+        new Runnable(){int phase=-1;void cleanup(){
+            MinecraftForge.EVENT_BUS.unregister(deny);MinecraftForge.EVENT_BUS.unregister(revoke);
+            RepairJobs.stop(server);NetworkIntegrityManager.clearPending();NetworkOperations.forget(p);
             storage.set("compiledcircuits_networks",original);level.setBlock(pos,old,3);
         }
-        h.succeed();
+        public void run(){try{
+            if(RepairJobs.isBusy(p)){h.runAfterDelay(1,()->this.run());return;}
+            if(phase==-1){
+                if(n.isIntegrityPending()){h.runAfterDelay(1,()->this.run());return;}
+                before[0]=data.save(new CompoundTag());data.setDirty(false);
+                MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGHEST,false,BlockEvent.EntityPlaceEvent.class,deny);
+                h.assertTrue(NetworkRepairManager.repairNetwork(level,n,p).code()==NetworkOperations.Code.QUEUED,"protected request queued");phase=0;
+            }else if(phase==0){
+                h.assertTrue(saw[0]&&level.getBlockState(pos).isAir()&&inventory.equals(p.getInventory().save(new ListTag())),"cancelled placement preserves world and inventory");
+                h.assertTrue(before[0].equals(data.save(new CompoundTag()))&&!data.isDirty(),"cancelled placement preserves saved state");
+                h.assertTrue(!level.captureBlockSnapshots&&!level.restoringBlockSnapshots&&level.capturedBlockSnapshots.isEmpty(),"capture state restored");
+                MinecraftForge.EVENT_BUS.unregister(deny);MinecraftForge.EVENT_BUS.addListener(EventPriority.HIGHEST,false,BlockEvent.EntityPlaceEvent.class,revoke);
+                h.assertTrue(NetworkRepairManager.repairNetwork(level,n,p).success(),"permission-race request accepted");phase=1;
+            }else if(phase==1){
+                h.assertTrue(level.getBlockState(pos).isAir(),"permission revoked during placement restores old block");
+                MinecraftForge.EVENT_BUS.unregister(revoke);p.getAbilities().mayBuild=true;
+                h.assertTrue(NetworkRepairManager.repairNetwork(level,n,p).success(),"normal retry accepted");phase=2;
+            }else{
+                if(n.isDamaged()||n.isIntegrityPending()){h.runAfterDelay(1,()->this.run());return;}
+                h.assertTrue(level.getBlockState(pos).equals(state),"normal player repair preserves exact snapshot");cleanup();h.succeed();return;
+            }
+            h.runAfterDelay(1,()->this.run());
+        }catch(Exception e){cleanup();throw new IllegalStateException(e);}}}.run();
     }
     @GameTest(template="empty",timeoutTicks=100)
     public static void requestLimits(GameTestHelper h) throws Exception {

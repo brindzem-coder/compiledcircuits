@@ -27,7 +27,7 @@ public class RuntimeLifecycleGameTests {
             power = input.below(); lamp = output.above(); other = input.offset(32, 0, 0); wire = input.offset(64, 0, 0);
             // Test setup explicitly loads its chunks; production runtime must never do so.
             for (BlockPos pos : List.of(input, other, output, wire)) for (long c : RuntimeSignalReader.dependencyChunks(pos))
-                level.getChunk(net.minecraft.world.level.ChunkPos.getX(c), net.minecraft.world.level.ChunkPos.getZ(c));
+                { keepLoaded(c);level.getChunk(net.minecraft.world.level.ChunkPos.getX(c), net.minecraft.world.level.ChunkPos.getZ(c)); }
             set(input, ModBlocks.INPUT_ENDPOINT.get().defaultBlockState());
             set(output, ModBlocks.OUTPUT_ENDPOINT.get().defaultBlockState());
             set(power, Blocks.AIR.defaultBlockState()); set(lamp, Blocks.REDSTONE_LAMP.defaultBlockState());
@@ -40,7 +40,7 @@ public class RuntimeLifecycleGameTests {
                     CompiledElementFactory.create(level, Set.of(wire), twoInputs ? Set.of(input, other) : Set.of(input), Set.of(output)));
             data.addNetwork(n); return n;
         }
-        void tick() { NetworkRuntime.tick(level.getServer()); }
+        void tick() { NetworkIntegrityManager.processPending(level.getServer()); NetworkRuntime.tick(level.getServer()); }
         int signal() { return level.getBlockState(output).getSignal(level, output, Direction.UP); }
         void chunk(BlockPos pos, boolean loaded) { NetworkRuntime.chunkChanged(level, RuntimeSignalReader.chunk(pos), loaded); }
         void keepLoaded(long chunk) {
@@ -80,32 +80,28 @@ public class RuntimeLifecycleGameTests {
         }
         helper.succeed();
     }
-    @GameTest(template="empty", timeoutTicks=100)
+    @GameTest(template="empty", batch="runtime_chunk_budget", timeoutTicks=200)
     public static void chunkTransitions(GameTestHelper helper) {
-        try (var f = new Fixture(helper)) {
-            f.set(f.power, Blocks.REDSTONE_BLOCK.defaultBlockState());
-            var n = f.create(true); f.tick(); helper.assertTrue(f.signal() == 15, "two available inputs OR");
-            // Unload-hook window: the real chunk is still readable, but must already be unavailable.
-            f.chunk(f.other, false);
-            helper.assertTrue(f.signal() == 0 && !n.isDamaged(), "pending unload gates HIGH immediately without damage");
-            f.tick(); helper.assertTrue(f.signal() == 0, "known HIGH cannot bypass unavailable second input");
-            f.chunk(f.other, true); f.tick(); helper.assertTrue(f.signal() == 15, "load restores without neighborChanged");
-            f.chunk(f.wire, false); f.tick(); helper.assertTrue(f.signal() == 15 && !n.isDamaged(), "verified unloaded wire preserves circuit");
-            f.set(f.wire, Blocks.AIR.defaultBlockState());
-            f.chunk(f.wire, true); helper.assertTrue(f.signal() == 0, "wire load cannot flash stale HIGH");
-            f.tick(); helper.assertTrue(n.isDamaged() && f.signal() == 0, "returned missing wire is damaged");
-            f.chunk(f.other, false);
-            f.set(f.wire, ModBlocks.BASIC_WIRE.get().defaultBlockState());
-            NetworkIntegrityManager.processPending(f.level.getServer()); f.tick();
-            helper.assertTrue(!n.isDamaged() && f.signal() == 0, "repair does not cancel unavailable input");
-            f.chunk(f.other, true); f.tick(); helper.assertTrue(f.signal() == 15, "last dependency restores repaired network");
-            f.chunk(f.output, false); f.chunk(f.output, true);
-            f.set(f.lamp, Blocks.REDSTONE_LAMP.defaultBlockState()); f.tick();
-            helper.assertTrue(f.signal() == 15 && f.level.getBlockState(f.lamp).getValue(RedstoneLampBlock.LIT), "output reload resynchronizes unchanged HIGH");
-            f.data.removeNetwork(n.getId()); NetworkRuntime.notifyOutput(f.level, f.output);
-            helper.assertTrue(f.signal() == 0, "removal clears runtime before callback");
-        }
-        helper.succeed();
+        var f=new Fixture(helper);f.set(f.power,Blocks.REDSTONE_BLOCK.defaultBlockState());var n=f.create(true);
+        new Runnable(){int phase;public void run(){try{
+            switch(phase) {
+                case 0 -> {if(f.signal()!=15){helper.runAfterDelay(1,()->run());return;}
+                    f.chunk(f.other,false);helper.assertTrue(f.signal()==0&&!n.isDamaged(),"pending unload gates HIGH immediately without damage");}
+                case 1 -> {helper.assertTrue(f.signal()==0,"known HIGH cannot bypass unavailable second input");f.chunk(f.other,true);}
+                case 2 -> {if(f.signal()!=15){helper.runAfterDelay(1,()->run());return;}f.chunk(f.wire,false);}
+                case 3 -> {helper.assertTrue(f.signal()==15&&!n.isDamaged(),"verified unloaded wire preserves circuit");
+                    f.set(f.wire,Blocks.AIR.defaultBlockState());f.chunk(f.wire,true);helper.assertTrue(f.signal()==0,"wire load cannot flash stale HIGH");}
+                case 4 -> {if(!n.isDamaged()){helper.runAfterDelay(1,()->run());return;}
+                    helper.assertTrue(f.signal()==0,"returned missing wire is damaged");f.chunk(f.other,false);f.set(f.wire,ModBlocks.BASIC_WIRE.get().defaultBlockState());}
+                case 5 -> {if(n.isDamaged()){helper.runAfterDelay(1,()->run());return;}
+                    helper.assertTrue(f.signal()==0,"repair does not cancel unavailable input");f.chunk(f.other,true);}
+                case 6 -> {if(f.signal()!=15){helper.runAfterDelay(1,()->run());return;}
+                    f.chunk(f.output,false);f.chunk(f.output,true);f.set(f.lamp,Blocks.REDSTONE_LAMP.defaultBlockState());}
+                default -> {if(f.signal()!=15||!f.level.getBlockState(f.lamp).getValue(RedstoneLampBlock.LIT)){helper.runAfterDelay(1,()->run());return;}
+                    f.data.removeNetwork(n.getId());NetworkRuntime.notifyOutput(f.level,f.output);helper.assertTrue(f.signal()==0,"removal clears runtime before callback");f.close();helper.succeed();return;}
+            }
+            phase++;helper.runAfterDelay(1,()->run());
+        }catch(Exception e){f.close();throw new IllegalStateException("chunk transition phase "+phase,e);}}}.run();
     }
     @GameTest(template="empty", timeoutTicks=100)
     public static void unavailableAndIndirectDependencies(GameTestHelper helper) {
@@ -120,7 +116,7 @@ public class RuntimeLifecycleGameTests {
             helper.assertTrue(f.signal() == 0 && !f.level.hasChunkAt(far) && !n.isDamaged(), "no forced chunk or fake broken input");
             f.data.removeNetwork(1);
             // Position x=14: the indirect dependency x=16 is beyond the direct neighbor x=15.
-            BlockPos boundary = new BlockPos((f.input.getX() >> 4) * 16 + 14, f.input.getY(), f.input.getZ());
+            BlockPos boundary = new BlockPos((f.input.getX() >> 4) * 16 + 14, f.input.getY(), f.input.getZ()+8);
             for (long c : RuntimeSignalReader.dependencyChunks(boundary)) f.level.getChunk(net.minecraft.world.level.ChunkPos.getX(c), net.minecraft.world.level.ChunkPos.getZ(c));
             f.set(boundary, ModBlocks.INPUT_ENDPOINT.get().defaultBlockState());
             f.set(boundary.east(), Blocks.STONE.defaultBlockState());
@@ -345,9 +341,10 @@ public class RuntimeLifecycleGameTests {
         }
         helper.succeed();
     }
-    @GameTest(template="empty",timeoutTicks=100)
+    @GameTest(template="empty",batch="runtime_stable_budget",timeoutTicks=200)
     public static void savedBrokenAndStableChecks(GameTestHelper helper) throws Exception {
-        try(var f=new Fixture(helper)) {
+        var f=new Fixture(helper);
+        try {
             f.set(f.power,Blocks.REDSTONE_BLOCK.defaultBlockState());
             var elements=new ArrayList<CompiledCircuitElement>(CompiledElementFactory.create(f.level,Set.of(),Set.of(f.input),Set.of(f.output)));
             var far=new BlockPos(15000000,90,15000000);elements.add(new CompiledCircuitElement(50,far,CircuitElementType.WIRE,"compiledcircuits:basic_wire"));
@@ -369,9 +366,9 @@ public class RuntimeLifecycleGameTests {
             f.chunk(f.input,false);
             f.data.replaceNetwork(new CompiledNetwork(stable.getId(),"pending replace",0,stable.getDimension(),stable.getElements()));
             f.tick();helper.assertTrue(f.signal()==0,"replace cannot erase pending unload state");
-            f.chunk(f.input,true);f.tick();helper.assertTrue(f.signal()==15,"replacement resumes on load");
-        }
-        helper.succeed();
+            f.chunk(f.input,true);
+            helper.succeedWhen(()->{f.tick();helper.assertTrue(f.signal()==15,"replacement resumes on load");f.close();});
+        } catch(Exception e){f.close();throw e;}
     }
 
 }

@@ -22,6 +22,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
 public class NetworkSavedData extends SavedData {
+    final ServerWorkBudget workBudget = new ServerWorkBudget();
+    private final IntegrityScheduler integrity = new IntegrityScheduler(this);
+    IntegrityScheduler integrity() { return integrity; }
     private final NetworkRuntime runtime = new NetworkRuntime(this);
     NetworkRuntime runtime() { return runtime; }
 
@@ -167,8 +170,10 @@ public class NetworkSavedData extends SavedData {
         requireMutationThread(); requireResolvedMembership(); return new PreparedAdmission(candidate);
     }
 
-    public NetworkSavedData() {
-    }
+    private static final java.util.Set<NetworkSavedData> integrityOwners = java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
+    public NetworkSavedData() { integrityOwners.add(this); }
+    static void clearIntegritySchedulers() { for(var data:integrityOwners) data.integrity.clear(); }
+
 
     private final Map<Integer, CircuitFolder> folders =
             new HashMap<>();
@@ -452,8 +457,12 @@ public class NetworkSavedData extends SavedData {
         requireMutationThread();
         if (ids.isEmpty() || !networks.keySet().containsAll(ids)) return List.of();
         List<CompiledNetwork> removed = new ArrayList<>();
-        for (int id : new LinkedHashSet<>(ids)) removed.add(networks.remove(id));
-        for (CompiledNetwork network : removed) { membership.remove(network); runtime.remove(network); }
+        for (int id : new LinkedHashSet<>(ids)) removed.add(networks.get(id));
+        if(!runtime.canRetire(removed))return List.of();
+        long commitStart = com.example.compiledcircuits.diagnostics.PerformanceDiagnostics.begin();
+        for (CompiledNetwork network : removed) { networks.remove(network.getId()); runtime.remove(network); }
+        com.example.compiledcircuits.diagnostics.PerformanceDiagnostics.elapsed("decompile.atomicCommit",commitStart);
+        com.example.compiledcircuits.diagnostics.PerformanceDiagnostics.add("decompile.networks",removed.size());
         for (CompiledNetwork network : removed) CompiledElementSync.markDimensionDirty(network.getDimension());
         setDirty();
         return removed;
@@ -663,6 +672,7 @@ public class NetworkSavedData extends SavedData {
         Set<Integer> ids = new HashSet<>();
         CompiledNetwork previous = replacing ? networks.get(ordered.get(0).getId()) : null;
         if (replacing && previous == null) throw new AdmissionException("Replacement network does not exist.");
+        if(previous!=null && !runtime.canRetire(List.of(previous)))throw new AdmissionException("Retirement queue is full; retry later.");
         int committedNextId = nextNetworkId;
         for (var network : ordered) {
             if (reservations.networkIds.contains(network.getId()))
@@ -898,17 +908,19 @@ public class NetworkSavedData extends SavedData {
         return location == null ? null : location.network();
     }
 
+    void retireClaim(CompiledNetwork network, CompiledCircuitElement element) { membership.unstage(network,element); }
+    public boolean canRetireNetworks(Collection<CompiledNetwork> networks) { return runtime.canRetire(networks); }
     public boolean removeNetwork(int id) {
         requireMutationThread();
 
-        CompiledNetwork removed =
-                networks.remove(id);
+        CompiledNetwork candidate=networks.get(id);
+        if(candidate!=null && !runtime.canRetire(List.of(candidate)))return false;
+        CompiledNetwork removed = networks.remove(id);
 
         if (removed == null) {
             return false;
         }
 
-        membership.remove(removed);
         runtime.remove(removed);
         CompiledElementSync.markDimensionDirty(removed.getDimension());
         setDirty();

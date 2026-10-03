@@ -17,7 +17,10 @@ abstract class LevelChunkCompilationMixin {
     private void compiledcircuits$invalidate(BlockPos pos, BlockState state, boolean moving,
                                              CallbackInfoReturnable<BlockState> cir) {
         LevelChunk chunk = (LevelChunk)(Object)this;
-        if (chunk.getLevel() instanceof ServerLevel level && chunk.getBlockState(pos) != state)
+        if (chunk.getLevel() instanceof ServerLevel level && chunk.getBlockState(pos) != state) {
             CompilationJobs.blockChanged(level, pos);
+            if(level.getServer().isSameThread() && level.getServer().overworld()!=null)
+                com.example.compiledcircuits.network.NetworkIntegrityManager.scheduleCheck(level,pos);
+        }
     }
 }

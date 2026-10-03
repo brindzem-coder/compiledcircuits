@@ -107,9 +107,12 @@ public final class CompilationJobs {
                 idle = 0;
                 for (int i = 0; i < QUANTUM && work < WORK_PER_TICK && job.tickWork < WORK_PER_JOB_TICK
                         && job.tickNanos < NANOS_PER_JOB_TICK && System.nanoTime() - began < NANOS_PER_TICK; i++) {
+                    long shared = ServerWorkBudget.begin(server, ServerWorkBudget.Lane.SCAN);
+                    if (shared == 0) { jobs.addLast(job); return; }
                     long started = System.nanoTime(); var phase = job.phase;
                     try { job.step(); }
                     catch (IllegalArgumentException | IllegalStateException invalid) { job.fail(Code.CONFLICT, invalid.getMessage()); }
+                    finally { ServerWorkBudget.end(server, ServerWorkBudget.Lane.SCAN, shared); }
                     long elapsed = System.nanoTime() - started;
                     job.tickWork++; work++;
                     PerformanceDiagnostics.add(phase.workMetric, 1);

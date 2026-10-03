@@ -36,7 +36,7 @@ final class NetworkMembershipIndex {
             for (var element : replaced.getElements()) {
                 Key key = new Key(replaced.getDimension(), element.getPos());
                 updates.put(key, claims.getOrDefault(key, List.of()).stream()
-                        .filter(c -> c.network() != replaced).toList());
+                        .filter(c -> c.network() != replaced && !c.network().isRetired()).toList());
             }
         }
         for (var network : candidates) {
@@ -44,7 +44,7 @@ final class NetworkMembershipIndex {
                     .sorted(Comparator.comparing(CompiledCircuitElement::getPos)).toList();
             for (var element : elements) {
                 Key key = new Key(network.getDimension(), element.getPos());
-                var owners = updates.getOrDefault(key, claims.getOrDefault(key, List.of()));
+                var owners = updates.getOrDefault(key, claims.getOrDefault(key, List.of())).stream().filter(c -> !c.network().isRetired()).toList();
                 if (!owners.isEmpty()) {
                     var owner = owners.get(0).network();
                     throw new NetworkSavedData.AdmissionException("Position " + element.getPos().toShortString()
@@ -72,7 +72,8 @@ final class NetworkMembershipIndex {
 
     void stage(CompiledNetwork network, CompiledCircuitElement element) {
         Key key = new Key(network.getDimension(), element.getPos());
-        if (claims.containsKey(key)) throw new NetworkSavedData.AdmissionException("Position already claimed: " + element.getPos());
+        var previous = claims.get(key);
+        if (previous != null && previous.stream().anyMatch(c -> !c.network().isRetired())) throw new NetworkSavedData.AdmissionException("Position already claimed: " + element.getPos());
         claims.put(key, List.of(new NetworkSavedData.ElementLocation(network, element)));
     }
     void unstage(CompiledNetwork network, CompiledCircuitElement element) {
