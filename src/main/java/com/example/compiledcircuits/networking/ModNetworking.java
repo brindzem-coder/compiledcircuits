@@ -8,7 +8,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 
 public final class ModNetworking {
 
-    private static final String PROTOCOL_VERSION = "11";
+    private static final String PROTOCOL_VERSION = "12";
 
     public static final SimpleChannel CHANNEL =
             NetworkRegistry.ChannelBuilder
@@ -33,16 +33,15 @@ public final class ModNetworking {
     }
 
     public static void register() {
-        CHANNEL.registerMessage(packetId++, BrokenElementListS2CPacket.class,
-                PerformanceDiagnostics.encoder("BrokenElementListS2CPacket", BrokenElementListS2CPacket::encode), BrokenElementListS2CPacket::decode,
-                BrokenElementListS2CPacket::handle,
+        CHANNEL.registerMessage(packetId++, DamagePartS2CPacket.class,
+                PerformanceDiagnostics.encoder("DamagePartS2CPacket",DamagePartS2CPacket::encode),DamagePartS2CPacket::decode,DamagePartS2CPacket::handle,
                 java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));
-        CHANNEL.registerMessage(
-                packetId++, BrokenElementsS2CPacket.class,
-                PerformanceDiagnostics.encoder("BrokenElementsS2CPacket", BrokenElementsS2CPacket::encode), BrokenElementsS2CPacket::decode,
-                BrokenElementsS2CPacket::handle,
-                java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));
-
+        CHANNEL.registerMessage(packetId++, DamageResyncC2SPacket.class,
+                PerformanceDiagnostics.encoder("DamageResyncC2SPacket",DamageResyncC2SPacket::encode),DamageResyncC2SPacket::decode,DamageResyncC2SPacket::handle,
+                java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER));
+        CHANNEL.registerMessage(packetId++, DamageAckC2SPacket.class,
+                PerformanceDiagnostics.encoder("DamageAckC2SPacket",DamageAckC2SPacket::encode),DamageAckC2SPacket::decode,DamageAckC2SPacket::handle,
+                java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER));
 
         CHANNEL.registerMessage(
                 packetId++,

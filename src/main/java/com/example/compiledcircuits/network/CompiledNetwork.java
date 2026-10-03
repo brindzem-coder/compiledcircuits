@@ -43,6 +43,8 @@ public class CompiledNetwork {
     private final Set<BlockPos> outputs;
     private final Map<Integer, CompiledCircuitElement> elements;
     private final Map<BlockPos, CompiledCircuitElement> elementsByPosition;
+    DamageLedger damageLedger;
+    PersistentIntMap<BrokenCircuitElement> damageRoot(){return brokenElements;}
     private PersistentIntMap<BrokenCircuitElement> brokenElements = new PersistentIntMap<>();
     private boolean savedIntegrityPending;
     boolean savedIntegrityPending() { return savedIntegrityPending; }
@@ -202,14 +204,21 @@ public class CompiledNetwork {
 
     public boolean markBroken(BrokenCircuitElement broken) {
         if (brokenElements.get(broken.getElementId()) != null) return false;
-        brokenElements = brokenElements.put(broken.getElementId(), broken); return true;
+        brokenElements = brokenElements.put(broken.getElementId(), broken);
+        if(damageLedger!=null)damageLedger.element(this,broken.getElementId());return true;
     }
 
     public boolean markRepaired(int elementId) {
         if (brokenElements.get(elementId) == null) return false;
-        brokenElements = brokenElements.remove(elementId); return true;
+        brokenElements = brokenElements.remove(elementId);
+        if(damageLedger!=null)damageLedger.element(this,elementId);return true;
     }
 
+    public boolean updateBrokenActual(int id,String actual) {
+        var old=brokenElements.get(id);if(old==null||old.getActualBlockId().equals(actual))return false;
+        brokenElements=brokenElements.put(id,old.withActual(actual));
+        if(damageLedger!=null)damageLedger.element(this,id);return true;
+    }
     public int getId() {
         return id;
     }
@@ -220,6 +229,7 @@ public class CompiledNetwork {
 
     public void setFolderId(int folderId) {
         this.folderId = folderId;
+        if(damageLedger!=null)damageLedger.metadata(this);
     }
 
     public String getName() {
@@ -228,6 +238,7 @@ public class CompiledNetwork {
 
     public void setName(String name) {
         this.name = name;
+        if(damageLedger!=null)damageLedger.metadata(this);
     }
 
     public String getDimension() {

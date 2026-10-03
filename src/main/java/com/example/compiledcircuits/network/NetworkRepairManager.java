@@ -20,7 +20,7 @@ public final class NetworkRepairManager {
         if(!NetworkOperations.canModify(player) || NetworkSavedData.get(level.getServer()).getNetwork(network.getId())!=network)return Outcome.FAILED;
         var element=network.getElement(target.getElementId());if(element==null)return Outcome.FAILED;
         var current=network.getBrokenElement(target.getElementId());
-        if(current!=null && current!=target)return Outcome.CHANGED;
+        if(current!=null && !current.sameOccurrence(target))return Outcome.CHANGED;
         if(!level.dimension().location().toString().equals(network.getDimension()))return Outcome.UNLOADED;
         var pos=element.getPos();var decoded=element.resolveState();
         if(decoded.status()==CompiledBlockStateCodec.Status.UNRESOLVED)return Outcome.INVALID;
@@ -43,7 +43,7 @@ public final class NetworkRepairManager {
                 || !level.isUnobstructed(restored,pos,net.minecraft.world.phys.shapes.CollisionContext.empty()))return Outcome.FAILED;
         if(!ProtectedRepairPlacement.place(level,pos,restored,player,()->NetworkOperations.canModify(player)
                 && NetworkSavedData.get(level.getServer()).getNetwork(network.getId())==network
-                && network.getBrokenElement(target.getElementId())==target))return Outcome.PROTECTED;
+                && target.sameOccurrence(network.getBrokenElement(target.getElementId()))))return Outcome.PROTECTED;
         NetworkIntegrityManager.scheduleCheck(level,pos);
         for(var direction:net.minecraft.core.Direction.values())NetworkIntegrityManager.scheduleCheck(level,pos.relative(direction));
         return Outcome.PLACED;

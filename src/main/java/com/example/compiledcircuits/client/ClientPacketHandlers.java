@@ -22,6 +22,8 @@ public final class ClientPacketHandlers {
         ClientCompiledElements.accept(packet, System.nanoTime());
     }
 
+    public static void handleDamage(com.example.compiledcircuits.networking.DamagePartS2CPacket packet,net.minecraft.network.Connection connection){ClientDamageSync.accept(packet,connection);}
+
     public static void handleBrokenElementList(com.example.compiledcircuits.networking.BrokenElementListS2CPacket packet) {
         ClientBrokenElementList.setEntries(packet.getEntries());
         java.util.Set<ClientBrokenElements.FocusedBrokenPos> valid = new java.util.HashSet<>();

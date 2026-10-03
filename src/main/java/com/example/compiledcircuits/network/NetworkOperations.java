@@ -29,10 +29,14 @@ public final class NetworkOperations {
         return player != null && !player.isRemoved() && !player.isSpectator() && player.mayBuild();
     }
     public static void forget(Object actor) {
-        if (actor instanceof ServerPlayer player) { CompilationJobs.cancel(player); RepairJobs.cancel(player); }
+        if (actor instanceof ServerPlayer player) { CompilationJobs.cancel(player); RepairJobs.cancel(player); com.example.compiledcircuits.networking.DamageSync.forget(player); }
         budgets.remove(actor);
     }
     public static void clear() { budgets.clear(); }
+    public static boolean authorizeDamageResync(ServerPlayer player) {
+        if(player==null || player.isRemoved() || !player.getServer().isSameThread())return false;
+        return charge(player.createCommandSourceStack(),1,true)==null;
+    }
     private static Object actor(CommandSourceStack source) {
         return source.getEntity() instanceof ServerPlayer p ? p : source.getServer();
     }

@@ -22,6 +22,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
 public class NetworkSavedData extends SavedData {
+    private final DamageLedger damage=new DamageLedger(this);
+    public DamageLedger damage(){return damage;}
     final ServerWorkBudget workBudget = new ServerWorkBudget();
     private final IntegrityScheduler integrity = new IntegrityScheduler(this);
     IntegrityScheduler integrity() { return integrity; }
@@ -310,7 +312,7 @@ public class NetworkSavedData extends SavedData {
 
         folder.setName(newName);
 
-        setDirty();
+        setDirty(); damage.foldersChanged();
 
         return true;
     }
@@ -438,7 +440,7 @@ public class NetworkSavedData extends SavedData {
                 targetParentId
         );
 
-        setDirty();
+        setDirty(); damage.foldersChanged();
 
         return true;
     }
@@ -508,7 +510,7 @@ public class NetworkSavedData extends SavedData {
                     || !targetNames.add(folders.get(id).getName())) return false;
         }
         for (int id : topLevel) folders.get(id).setParentId(targetParentId);
-        setDirty();
+        setDirty(); damage.foldersChanged();
         return true;
     }
 

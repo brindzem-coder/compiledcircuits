@@ -90,7 +90,7 @@ public final class NetworkRuntime {
         network.reactivate();
         Entry entry = new Entry(network);
         entries.put(network, entry);
-        data.integrity().add(network);
+        data.integrity().add(network);data.damage().add(network);
         network.runtimeState(false, false);
         for (var element : network.getElements()) prepareElement(entry, element);
         entry.parts.forEach((key, part) -> chunks.computeIfAbsent(key, k -> new IdentityHashMap<>()).put(entry, part));
@@ -122,7 +122,7 @@ public final class NetworkRuntime {
             return true;
         }
         void publish() {
-            entries.put(entry.network, entry); data.integrity().add(entry.network); entry.outputs = entry.network.getOutputs().iterator(); queue.add(entry);
+            entries.put(entry.network, entry); data.integrity().add(entry.network);data.damage().add(entry.network); entry.outputs = entry.network.getOutputs().iterator(); queue.add(entry);
         }
         void beginRollback() { parts = entry.parts.entrySet().iterator(); }
         boolean rollbackNext() {
@@ -134,7 +134,7 @@ public final class NetworkRuntime {
     }
     Prepared prepare(CompiledNetwork network) { return new Prepared(network); }
     void remove(CompiledNetwork network) {
-        Entry entry=entries.remove(network);data.integrity().remove(network);
+        Entry entry=entries.remove(network);data.integrity().remove(network);data.damage().remove(network);
         if(server!=null)RepairJobs.removed(server,network);
         network.retire();network.runtimeState(false,false);
         if(entry==null)return;

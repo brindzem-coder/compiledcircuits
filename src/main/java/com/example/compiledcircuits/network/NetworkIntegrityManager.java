@@ -62,10 +62,13 @@ public final class NetworkIntegrityManager {
         boolean changed = repaired
                 ? network.markRepaired(element.getId())
                 : network.markBroken(new BrokenCircuitElement(element.getId(), actualBlockId, level.getGameTime()));
-        if (!changed) return true;
+        if (!changed) {
+            if(!repaired && network.updateBrokenActual(element.getId(),actualBlockId))data.setDirty();
+            return true;
+        }
 
         data.setDirty();
-        DamageNotifications.changed(level, repaired);
+        DamageNotifications.changed(level, network.getId(), repaired);
         if (!wasDamaged && network.isDamaged()) {
             NetworkRuntime.networkBecameDamaged(level, network);
         } else if (wasDamaged && !network.isDamaged()) {

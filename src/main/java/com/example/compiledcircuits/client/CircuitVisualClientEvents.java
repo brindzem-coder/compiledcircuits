@@ -15,6 +15,7 @@ public final class CircuitVisualClientEvents {
     @SubscribeEvent
     public static void tick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
+        ClientDamageSync.tick();
         var level = Minecraft.getInstance().level;
         ClientCompiledElements.onLevelChanged(level, level == null ? "" : level.dimension().location().toString());
         ClientCompiledElements.tick(System.nanoTime());
@@ -45,5 +46,5 @@ public final class CircuitVisualClientEvents {
         }
     }
     @SubscribeEvent
-    public static void logout(ClientPlayerNetworkEvent.LoggingOut event) { ClientCompiledElements.clear(); ClientCircuitBlockIndex.clear(); ClientHoveredCircuit.reset(); }
+    public static void logout(ClientPlayerNetworkEvent.LoggingOut event) { ClientDamageSync.clear(); ClientCompiledElements.clear(); ClientCircuitBlockIndex.clear(); ClientHoveredCircuit.reset(); }
 }

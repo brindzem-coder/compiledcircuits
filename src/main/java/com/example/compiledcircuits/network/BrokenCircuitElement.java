@@ -3,16 +3,23 @@ package com.example.compiledcircuits.network;
 import net.minecraft.nbt.CompoundTag;
 
 public final class BrokenCircuitElement {
+    private final Object occurrence;
     private final int elementId;
     private final String actualBlockId;
     private final long detectedAt;
 
     public BrokenCircuitElement(int elementId, String actualBlockId, long detectedAt) {
+        this(elementId,actualBlockId,detectedAt,new Object());
+    }
+    private BrokenCircuitElement(int elementId,String actualBlockId,long detectedAt,Object occurrence){
+        this.occurrence=occurrence;
         this.elementId = elementId;
         this.actualBlockId = actualBlockId;
         this.detectedAt = detectedAt;
     }
 
+    public BrokenCircuitElement withActual(String actual){return new BrokenCircuitElement(elementId,actual,detectedAt,occurrence);}
+    public boolean sameOccurrence(BrokenCircuitElement other){return other!=null && occurrence==other.occurrence;}
     public int getElementId() { return elementId; }
     public String getActualBlockId() { return actualBlockId; }
     public long getDetectedAt() { return detectedAt; }

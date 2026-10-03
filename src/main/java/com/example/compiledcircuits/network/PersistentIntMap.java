@@ -3,10 +3,10 @@ package com.example.compiledcircuits.network;
 import java.util.*;
 
 /** Immutable AVL map. Capturing a repair target set is O(1); edits copy only a logarithmic path. */
-final class PersistentIntMap<V> {
+public final class PersistentIntMap<V> {
     private record Node<V>(int key, V value, Node<V> left, Node<V> right, int height, int size) {}
     private final Node<V> root;
-    PersistentIntMap() { this(null); }
+    public PersistentIntMap() { this(null); }
     private PersistentIntMap(Node<V> root) { this.root = root; }
     private static int height(Node<?> n) { return n == null ? 0 : n.height; }
     private static int size(Node<?> n) { return n == null ? 0 : n.size; }
@@ -30,21 +30,21 @@ final class PersistentIntMap<V> {
         }
         return n;
     }
-    V get(int key) {
+    public V get(int key) {
         var n = root;
         while (n != null) { if (key == n.key) return n.value; n = key < n.key ? n.left : n.right; }
         return null;
     }
-    int size() { return size(root); }
-    boolean isEmpty() { return root == null; }
-    PersistentIntMap<V> put(int key, V value) { return new PersistentIntMap<>(put(root, key, Objects.requireNonNull(value))); }
+    public int size() { return size(root); }
+    public boolean isEmpty() { return root == null; }
+    public PersistentIntMap<V> put(int key, V value) { return new PersistentIntMap<>(put(root, key, Objects.requireNonNull(value))); }
     private static <V> Node<V> put(Node<V> n, int key, V value) {
         if (n == null) return node(key, value, null, null);
         if (key == n.key) return node(key, value, n.left, n.right);
         return balance(key < n.key ? node(n.key, n.value, put(n.left, key, value), n.right)
                 : node(n.key, n.value, n.left, put(n.right, key, value)));
     }
-    PersistentIntMap<V> remove(int key) { return new PersistentIntMap<>(remove(root, key)); }
+    public PersistentIntMap<V> remove(int key) { return new PersistentIntMap<>(remove(root, key)); }
     private static <V> Node<V> remove(Node<V> n, int key) {
         if (n == null) return null;
         if (key < n.key) return balance(node(n.key, n.value, remove(n.left, key), n.right));
@@ -54,7 +54,7 @@ final class PersistentIntMap<V> {
         var successor = n.right; while (successor.left != null) successor = successor.left;
         return balance(node(successor.key, successor.value, n.left, remove(n.right, successor.key)));
     }
-    Collection<V> values() {
+    public Collection<V> values() {
         return Collections.unmodifiableCollection(new AbstractCollection<>() {
             @Override public int size() { return PersistentIntMap.this.size(); }
             @Override public Iterator<V> iterator() {

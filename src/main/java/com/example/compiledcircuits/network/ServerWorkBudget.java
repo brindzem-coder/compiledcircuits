@@ -27,19 +27,21 @@ public final class ServerWorkBudget {
         int cap = switch (lane) {
             case POINT -> ServerConfig.POINT_WORK.get(); case RECHECK -> ServerConfig.RECHECK_WORK.get();
             case REPAIR -> ServerConfig.REPAIR_WORK.get(); case AUDIT -> ServerConfig.AUDIT_WORK.get();
-            case SCAN -> CompilationJobs.WORK_PER_TICK; case RUNTIME -> NetworkRuntime.WORK_PER_TICK; case SYNC -> 2;
+            case SCAN -> CompilationJobs.WORK_PER_TICK; case RUNTIME -> NetworkRuntime.WORK_PER_TICK; case SYNC -> Math.min(com.example.compiledcircuits.networking.DamageProtocol.BUILD_STEPS,ServerConfig.TOTAL_WORK.get()/8);
         };
+        long timeLimit=ServerConfig.TOTAL_MICROS.get()*1000L;
+        if(lane!=Lane.SYNC)timeLimit-=Math.min(1_500_000L,timeLimit/4);
         if (f.total >= ServerConfig.TOTAL_WORK.get() || f.work[lane.ordinal()] >= cap
-                || f.elapsed >= ServerConfig.TOTAL_MICROS.get() * 1000L) return false;
+                || f.elapsed >= timeLimit) return false;
         // Reserve operation shares even at the minimum global setting: audit/repair cannot
-        // consume every slot before compilation and runtime get their turn. Two are for sync.
-        int usable=ServerConfig.TOTAL_WORK.get()-2, integrityShare=usable/6, scanShare=usable*2/3;
+        // consume every slot before compilation and runtime get their turn. One eighth (at most 1024) is reserved for damage encoding/delivery.
+        int usable=ServerConfig.TOTAL_WORK.get()-Math.min(com.example.compiledcircuits.networking.DamageProtocol.BUILD_STEPS,ServerConfig.TOTAL_WORK.get()/8), integrityShare=usable/6, runtimeShare=Math.min(NetworkRuntime.WORK_PER_TICK,usable/5), scanShare=usable-integrityShare-runtimeShare;
         int integrityWork=f.work[Lane.POINT.ordinal()]+f.work[Lane.RECHECK.ordinal()]
                 +f.work[Lane.REPAIR.ordinal()]+f.work[Lane.AUDIT.ordinal()];
         boolean shareAvailable=switch(lane) {
             case POINT, RECHECK, REPAIR, AUDIT -> integrityWork<integrityShare;
             case SCAN -> f.work[lane.ordinal()]<scanShare;
-            case RUNTIME -> f.work[lane.ordinal()]<usable-integrityShare-scanShare;
+            case RUNTIME -> f.work[lane.ordinal()]<runtimeShare;
             case SYNC -> true;
         };
         if(!shareAvailable)return false;

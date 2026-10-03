@@ -89,15 +89,10 @@ public final class NetworkGuiSync {
         return result;
     }
 
-    public static void sendBrokenList(ServerPlayer player) {
-        ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                new BrokenElementListS2CPacket(buildBrokenEntries(player)));
-    }
+    public static void sendBrokenList(ServerPlayer player) { DamageSync.ensure(player); }
 
-    public static void broadcastBrokenList(net.minecraft.server.MinecraftServer server) {
-        var packet = new BrokenElementListS2CPacket(buildBrokenEntries(NetworkSavedData.get(server)));
-        ModNetworking.CHANNEL.send(PacketDistributor.ALL.noArg(), packet);
-    }
+    /** Compatibility entry point: the ledger already observes every supported mutation. */
+    public static void broadcastBrokenList(net.minecraft.server.MinecraftServer server) { }
 
     public static void sendList(ServerPlayer player) {
         sendBrokenList(player);

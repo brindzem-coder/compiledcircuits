@@ -1224,6 +1224,12 @@ public class NetworkManagerScreen
         validateBrokenSelection();
     }
 
+    public void onDamageUnconfirmed() {
+        for (Button button : new Button[]{brokenSelectAllButton, brokenOpenNetworkButton, brokenDecompileButton, brokenRepairButton})
+            if (button != null) button.active = false;
+        stopBrokenPaint();
+    }
+
     private void rebuildBrokenNetworkIds() {
         brokenNetworkIds.clear();
         for (var entry : brokenEntries) brokenNetworkIds.add(entry.networkId());
@@ -1268,7 +1274,7 @@ public class NetworkManagerScreen
     }
 
     private void selectAllBrokenSmart() {
-        if (brokenEntries.isEmpty()) return;
+        if (!ClientDamageSync.ready() || brokenEntries.isEmpty()) return;
         stopBrokenPaint();
         Set<Integer> networks = getSelectedBrokenNetworkIds();
         Integer onlyNetwork = networks.size() == 1 ? networks.iterator().next() : null;
@@ -1282,6 +1288,7 @@ public class NetworkManagerScreen
     }
 
     private void openSelectedBrokenNetwork() {
+        if (!ClientDamageSync.ready()) return;
         Set<Integer> networks = getSelectedBrokenNetworkIds();
         if (networks.size() != 1) return;
         stopBrokenPaint();
@@ -1293,6 +1300,7 @@ public class NetworkManagerScreen
     }
 
     private void repairSelectedBrokenNetworks() {
+        if (!ClientDamageSync.ready()) return;
         Set<Integer> networks = getSelectedBrokenNetworkIds();
         if (networks.isEmpty()) return;
         ModNetworking.CHANNEL.sendToServer(new NetworkBulkActionC2SPacket(
@@ -1300,6 +1308,7 @@ public class NetworkManagerScreen
     }
 
     private void decompileSelectedBrokenNetworks() {
+        if (!ClientDamageSync.ready()) return;
         Set<Integer> networks = getSelectedBrokenNetworkIds();
         if (networks.isEmpty()) return;
         ModNetworking.CHANNEL.sendToServer(new NetworkBulkActionC2SPacket(
@@ -1314,10 +1323,11 @@ public class NetworkManagerScreen
         brokenDecompileButton.visible = visible;
         brokenRepairButton.visible = visible;
         int count = getSelectedBrokenNetworkIds().size();
-        brokenSelectAllButton.active = visible && !brokenEntries.isEmpty();
-        brokenOpenNetworkButton.active = visible && count == 1;
-        brokenDecompileButton.active = visible && count > 0;
-        brokenRepairButton.active = visible && count > 0;
+        boolean ready = visible && ClientDamageSync.ready();
+        brokenSelectAllButton.active = ready && !brokenEntries.isEmpty();
+        brokenOpenNetworkButton.active = ready && count == 1;
+        brokenDecompileButton.active = ready && count > 0;
+        brokenRepairButton.active = ready && count > 0;
         brokenRepairButton.setMessage(Component.literal(count <= 1 ? "Repair Network" : "Repair Networks (" + count + ")"));
         brokenDecompileButton.setMessage(Component.literal(count <= 1 ? "Decompile Network" : "Decompile Networks (" + count + ")"));
     }
@@ -1364,7 +1374,7 @@ public class NetworkManagerScreen
     }
 
     private com.example.compiledcircuits.networking.BrokenElementListS2CPacket.Entry getBrokenEntryAt(double mouseX, double mouseY) {
-        if (!isInsideBrokenList(mouseX, mouseY)) return null;
+        if (!ClientDamageSync.ready() || !isInsideBrokenList(mouseX, mouseY)) return null;
         int row = (int) ((mouseY - LIST_TOP) / BROKEN_ROW_HEIGHT);
         // Only complete rows are rendered; the trailing space is not clickable.
         if (row >= getVisibleBrokenRowCount()) return null;
@@ -1395,6 +1405,9 @@ public class NetworkManagerScreen
     private void renderBrokenMode(GuiGraphics graphics, int mouseX, int mouseY) {
         graphics.drawString(font, "Broken Elements", 13, TOP + 6, 0xFFFFFF, false);
         graphics.drawString(font, "Total: " + brokenEntries.size() + " | Selected: " + selectedBrokenKeys.size(), 13, TOP + 18, 0xAAAAAA, false);
+        if(!ClientDamageSync.ready()){
+            graphics.drawString(font,"Damage data: "+ClientDamageSync.status()+" — synchronizing",13,LIST_TOP+3,0xFFBB55,false);return;
+        }
         if (brokenEntries.isEmpty()) {
             graphics.drawString(font, "All compiled networks are healthy.", 13, LIST_TOP + 3, 0xAAAAAA, false);
             return;
@@ -1413,7 +1426,7 @@ public class NetworkManagerScreen
                 String line1 = entry.networkName() + " (#" + entry.networkId() + ") | Element #"
                         + entry.elementId() + " | " + getBlockDisplayName(entry.blockId());
                 var pos = entry.pos();
-                String line2 = getFolderPath(entry.folderId());
+                String line2 = ClientDamageSync.folderPath(entry.networkId());
                 String line3 = "X: " + pos.getX() + " Y: " + pos.getY() + " Z: " + pos.getZ()
                         + " | " + entry.type().name() + " | " + getDimensionDisplayName(entry.dimension());
                 graphics.drawString(font, line1, 13, y + 3, 0xFFFFFF, false);
@@ -1422,6 +1435,13 @@ public class NetworkManagerScreen
             }
         } finally {
             graphics.disableScissor();
+        }
+        var hoveredEntry = getBrokenEntryAt(mouseX, mouseY);
+        if (hoveredEntry != null) {
+            graphics.renderTooltip(font, List.of(
+                    Component.literal("Expected: " + getBlockDisplayName(hoveredEntry.blockId())),
+                    Component.literal("Actual: " + getBlockDisplayName(hoveredEntry.actualBlockId()))
+            ), java.util.Optional.empty(), mouseX, mouseY);
         }
     }
 

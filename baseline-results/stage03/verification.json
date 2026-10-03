@@ -1,0 +1,72 @@
+{
+  "stage": "03",
+  "date": "2026-10-03",
+  "baseCommit": "9b73527",
+  "build": "passed",
+  "visualChecks": "passed",
+  "gameTests": {
+    "required": 51,
+    "passed": 51
+  },
+  "restart": {
+    "write": "50 tests passed",
+    "read": "runtime and pending restart fixtures passed; intermediate chat test failed, fixed in final run"
+  },
+  "manualClientAcceptance": {
+    "reportedOn": "2026-10-03",
+    "check1": "LOW/marker temporal order not visually distinguishable; do not claim manual ordering confirmation",
+    "check2": "64-wire removal and GUI repair verified against capture",
+    "check3": "User repeated check after tooltip correction: Actual Air -> Stone -> Dirt and clearing after restoring wire all passed.",
+    "checks4to7": "User reports passed, including dedicated server with three real clients",
+    "captureId": "bcd1d178-a179-4e34-ba84-5886de589340",
+    "status": "complete; LOW/marker sub-frame ordering covered by automated checks, not claimed as visually distinguished"
+  },
+  "comparison": "Retained legacy snapshot builders/codecs versus bounded shared engine; application bytes exclude Forge/TCP framing. Single samples, not an FPS/MSPT benchmark. Simulated engine ticks include damage and repair.",
+  "measurements": [
+    {
+      "elements": 100,
+      "legacySnapshotBytes": 10022,
+      "legacyBuildEncodeNanos": 12473100,
+      "newDamagePacketsThreeClients": 3,
+      "newPayloadBytesThreeClients": 18705,
+      "newEncodedBytesThreeClients": 18897,
+      "newSharedBuildNanos": 15317100,
+      "newRepairPackets": 3,
+      "serverTicks": 2,
+      "legacyEncodedBytesThreeClients": 30066
+    },
+    {
+      "elements": 1000,
+      "legacySnapshotBytes": 100897,
+      "legacyBuildEncodeNanos": 7713100,
+      "newDamagePacketsThreeClients": 6,
+      "newPayloadBytesThreeClients": 188733,
+      "newEncodedBytesThreeClients": 189135,
+      "newSharedBuildNanos": 15132400,
+      "newRepairPackets": 3,
+      "serverTicks": 4,
+      "legacyEncodedBytesThreeClients": 302691
+    },
+    {
+      "elements": 10000,
+      "legacySnapshotBytes": 1009897,
+      "legacyBuildEncodeNanos": 47351900,
+      "newDamagePacketsThreeClients": 60,
+      "newPayloadBytesThreeClients": 1889841,
+      "newEncodedBytesThreeClients": 1893861,
+      "newSharedBuildNanos": 26088600,
+      "newRepairPackets": 3,
+      "serverTicks": 40,
+      "legacyEncodedBytesThreeClients": 3029691
+    }
+  ],
+  "diagnosticCaptures": [
+    "baseline-results\\stage03\\mass-81ed8e96-819f-40ac-a0a6-3f03c3bf8103.json"
+  ],
+  "logs": [
+    "baseline-results/stage03-final.log",
+    "baseline-results/stage03-restart-write.log",
+    "baseline-results/stage03-restart-read.log"
+  ],
+  "status": "complete"
+}

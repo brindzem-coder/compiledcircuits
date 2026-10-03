@@ -91,6 +91,13 @@ minecraft {
             workingDirectory project.file('run_client2')
             args '--username', 'Dev2'
         }
+
+        client3 {
+            parent runs.client
+            workingDirectory project.file('run_client3')
+            args '--username', 'Dev3'
+        }
+
         server {
             property 'forge.enabledGameTestNamespaces', mod_id
             args '--nogui'
