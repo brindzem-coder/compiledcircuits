@@ -62,16 +62,7 @@ public final class ClientPacketHandlers {
         );
     }
 
-    public static void handleHighlight(
-            NetworkHighlightS2CPacket packet
-    ) {
-
-        ClientNetworkSelection.setSelection(
-                packet.getWires(),
-                packet.getInputs(),
-                packet.getOutputs()
-        );
-
-        Minecraft.getInstance().setScreen(null);
+    public static void handleHighlight(NetworkHighlightS2CPacket packet,net.minecraft.network.Connection connection) {
+        ClientHighlightSync.accept(packet,connection);
     }
 }

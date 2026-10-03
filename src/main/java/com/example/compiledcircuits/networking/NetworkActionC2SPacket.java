@@ -24,6 +24,8 @@ public class NetworkActionC2SPacket {
     private final Action action;
     private final int networkId, targetId;
     private final String value;
+    private HighlightProtocol.Request highlight = HighlightProtocol.LEGACY;
+    public NetworkActionC2SPacket(Action action, int id, String value, HighlightProtocol.Request request) { this(action,id,0,value); highlight=request; }
     public NetworkActionC2SPacket(Action action, int id, int target, String value) {
         if (action == null || id < 0 || (id == 0 && action != Action.CREATE_FOLDER) || target < 0
                 || value == null || value.length() > OperationLimits.NAME) throw new IllegalArgumentException("Invalid action fields");
@@ -32,9 +34,12 @@ public class NetworkActionC2SPacket {
     public NetworkActionC2SPacket(Action action, int id, String value) { this(action,id,0,value); }
     public static void encode(NetworkActionC2SPacket packet, FriendlyByteBuf buf) {
         buf.writeEnum(packet.action); buf.writeInt(packet.networkId); buf.writeInt(packet.targetId); buf.writeUtf(packet.value, OperationLimits.NAME);
+        if(packet.action==Action.HIGHLIGHT)NetworkHighlightS2CPacket.writeRequest(packet.highlight,buf);
     }
     public static NetworkActionC2SPacket decode(FriendlyByteBuf buf) {
-        return new NetworkActionC2SPacket(buf.readEnum(Action.class),buf.readInt(),buf.readInt(),buf.readUtf(OperationLimits.NAME));
+        var p=new NetworkActionC2SPacket(buf.readEnum(Action.class),buf.readInt(),buf.readInt(),buf.readUtf(OperationLimits.NAME));
+        if(p.action==Action.HIGHLIGHT)p.highlight=NetworkHighlightS2CPacket.readRequest(buf);
+        return p;
     }
     /** Called inside enqueueWork, so current permissions are evaluated at execution. */
     public static NetworkOperations.Result execute(NetworkActionC2SPacket packet, ServerPlayer player) {
@@ -54,12 +59,11 @@ public class NetworkActionC2SPacket {
         }
         context.enqueueWork(() -> {
             var player = context.getSender(); if (player == null) return;
+            if(packet.action==Action.HIGHLIGHT){HighlightSync.request(player,packet.highlight,List.of(packet.networkId));return;}
             var result = execute(packet, player);
             NetworkOperations.reply(player.createCommandSourceStack(), result);
             if (!result.success()) return;
-            if (packet.action == Action.HIGHLIGHT) ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                    NetworkBulkActionC2SPacket.buildHighlight(result.networks()));
-            else NetworkGuiSync.sendList(player);
+            NetworkGuiSync.sendList(player);
         });
         context.setPacketHandled(true);
     }

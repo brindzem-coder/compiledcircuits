@@ -41,7 +41,7 @@ public final class CircuitStateOutlineRenderer {
         var minecraft = Minecraft.getInstance();
         var level = minecraft.level;
         if (level == null || !ClientCompiledElements.isReadyFor(level.dimension().location().toString())) return;
-        var exclusions = CircuitVisualPriority.capture(level.dimension().location().toString());
+        var exclusions = CircuitVisualPriority.capture(level.dimension().location().toString(), level);
         var camera = event.getCamera().getPosition();
         double distance = minecraft.options.getEffectiveRenderDistance() * 16.0;
         double distanceSquared = distance * distance;

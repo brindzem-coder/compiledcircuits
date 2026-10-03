@@ -22,6 +22,15 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
 public class NetworkSavedData extends SavedData {
+    private long highlightMembershipRevision;
+    private java.util.function.Consumer<CompiledNetwork> highlightInvalidator = n -> {};
+    public long highlightMembershipRevision() { return highlightMembershipRevision; }
+    public void highlightInvalidator(java.util.function.Consumer<CompiledNetwork> observer) { highlightInvalidator = observer; }
+    void highlightMembershipChanged(CompiledNetwork removed) {
+        highlightMembershipRevision++;
+        if (removed != null) highlightInvalidator.accept(removed);
+    }
+
     private final DamageLedger damage=new DamageLedger(this);
     public DamageLedger damage(){return damage;}
     final ServerWorkBudget workBudget = new ServerWorkBudget();

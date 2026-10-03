@@ -1,0 +1,39 @@
+{
+  "stage": "05",
+  "date": "2026-10-03",
+  "baseCommit": "af7fc30",
+  "protocol": 13,
+  "status": "complete",
+  "build": "passed",
+  "visualChecks": "passed",
+  "gameTests": {
+    "required": 57,
+    "passed": 57,
+    "newHighlightTests": 6
+  },
+  "maximumSelection": {
+    "positions": 50000,
+    "parts": 17,
+    "encodedBytes": 451241,
+    "peakStagingBytes": 450000,
+    "simulatedTicks": 146
+  },
+  "legacyPayloadFormulaBytes": 400012,
+  "measurementNotes": "Actual production codec bytes, excluding Forge/TCP framing. In-process replicas and deterministic engine ticks, not real multiplayer latency. No FPS claim.",
+  "log": "baseline-results/stage05-final.log",
+  "manualPending": [],
+  "manualClientAcceptance": {
+    "status": "passed",
+    "source": "User reports all seven requested checks passed exactly as expected",
+    "checks": [
+      "normal highlight colors and damage priority",
+      "same-coordinate cross-dimension selection and skipped counts",
+      "replacement and selector cancellation",
+      "portal/respawn/reconnect and different-world lifecycle",
+      "decompile invalidation; rename/move/damage preserve geometry",
+      "large selection and subsequent smaller selection",
+      "dedicated server: independent selections and reconnect"
+    ],
+    "limitations": "Exact packet reordering and capacity boundaries are automated evidence; manual report does not establish a 50000-position in-game heap profile."
+  }
+}

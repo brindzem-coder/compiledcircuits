@@ -35,5 +35,5 @@ public final class DamageNotifications {
         }
         DamageSync.flush(server);
     }
-    public static void stop(MinecraftServer server){pending.remove(server);DamageSync.stop(server);}
+    public static void stop(MinecraftServer server){pending.remove(server);DamageSync.stop(server);HighlightSync.stop(server);}
 }

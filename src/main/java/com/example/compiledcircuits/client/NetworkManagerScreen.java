@@ -1039,7 +1039,7 @@ public class NetworkManagerScreen
     }
 
     private void highlightSelected() {
-        sendBulk(NetworkBulkActionC2SPacket.BulkAction.HIGHLIGHT_NETWORKS, selectedNetworkIds, 0);
+        ClientHighlightSync.request(selectedNetworkIds);
     }
 
     private void renameSelected() {

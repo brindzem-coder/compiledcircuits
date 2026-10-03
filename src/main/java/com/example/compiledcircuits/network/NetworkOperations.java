@@ -29,7 +29,7 @@ public final class NetworkOperations {
         return player != null && !player.isRemoved() && !player.isSpectator() && player.mayBuild();
     }
     public static void forget(Object actor) {
-        if (actor instanceof ServerPlayer player) { CompilationJobs.cancel(player); RepairJobs.cancel(player); com.example.compiledcircuits.networking.DamageSync.forget(player); }
+        if (actor instanceof ServerPlayer player) { CompilationJobs.cancel(player); RepairJobs.cancel(player); com.example.compiledcircuits.networking.DamageSync.forget(player); HighlightSync.forget(player); }
         budgets.remove(actor);
     }
     public static void clear() { budgets.clear(); }
@@ -120,6 +120,20 @@ public final class NetworkOperations {
         }
         if ((action == Action.MOVE_NETWORKS || action == Action.MOVE_FOLDERS) && !data.folderExists(target))
             return result(Code.NOT_FOUND, "Destination folder does not exist.");
+        if (action == Action.HIGHLIGHT) {
+            List<CompiledNetwork> selected = new ArrayList<>(); long count = 0; int skipped = 0;
+            String dimension = player.serverLevel().dimension().location().toString();
+            for (int id : ids) {
+                var n = data.getNetwork(id);
+                if (!dimension.equals(n.getDimension())) { skipped++; continue; }
+                count += n.getElements().size();
+                if (count > OperationLimits.ELEMENTS) return result(Code.INVALID_ARGUMENT, "Highlight exceeds 50000 positions; select fewer networks.");
+                selected.add(n);
+            }
+            rate = charge(source, (int)count + ids.size(), false); if (rate != null) return rate;
+            String message = skipped == 0 ? "" : "Skipped " + skipped + " network(s) in another dimension.";
+            return new Result(Code.OK, message, List.copyOf(selected));
+        }
         // Bound full-list/metadata work before traversing any collection or building a response.
         long total = (long)data.getNetworks().size() + data.getFolders().size();
         if (total > OperationLimits.ELEMENTS) return result(Code.INVALID_ARGUMENT, "Too many metadata entries for this synchronous request.");
