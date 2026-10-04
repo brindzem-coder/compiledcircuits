@@ -29,7 +29,7 @@ public final class NetworkOperations {
         return player != null && !player.isRemoved() && !player.isSpectator() && player.mayBuild();
     }
     public static void forget(Object actor) {
-        if (actor instanceof ServerPlayer player) { CompilationJobs.cancel(player); RepairJobs.cancel(player); com.example.compiledcircuits.networking.DamageSync.forget(player); HighlightSync.forget(player); }
+        if (actor instanceof ServerPlayer player) { CompilationJobs.cancel(player); RepairJobs.cancel(player); com.example.compiledcircuits.networking.DamageSync.forget(player); HighlightSync.forget(player); CompiledElementSync.forget(player); }
         budgets.remove(actor);
     }
     public static void clear() { budgets.clear(); }
@@ -134,31 +134,23 @@ public final class NetworkOperations {
             String message = skipped == 0 ? "" : "Skipped " + skipped + " network(s) in another dimension.";
             return new Result(Code.OK, message, List.copyOf(selected));
         }
-        // Bound full-list/metadata work before traversing any collection or building a response.
-        long total = (long)data.getNetworks().size() + data.getFolders().size();
-        if (total > OperationLimits.ELEMENTS) return result(Code.INVALID_ARGUMENT, "Too many metadata entries for this synchronous request.");
-        rate = charge(source, (int)total, false); if (rate != null) return rate;
-        long responseWork = 0;
-        for (var n : data.getNetworks()) {
-            responseWork += n.getBrokenElements().size();
-            if (responseWork > OperationLimits.ELEMENTS) return result(Code.INVALID_ARGUMENT, "Too many broken entries for this synchronous request.");
+        // Folder operations may traverse metadata; direct network operations are bounded by IDs.
+        if(folderTargets||action==Action.MOVE_PATH){
+            long total=(action==Action.DELETE_FOLDERS?(long)data.getNetworks().size():0)+data.getFolders().size();
+            if(total>OperationLimits.ELEMENTS)return result(Code.INVALID_ARGUMENT,"Too many metadata entries for this folder operation.");
+            rate=charge(source,(int)total,false);if(rate!=null)return rate;
         }
-        rate = charge(source, (int)responseWork, false); if (rate != null) return rate;
         if (action == Action.COMPILE) return compile(source, player, data, value);
         if (action == Action.OPEN_COMPILE) return NetworkSelectionData.get(player) == null
                 ? result(Code.NOT_FOUND, "No circuit selected.") : ok("");
         if (action == Action.REMOVE_CONFLICT) {
-            long isolationWork = data.getIsolationWorkSize();
-            if (isolationWork > OperationLimits.ELEMENTS) return result(Code.INVALID_ARGUMENT, "Isolation data exceeds synchronous administration limit.");
-            rate = charge(source, (int)isolationWork, false); if (rate != null) return rate;
             try { if (!UUID.fromString(value).toString().equals(value)) return result(Code.INVALID_ARGUMENT, "Invalid record UUID."); }
             catch (RuntimeException invalid) { return result(Code.INVALID_ARGUMENT, "Invalid record UUID."); }
-            return data.removeInvalidMembershipRecord(value) ? ok("Removed isolated record " + value + ". Other records remain blocked.")
-                    : result(Code.NOT_FOUND, "Isolated record does not exist.");
+            return data.queueInvalidRecordRemoval(value,source)?result(Code.QUEUED,"Isolated-record removal queued; membership remains reserved until completion.")
+                    :result(Code.BUSY,"Another isolated-record removal is already being prepared.");
         }
         if (action == Action.LIST_CONFLICTS) {
-            if (data.getInvalidMembershipRecordCount() > OperationLimits.IDS) return result(Code.INVALID_ARGUMENT, "Too many isolated records to list in one request.");
-            rate = charge(source, data.getInvalidMembershipRecordCount(), false);
+            rate = charge(source, Math.min(20,data.getInvalidMembershipRecordCount()), false);
             return rate == null ? ok("") : rate;
         }
         if (action == Action.LIST || action == Action.GUI) return ok("");
@@ -177,7 +169,7 @@ public final class NetworkOperations {
             } else {
                 var n = data.getNetwork(id);
                 if (n == null) return result(Code.NOT_FOUND, "Network does not exist or is isolated.");
-                networks.add(n); work += n.getElements().size();
+                networks.add(n); work += action==Action.REPAIR?n.getElements().size():1;
                 if (work > OperationLimits.ELEMENTS) return result(Code.INVALID_ARGUMENT, "Request exceeds 50000 elements.");
             }
         }

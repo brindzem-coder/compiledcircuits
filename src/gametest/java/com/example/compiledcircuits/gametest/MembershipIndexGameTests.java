@@ -109,13 +109,10 @@ public class MembershipIndexGameTests {
         CompoundTag before = data.save(new CompoundTag());
         data.setDirty(false);
         com.example.compiledcircuits.networking.CompiledElementSync.clear();
+        long revision=data.highlightMembershipRevision();
         rejects(action);
         helper.assertTrue(before.equals(data.save(new CompoundTag())) && !data.isDirty(), "rejection preserves saved state and ID");
-        try {
-            var field = com.example.compiledcircuits.networking.CompiledElementSync.class.getDeclaredField("dirty");
-            field.setAccessible(true);
-            helper.assertTrue(((Set<?>) field.get(null)).isEmpty(), "rejection sends no sync invalidation");
-        } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+        helper.assertTrue(data.highlightMembershipRevision()==revision,"rejection does not change membership revision");
         for (var n : data.getNetworks()) for (var e : n.getElements()) matchesScan(helper, data, n.getDimension(), e.getPos());
     }
 
@@ -318,7 +315,8 @@ public class MembershipIndexGameTests {
             var fake = new net.minecraftforge.common.util.FakePlayer(level, new com.mojang.authlib.GameProfile(java.util.UUID.randomUUID(), "membership")).createCommandSourceStack().withPermission(0);
             try { dispatcher.execute("circuit conflicts remove " + before.get(0).getString("recordId"), fake); throw new AssertionError("non-admin removal"); }
             catch (com.mojang.brigadier.exceptions.CommandSyntaxException expected) { }
-            helper.assertTrue(dispatcher.execute("circuit conflicts remove " + before.get(0).getString("recordId"), admin) == 1, "administrator removes one explicit record");
+            helper.assertTrue(dispatcher.execute("circuit conflicts remove " + before.get(0).getString("recordId"), admin) == 1, "administrator queues one explicit record");
+            while(isolated.reservationRemovalStep()){}
             helper.assertTrue(isolated.getBlockingRecords(OVERWORLD, pos).size() == 1, "command preserves other reservation");
         } finally {
             storage.set("compiledcircuits_networks", original);

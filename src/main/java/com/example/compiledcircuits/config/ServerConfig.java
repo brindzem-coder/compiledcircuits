@@ -4,6 +4,7 @@ import net.minecraftforge.common.ForgeConfigSpec;
 public final class ServerConfig {
     public static final ForgeConfigSpec SPEC;
     public static final ForgeConfigSpec.BooleanValue EXACT_BLOCK_STATE_INTEGRITY;
+    public static final ForgeConfigSpec.IntValue NETWORK_CAPACITY, DIMENSION_CAPACITY;
     public static final ForgeConfigSpec.IntValue TOTAL_WORK, TOTAL_MICROS, INTEGRITY_MICROS,
             POINT_WORK, RECHECK_WORK, REPAIR_WORK, AUDIT_WORK, MAX_PENDING, MAX_REPAIR_JOBS,
             MAX_REPAIR_TARGETS, REPAIR_LIFETIME_TICKS, REPAIR_LIFETIME_SECONDS;
@@ -11,6 +12,10 @@ public final class ServerConfig {
         ForgeConfigSpec.Builder builder = new ForgeConfigSpec.Builder();
         EXACT_BLOCK_STATE_INTEGRITY = builder.comment("Compare all compiled properties, including dynamic wire connections. Requires restart.")
                 .worldRestart().define("exactBlockStateIntegrity", false);
+        builder.push("membershipCapacity");
+        NETWORK_CAPACITY=builder.comment("Admission limit per network; existing larger networks are preserved. Requires world restart.").worldRestart().defineInRange("elementsPerNetwork",50000,1,50000);
+        DIMENSION_CAPACITY=builder.comment("Reserved membership records per dimension, including isolated records. Requires world restart.").worldRestart().defineInRange("elementsPerDimension",1000000,1,1000000);
+        builder.pop();
         builder.push("workBudget");
         TOTAL_WORK = builder.worldRestart().defineInRange("totalOperationsPerTick", 12288, 128, 65536);
         TOTAL_MICROS = builder.worldRestart().defineInRange("totalMicrosPerTick", 9000, 100, 100000);

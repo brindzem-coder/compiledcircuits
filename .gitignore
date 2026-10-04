@@ -44,3 +44,7 @@ forge*changelog.txt
 *.hprof
 hs_err_pid*.log
 replay_pid*.log
+
+# Additional test client logs
+/run_client2/logs/
+/run_client3/logs/

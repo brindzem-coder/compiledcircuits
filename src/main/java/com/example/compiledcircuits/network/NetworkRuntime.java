@@ -48,11 +48,13 @@ public final class NetworkRuntime {
         }
     }
     public static final int MAX_RETIRED_WORK = 200000;
-    private int retiredWork;
+    private long retiredWork;
     boolean canRetire(Collection<CompiledNetwork> networks) {
         long work=retiredWork;
         for(var network:networks){var entry=entries.get(network);if(entry!=null)work+=(long)network.getElements().size()+network.getOutputs().size()+entry.parts.size();}
-        return server==null || work<=MAX_RETIRED_WORK;
+        // One existing oversized network can retire alone, using its retained iterators.
+        // No extra work is appended until this bounded per-tick cleanup has drained.
+        return server==null || work<=MAX_RETIRED_WORK || retiredWork==0&&networks.size()==1;
     }
     private final ArrayDeque<Retired> retired = new ArrayDeque<>();
     private boolean draining, retireTurn;
@@ -90,7 +92,7 @@ public final class NetworkRuntime {
         network.reactivate();
         Entry entry = new Entry(network);
         entries.put(network, entry);
-        data.integrity().add(network);data.damage().add(network);data.highlightMembershipChanged(null);
+        data.integrity().add(network);data.damage().add(network);data.capacity().add(network);data.highlightMembershipChanged(null);
         network.runtimeState(false, false);
         for (var element : network.getElements()) prepareElement(entry, element);
         entry.parts.forEach((key, part) -> chunks.computeIfAbsent(key, k -> new IdentityHashMap<>()).put(entry, part));
@@ -122,7 +124,7 @@ public final class NetworkRuntime {
             return true;
         }
         void publish() {
-            entries.put(entry.network, entry); data.integrity().add(entry.network);data.damage().add(entry.network);data.highlightMembershipChanged(null); entry.outputs = entry.network.getOutputs().iterator(); queue.add(entry);
+            entries.put(entry.network, entry); data.integrity().add(entry.network);data.damage().add(entry.network);data.capacity().add(entry.network);data.highlightMembershipChanged(null); entry.outputs = entry.network.getOutputs().iterator(); queue.add(entry);
         }
         void beginRollback() { parts = entry.parts.entrySet().iterator(); }
         boolean rollbackNext() {
@@ -134,12 +136,12 @@ public final class NetworkRuntime {
     }
     Prepared prepare(CompiledNetwork network) { return new Prepared(network); }
     void remove(CompiledNetwork network) {
-        Entry entry=entries.remove(network);data.integrity().remove(network);data.damage().remove(network);data.highlightMembershipChanged(network);
+        Entry entry=entries.remove(network);data.integrity().remove(network);data.damage().remove(network);data.capacity().remove(network);data.highlightMembershipChanged(network);
         if(server!=null)RepairJobs.removed(server,network);
         network.retire();network.runtimeState(false,false);
         if(entry==null)return;
         queue.remove(entry);
-        int work=network.getElements().size()+network.getOutputs().size()+entry.parts.size();
+        long work=(long)network.getElements().size()+network.getOutputs().size()+entry.parts.size();
         if(work>0){retired.addLast(new Retired(entry));retiredWork+=work;}
     }
     public static boolean isChunkAvailable(ServerLevel level, long pos) {

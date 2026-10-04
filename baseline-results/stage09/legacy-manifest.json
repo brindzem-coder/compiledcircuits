@@ -1,0 +1,20 @@
+[
+  {
+    "source": "C:\\Users\\mycbry001\\Desktop\\forge 1.20.1 compiledcircuits\\baseline-2026-09-20\\New World\\data\\compiledcircuits_networks.dat",
+    "copy": "C:\\Users\\mycbry001\\Desktop\\forge 1.20.1 compiledcircuits\\build\\stage09-legacy\\world-0.dat",
+    "bytes": 3139,
+    "sha256": "59776c9094f6ba41d7f36f7de943c2367023cdf915126cc45866f799bbd0b493"
+  },
+  {
+    "source": "C:\\Users\\mycbry001\\Desktop\\forge 1.20.1 compiledcircuits\\baseline-2026-09-20\\Performance Baseline - Велика мережа copy\\data\\compiledcircuits_networks.dat",
+    "copy": "C:\\Users\\mycbry001\\Desktop\\forge 1.20.1 compiledcircuits\\build\\stage09-legacy\\world-1.dat",
+    "bytes": 9876,
+    "sha256": "1a0cbec88a396a612bbbb5cece421d488fe1ab0700c6cb9331857bc035e7fb28"
+  },
+  {
+    "source": "C:\\Users\\mycbry001\\Desktop\\forge 1.20.1 compiledcircuits\\baseline-2026-09-20\\Performance Baseline - Малі мережі copy\\data\\compiledcircuits_networks.dat",
+    "copy": "C:\\Users\\mycbry001\\Desktop\\forge 1.20.1 compiledcircuits\\build\\stage09-legacy\\world-2.dat",
+    "bytes": 9519,
+    "sha256": "a004ca65004f6e12525508376b37d4d0256cb04960958667995611435728c4be"
+  }
+]

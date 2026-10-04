@@ -1,45 +1,34 @@
 package com.example.compiledcircuits.networking;
 import com.example.compiledcircuits.network.*;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.core.BlockPos;
 import java.util.*;
 public final class CompiledElementMutationTest {
-    private static int checks;
-    private static void check(boolean v) { checks++; if (!v) throw new AssertionError("Check " + checks); }
-    private static CompiledNetwork network(int id, String dimension) {
-        return new CompiledNetwork(id, "test", 0, dimension, Set.of(), Set.of(), Set.of());
-    }
-    public static void main(String[] args) throws Exception {
-        var field = CompiledElementSync.class.getDeclaredField("dirty");
-        field.setAccessible(true);
-        Set<?> dirty = (Set<?>) field.get(null);
-        var data = new NetworkSavedData();
-        CompiledElementSync.clear();
-        data.addNetwork(network(1,"minecraft:overworld"));
-        data.addNetwork(network(2,"minecraft:overworld"));
-        check(dirty.equals(Set.of("minecraft:overworld")));
-        CompiledElementSync.clear();
-        check(data.moveNetwork(1,0)); check(dirty.isEmpty());
-        check(!data.removeNetwork(999)); check(dirty.isEmpty());
-        check(data.removeNetworks(List.of(1,999)).isEmpty());
-        check(data.getNetwork(1)!=null && dirty.isEmpty());
-        data.addNetwork(network(3,"minecraft:the_nether"));
-        CompiledElementSync.clear();
-        check(data.removeNetworks(List.of(1,2,3,3)).size()==3);
-        check(dirty.equals(Set.of("minecraft:overworld","minecraft:the_nether")));
-        CompiledElementSync.clear();
-        data.addNetwork(network(4,"minecraft:overworld"));
-        CompiledElementSync.clear();
-        data.replaceNetwork(network(4,"minecraft:the_nether"));
-        check(dirty.equals(Set.of("minecraft:overworld","minecraft:the_nether")));
-        var saved = data.save(new CompoundTag());
-        CompiledElementSync.clear();
-        var loaded = NetworkSavedData.load(saved);
-        check(loaded.getNetwork(4)!=null && dirty.isEmpty());
-        check(loaded.removeNetwork(4));
-        check(dirty.equals(Set.of("minecraft:the_nether")));
-        check(CompiledElementSync.buildSnapshot(loaded,"minecraft:the_nether",1).get(0).entries().isEmpty());
-        CompiledElementSync.clear();
-        check(dirty.isEmpty());
-        System.out.println("Mutation checks passed: " + checks);
+    static int checks;
+    static void check(boolean value){checks++;if(!value)throw new AssertionError("Mutation check "+checks);}
+    static CompiledNetwork n(int id,String dim){return new CompiledNetwork(id,"test",0,dim,Set.of(new BlockPos(id,0,0)),Set.of(),Set.of());}
+    public static void main(String[] args){
+        String a="minecraft:overworld",b="minecraft:the_nether";var d=new NetworkSavedData();
+        d.addNetwork(n(1,a));long revision=d.capacity().revision(a);check(revision>0&&d.capacity().count(a)==1);
+        check(d.moveNetwork(1,0));check(d.capacity().revision(a)==revision);check(!d.removeNetwork(999));check(d.capacity().revision(a)==revision);
+        check(d.removeNetworks(List.of(1,999)).isEmpty());check(d.capacity().count(a)==1);
+        d.replaceNetwork(n(1,b));check(d.capacity().count(a)==0&&d.capacity().count(b)==1);check(d.capacity().revision(a)>revision);
+        var loaded=NetworkSavedData.load(d.save(new CompoundTag()));check(loaded.capacity().count(b)==1);check(loaded.removeNetwork(1));check(loaded.capacity().count(b)==0);
+        var packets=new HashMap<Object,List<CompiledElementPositionsS2CPacket>>();
+        var engine=new CompiledElementSync.Engine(d,(peer,packet)->packets.computeIfAbsent(peer,k->new ArrayList<>()).add(packet));
+        Object p1=new Object(),p2=new Object();UUID c1=UUID.randomUUID(),c2=UUID.randomUUID();check(engine.open(p1,c1,b,0));check(engine.open(p2,c2,b,0));
+        for(int tick=0;tick<10;tick++){engine.begin(tick);for(int i=0;i<100;i++)engine.step();}
+        check(packets.get(p1).size()==1&&packets.get(p2).size()==1);var first=packets.get(p1).get(0);check(first.snapshotId()==packets.get(p2).get(0).snapshotId());check(first.context().equals(c1));
+        engine.ack(p1,c1,first.snapshotId());engine.ack(p2,c2,first.snapshotId());d.removeNetwork(1);
+        for(int tick=10;tick<20;tick++){engine.begin(tick);for(int i=0;i<100;i++)engine.step();}
+        check(packets.get(p1).size()==2&&packets.get(p1).get(1).entries().isEmpty());
+        engine.close(p1);engine.close(p2);engine.begin(21);check(engine.clients()==0&&engine.retained()==0);
+        var keys=new Object[65];var token=UUID.randomUUID();
+        for(int i=0;i<65;i++){keys[i]=new Object();check(engine.open(keys[i],token,b,50)==(i<64));}
+        for(int tick=50;tick<65;tick++){engine.begin(tick);for(int i=0;i<100;i++)engine.step();}
+        check(packets.get(keys[64]).get(0).state()==CompiledElementPositionsS2CPacket.State.UNKNOWN);
+        engine.close(keys[0]);check(engine.open(keys[64],UUID.randomUUID(),b,100));
+        engine.begin(1000);check(engine.clients()==1);
+        System.out.println("Mutation and membership engine checks passed: "+checks);
     }
 }

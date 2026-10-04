@@ -215,11 +215,12 @@ public class PermissionsGameTests {
             data.addNetwork(new CompiledNetwork(1,"boundary",0,"minecraft:overworld",positions,Set.of(),Set.of()));
             h.assertTrue(call(p,NetworkOperations.Action.HIGHLIGHT,List.of(1),0,"").success(),"element limit inclusive");
             positions.add(new BlockPos(OperationLimits.ELEMENTS,80,900000));
-            data.replaceNetwork(new CompiledNetwork(1,"too-large",0,"minecraft:overworld",positions,Set.of(),Set.of()));
             var before=data.save(new CompoundTag());data.setDirty(false);
-            h.assertTrue(call(p,NetworkOperations.Action.DECOMPILE,List.of(1),0,"").code()==NetworkOperations.Code.INVALID_ARGUMENT,"oversize work rejected");
-            h.assertTrue(before.equals(data.save(new CompoundTag())) && !data.isDirty(),"oversize operation preserves state");
-            h.assertTrue(call(p,NetworkOperations.Action.RENAME_NETWORK,List.of(1),0,"name").code()==NetworkOperations.Code.INVALID_ARGUMENT,"oversize metadata request rejected");
+            try{data.replaceNetwork(new CompiledNetwork(1,"too-large",0,"minecraft:overworld",positions,Set.of(),Set.of()));throw new AssertionError("Oversized admission accepted");}
+            catch(NetworkSavedData.AdmissionException expected){}
+            h.assertTrue(before.equals(data.save(new CompoundTag()))&&!data.isDirty(),"capacity rejection preserves state");
+            h.assertTrue(call(p,NetworkOperations.Action.RENAME_NETWORK,List.of(1),0,"name").success(),"bounded metadata operation remains available");
+            h.assertTrue(call(p,NetworkOperations.Action.DECOMPILE,List.of(1),0,"").success(),"bounded retirement remains available");
             var buf=new FriendlyByteBuf(Unpooled.buffer());
             try {
                 buf.writeVarInt(999);

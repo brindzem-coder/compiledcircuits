@@ -19,6 +19,7 @@ public class RuntimeLifecycleGameTests {
         final NetworkSavedData original, data = new NetworkSavedData();
         final Map<BlockPos, BlockState> old = new LinkedHashMap<>();
         final Set<Long> forced = new HashSet<>();
+        Runnable restorePolicy = () -> {};
         final BlockPos input, output, power, lamp, other, wire;
         Fixture(GameTestHelper helper) {
             level = helper.getLevel(); original = NetworkSavedData.get(level.getServer());
@@ -33,6 +34,17 @@ public class RuntimeLifecycleGameTests {
             set(power, Blocks.AIR.defaultBlockState()); set(lamp, Blocks.REDSTONE_LAMP.defaultBlockState());
             set(other, ModBlocks.INPUT_ENDPOINT.get().defaultBlockState()); set(other.below(), Blocks.AIR.defaultBlockState());
             set(wire, ModBlocks.BASIC_WIRE.get().defaultBlockState());
+        }
+        void useDefaultIntegrityPolicy() {
+            // Other budget tests intentionally use tiny quotas in this persistent test world.
+            // The chain's fixed convergence deadline is defined against normal production quotas.
+            var values = List.of(com.example.compiledcircuits.config.ServerConfig.MAX_PENDING,
+                    com.example.compiledcircuits.config.ServerConfig.POINT_WORK,
+                    com.example.compiledcircuits.config.ServerConfig.RECHECK_WORK,
+                    com.example.compiledcircuits.config.ServerConfig.AUDIT_WORK);
+            var saved = values.stream().map(v -> v.get()).toList();
+            restorePolicy = () -> { for (int i=0;i<values.size();i++) values.get(i).set(saved.get(i)); };
+            for (var value : values) value.set(value.getDefault());
         }
         void set(BlockPos pos, BlockState state) { old.putIfAbsent(pos, level.getBlockState(pos)); level.setBlock(pos, state, 3); }
         CompiledNetwork create(boolean twoInputs) {
@@ -55,6 +67,7 @@ public class RuntimeLifecycleGameTests {
             for(long c:forced) level.setChunkForced(net.minecraft.world.level.ChunkPos.getX(c),net.minecraft.world.level.ChunkPos.getZ(c),false);
             level.getServer().overworld().getDataStorage().set("compiledcircuits_networks", original);
             NetworkIntegrityManager.clearPending();
+            restorePolicy.run();
         }
     }
     @GameTest(template="empty", timeoutTicks=100)
@@ -234,7 +247,7 @@ public class RuntimeLifecycleGameTests {
     }
     @GameTest(template="empty", batch="runtime_chain", timeoutTicks=160)
     public static void longChain(GameTestHelper helper) {
-        var f=new Fixture(helper); var networks=new ArrayList<CompiledNetwork>();
+        var f=new Fixture(helper); f.useDefaultIntegrityPolicy(); var networks=new ArrayList<CompiledNetwork>();
         BlockPos origin=new BlockPos(8196,90,8196); int count=512;
         var inputs=new ArrayList<BlockPos>();
         for(int i=0;i<=count;i++) inputs.add(origin.offset((i%16)*4,0,(i/16)*4));
@@ -255,12 +268,13 @@ public class RuntimeLifecycleGameTests {
             int attempts;
             public void run() {
                 try {
-                    if(networks.get(count-1).getEffectiveSignal()==15) {
-                        helper.assertTrue(networks.stream().allMatch(n->n.getEffectiveSignal()==15),"all 512 cascade stages settled");
+                    // The last output may precede queued integrity/chunk callbacks upstream.
+                    // Wait for the actual all-network postcondition, keeping the original deadline.
+                    if(networks.stream().allMatch(n->n.getEffectiveSignal()==15)) {
                         System.out.println("RUNTIME_CHAIN: 512 networks settled in "+(f.level.getServer().getTickCount()-start)+" ticks, no recursive overflow");
                         f.close();helper.succeed();return;
                     }
-                    if(++attempts>100) throw new IllegalStateException("chain failed to converge");
+                    if(++attempts>100) throw new IllegalStateException("chain failed to converge: HIGH="+networks.stream().filter(n->n.getEffectiveSignal()==15).count()+", states="+networks.stream().collect(java.util.stream.Collectors.groupingBy(CompiledNetwork::getRuntimeStatus,java.util.stream.Collectors.counting())));
                     helper.runAfterDelay(1, () -> this.run());
                 } catch(Throwable error) {f.close();throw new RuntimeException(error); }
             }

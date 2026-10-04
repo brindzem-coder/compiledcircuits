@@ -15,10 +15,9 @@ public final class CircuitVisualClientEvents {
     @SubscribeEvent
     public static void tick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
-        ClientDamageSync.tick();ClientHighlightSync.tick();
+        ClientDamageSync.tick();ClientHighlightSync.tick();ClientMembershipSync.tick();
         var level = Minecraft.getInstance().level;
         ClientCompiledElements.onLevelChanged(level, level == null ? "" : level.dimension().location().toString());
-        ClientCompiledElements.tick(System.nanoTime());
         ClientCircuitBlockIndex.onLevelChanged(level);
         ClientCircuitBlockIndex.tick(Minecraft.getInstance().gameRenderer.getMainCamera().getPosition());
         ClientHoveredCircuit.tick();

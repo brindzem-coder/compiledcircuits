@@ -34,15 +34,13 @@ public final class DamageSync {
         try{
             m.engine.removeIf(peer->((ServerPlayer)peer).isRemoved()
                     || server.getPlayerList().getPlayer(((ServerPlayer)peer).getUUID())!=peer);
-            m.engine.begin(server.getTickCount());HighlightSync.begin(server);
+            m.engine.begin(server.getTickCount());HighlightSync.begin(server);CompiledElementSync.begin(server);
         }finally{ServerWorkBudget.end(server,ServerWorkBudget.Lane.SYNC,preparation);}
-        int idle=0;boolean highlightTurn=false;
-        while(idle<6){
+        int idle=0;int syncTurn=0;
+        while(idle<16){
             long start=ServerWorkBudget.begin(server,ServerWorkBudget.Lane.SYNC);if(start==0)break;
             try{
-                highlightTurn=!highlightTurn;
-                boolean worked=highlightTurn?HighlightSync.step(server):m.engine.step();
-                if(!worked)worked=highlightTurn?m.engine.step():HighlightSync.step(server);
+                boolean worked=switch(syncTurn++%4){case 0->m.engine.step();case 1->HighlightSync.step(server);case 2->CompiledElementSync.step(server);default->m.data.reservationRemovalStep();};
                 if(worked)idle=0;else idle++;
             }finally{ServerWorkBudget.end(server,ServerWorkBudget.Lane.SYNC,start);}
         }

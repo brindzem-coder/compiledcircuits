@@ -24,6 +24,7 @@ public final class NetworkGuiSync {
                         player.getServer()
                 );
 
+        if((long)savedData.getNetworks().size()+savedData.getFolders().size()>NetworkListS2CPacket.MAX_RECORDS)return NetworkListS2CPacket.unavailable();
         List<NetworkListS2CPacket.Entry> entries =
                 new ArrayList<>();
 
@@ -65,7 +66,7 @@ public final class NetworkGuiSync {
                 )
         );
 
-        return new NetworkListS2CPacket(entries, folders);
+        return NetworkListS2CPacket.fits(entries,folders)?new NetworkListS2CPacket(entries, folders):NetworkListS2CPacket.unavailable();
     }
 
     public static List<BrokenElementListS2CPacket.Entry> buildBrokenEntries(ServerPlayer player) {

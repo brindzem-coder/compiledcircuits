@@ -1,7 +1,6 @@
 package com.example.compiledcircuits.network;
 
 import com.example.compiledcircuits.diagnostics.PerformanceDiagnostics;
-import com.example.compiledcircuits.networking.CompiledElementSync;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -22,6 +21,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
 public class NetworkSavedData extends SavedData {
+    private final MembershipCapacity capacity=new MembershipCapacity(this);
+    public MembershipCapacity capacity(){return capacity;}
+    long reservedCapacity(String dimension){return reservations.capacity.getOrDefault(dimension,0L);}
+    public Set<BlockPos> reservedPositionsView(String dimension){return java.util.Collections.unmodifiableSet(reservations.byDimension.getOrDefault(dimension,Set.of()));}
     private long highlightMembershipRevision;
     private java.util.function.Consumer<CompiledNetwork> highlightInvalidator = n -> {};
     public long highlightMembershipRevision() { return highlightMembershipRevision; }
@@ -48,7 +51,7 @@ public class NetworkSavedData extends SavedData {
 
     private final NetworkMembershipIndex membership = new NetworkMembershipIndex();
     // Preserved verbatim when strict membership validation fails. Never silently retry on load.
-    private final List<CompoundTag> invalidMembershipRecords = new ArrayList<>();
+    private List<CompoundTag> invalidMembershipRecords = new ArrayList<>();
 
     private MembershipReservations reservations = new MembershipReservations();
     public boolean hasUnknownMembershipReservations() { return reservations.unknown; }
@@ -66,14 +69,43 @@ public class NetworkSavedData extends SavedData {
     /** Explicit administrative deletion of one raw record, never automatic reactivation. */
     public boolean removeInvalidMembershipRecord(String recordId) {
         requireMutationThread();
-        var affected = new HashSet<String>();
-        for (var key : reservations.claims.keySet()) affected.add(key.dimension());
         if (!invalidMembershipRecords.removeIf(record -> record.getString("recordId").equals(recordId))) return false;
+        reservationRemoval=null;
         rebuildReservations();
         setDirty();
-        for (String dimension : affected) CompiledElementSync.markDimensionDirty(dimension);
         // Unknown reservations affect every dimension, including ones without known positions.
         reservationsChanged = true;
+        capacity.invalidateAll();
+        return true;
+    }
+    private ReservationRemoval reservationRemoval;
+    public boolean queueInvalidRecordRemoval(String id,net.minecraft.commands.CommandSourceStack source){
+        requireMutationThread();if(reservationRemoval!=null)return false;reservationRemoval=new ReservationRemoval(id,source);return true;
+    }
+    private final class ReservationRemoval {
+        final String id;final net.minecraft.commands.CommandSourceStack source;
+        final java.util.Iterator<CompoundTag> records=invalidMembershipRecords.iterator();
+        final List<CompoundTag> remaining=new ArrayList<>();final MembershipReservations replacement=new MembershipReservations();
+        MembershipReservations.RecordBuilder builder;boolean found;
+        ReservationRemoval(String id,net.minecraft.commands.CommandSourceStack source){this.id=id;this.source=source;}
+    }
+    /** One raw position/record transition per shared server work unit; publication is atomic. */
+    public boolean reservationRemovalStep(){
+        requireMutationThread();var job=reservationRemoval;if(job==null)return false;
+        boolean actorUnavailable=job.source!=null&&job.source.getEntity() instanceof net.minecraft.server.level.ServerPlayer player
+                &&(player.isRemoved()||player.isSpectator()||!player.createCommandSourceStack().hasPermission(2));
+        if(job.source!=null&&(!job.source.hasPermission(2)||actorUnavailable)){
+            reservationRemoval=null;job.source.sendFailure(net.minecraft.network.chat.Component.literal("Isolated-record removal cancelled: permission changed."));return true;
+        }
+        if(job.builder!=null){if(!job.builder.step())job.builder=null;return true;}
+        if(job.records.hasNext()){
+            var record=job.records.next();if(record.getString("recordId").equals(job.id)){job.found=true;return true;}
+            job.remaining.add(record);job.builder=job.replacement.prepare(record);return true;
+        }
+        reservationRemoval=null;
+        if(job.found){invalidMembershipRecords=job.remaining;reservations=job.replacement;capacity.invalidateAll();reservationsChanged=true;setDirty();}
+        if(job.source!=null){if(job.found)job.source.sendSuccess(()->net.minecraft.network.chat.Component.literal("Removed isolated record "+job.id+". Other records remain blocked."),false);
+            else job.source.sendFailure(net.minecraft.network.chat.Component.literal("Isolated record does not exist."));}
         return true;
     }
     private boolean reservationsChanged = true;
@@ -94,8 +126,10 @@ public class NetworkSavedData extends SavedData {
         return size;
     }
     public int getInvalidMembershipRecordCount() { return invalidMembershipRecords.size(); }
-    public List<String> getInvalidMembershipSummaries() {
-        return invalidMembershipRecords.stream().map(record -> {
+    public List<String> getInvalidMembershipSummaries(){return getInvalidMembershipSummaries(0,invalidMembershipRecords.size());}
+    public List<String> getInvalidMembershipSummaries(int offset,int limit){
+        int start=Math.min(Math.max(0,offset),invalidMembershipRecords.size()),end=start+Math.min(Math.max(0,limit),invalidMembershipRecords.size()-start);
+        return invalidMembershipRecords.subList(start,end).stream().map(record -> {
             var raw = record.getCompound("raw");
             String name = raw.getString("name"), reason = record.getString("reason");
             return record.getString("recordId") + " | " + name.substring(0, Math.min(name.length(), 64))
@@ -138,7 +172,9 @@ public class NetworkSavedData extends SavedData {
     }
 
     public static final class AdmissionException extends IllegalArgumentException {
-        public AdmissionException(String message) { super(message); }
+        public final NetworkOperations.Code code;
+        public AdmissionException(String message) { this(message,NetworkOperations.Code.CONFLICT); }
+        public AdmissionException(String message,NetworkOperations.Code code){super(message);this.code=code;}
     }
 
     /** Hidden membership and runtime entries are prepared one bounded unit at a time. */
@@ -163,13 +199,14 @@ public class NetworkSavedData extends SavedData {
             requireMutationThread();
             if (reservations != originalReservations || reservations.unknown || staged != candidate.getElements().size())
                 throw new AdmissionException("Admission changed during compilation.");
+            capacity.check(List.of(candidate),null);
             int id = getNextNetworkId();
             if (networks.containsKey(id) || reservations.networkIds.contains(id)) throw new AdmissionException("Network ID is reserved.");
             networks.put(id, candidate);
             candidate.publish(id);
             preparedRuntime.publish();
             nextNetworkId = id == Integer.MAX_VALUE ? 0 : id + 1;
-            setDirty(); CompiledElementSync.markDimensionDirty(candidate.getDimension());
+            setDirty();
         }
         void beginRollback() { rollback = candidate.getElements().iterator(); preparedRuntime.beginRollback(); }
         boolean rollbackNext() {
@@ -178,11 +215,12 @@ public class NetworkSavedData extends SavedData {
         }
     }
     PreparedAdmission prepareCompilation(CompiledNetwork candidate) {
-        requireMutationThread(); requireResolvedMembership(); return new PreparedAdmission(candidate);
+        requireMutationThread(); capacity.check(List.of(candidate),null); requireResolvedMembership(); return new PreparedAdmission(candidate);
     }
 
     private static final java.util.Set<NetworkSavedData> integrityOwners = java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
     public NetworkSavedData() { integrityOwners.add(this); }
+    NetworkSavedData(int networkLimit,int dimensionLimit){this();capacity.configure(networkLimit,dimensionLimit);}
     static void clearIntegritySchedulers() { for(var data:integrityOwners) data.integrity.clear(); }
 
 
@@ -474,7 +512,6 @@ public class NetworkSavedData extends SavedData {
         for (CompiledNetwork network : removed) { networks.remove(network.getId()); runtime.remove(network); }
         com.example.compiledcircuits.diagnostics.PerformanceDiagnostics.elapsed("decompile.atomicCommit",commitStart);
         com.example.compiledcircuits.diagnostics.PerformanceDiagnostics.add("decompile.networks",removed.size());
-        for (CompiledNetwork network : removed) CompiledElementSync.markDimensionDirty(network.getDimension());
         setDirty();
         return removed;
     }
@@ -580,6 +617,7 @@ public class NetworkSavedData extends SavedData {
                         NetworkSavedData::new,
                         DATA_NAME
                 );
+        data.capacity.networkLimit();
         data.runtime.bind(server);
         return data;
     }
@@ -677,11 +715,15 @@ public class NetworkSavedData extends SavedData {
 
     private void admit(Collection<CompiledNetwork> candidates, boolean replacing) {
         requireMutationThread();
-        requireResolvedMembership();
         var ordered = candidates.stream().sorted(java.util.Comparator.comparingInt(CompiledNetwork::getId)).toList();
         if (ordered.isEmpty()) throw new AdmissionException("No candidate networks.");
         Set<Integer> ids = new HashSet<>();
         CompiledNetwork previous = replacing ? networks.get(ordered.get(0).getId()) : null;
+        capacity.check(ordered,previous);
+        boolean shrinkingKnownMembership=previous!=null&&ordered.size()==1&&previous.getDimension().equals(ordered.get(0).getDimension())
+                &&ordered.get(0).getElements().size()<previous.getElements().size()
+                &&ordered.get(0).getElements().stream().allMatch(e->previous.getElementAt(e.getPos())!=null);
+        if(!shrinkingKnownMembership)requireResolvedMembership();
         if (replacing && previous == null) throw new AdmissionException("Replacement network does not exist.");
         if(previous!=null && !runtime.canRetire(List.of(previous)))throw new AdmissionException("Retirement queue is full; retry later.");
         int committedNextId = nextNetworkId;
@@ -708,8 +750,6 @@ public class NetworkSavedData extends SavedData {
         for (var network : ordered) runtime.add(network);
         nextNetworkId = committedNextId;
         setDirty();
-        if (previous != null) CompiledElementSync.markDimensionDirty(previous.getDimension());
-        for (var network : ordered) CompiledElementSync.markDimensionDirty(network.getDimension());
     }
 
     public CompiledNetwork getNetwork(int id) {
@@ -765,12 +805,9 @@ public class NetworkSavedData extends SavedData {
         return tag;
     }
 
-    public static NetworkSavedData load(
-            CompoundTag tag
-    ) {
-
-        NetworkSavedData data =
-                new NetworkSavedData();
+    public static NetworkSavedData load(CompoundTag tag){return load(tag,new NetworkSavedData());}
+    static NetworkSavedData load(CompoundTag tag,NetworkSavedData data){
+        if(!data.networks.isEmpty()||!data.invalidMembershipRecords.isEmpty())throw new IllegalArgumentException("Load requires empty data");
 
         data.nextNetworkId =
                 tag.getInt("nextNetworkId");
@@ -933,7 +970,6 @@ public class NetworkSavedData extends SavedData {
         }
 
         runtime.remove(removed);
-        CompiledElementSync.markDimensionDirty(removed.getDimension());
         setDirty();
         return true;
     }

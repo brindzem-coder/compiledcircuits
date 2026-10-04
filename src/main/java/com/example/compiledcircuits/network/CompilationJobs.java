@@ -111,7 +111,7 @@ public final class CompilationJobs {
                     if (shared == 0) { jobs.addLast(job); return; }
                     long started = System.nanoTime(); var phase = job.phase;
                     try { job.step(); }
-                    catch (IllegalArgumentException | IllegalStateException invalid) { job.fail(Code.CONFLICT, invalid.getMessage()); }
+                    catch (IllegalArgumentException | IllegalStateException invalid) { job.fail(invalid instanceof NetworkSavedData.AdmissionException admission?admission.code:Code.CONFLICT, invalid.getMessage()); }
                     finally { ServerWorkBudget.end(server, ServerWorkBudget.Lane.SCAN, shared); }
                     long elapsed = System.nanoTime() - started;
                     job.tickWork++; work++;
@@ -233,7 +233,7 @@ public final class CompilationJobs {
         }
         void enqueue(BlockPos pos, BlockState state) {
             if (snapshots.containsKey(pos)) return;
-            if (snapshots.size() >= OperationLimits.ELEMENTS) { fail(Code.TOO_LARGE, "Circuit exceeds 50000 elements."); return; }
+            if (snapshots.size() >= data.capacity().networkLimit()) { fail(Code.TOO_LARGE, "Circuit exceeds configured network limit " + data.capacity().networkLimit() + "."); return; }
             if (manager.retainedElements >= MAX_TOTAL_ELEMENTS) { fail(Code.BUSY, "Server compilation memory budget is full."); return; }
             pos = pos.immutable(); snapshots.put(pos, state); frontier.addLast(new Node(pos, state));
             manager.retainedElements++; retained++;

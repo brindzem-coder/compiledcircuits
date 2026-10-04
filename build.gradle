@@ -230,6 +230,7 @@ sourceSets {
 }
 configurations.gametestImplementation.extendsFrom(configurations.testImplementation)
 minecraft.runs.gameTestServer {
+    if (project.hasProperty('stage09LegacyInputs')) property 'compiledcircuits.legacyInputs', project.file(project.property('stage09LegacyInputs')).absolutePath
     workingDirectory project.file('run-stage7-tests')
     mods {
         "${mod_id}" {
@@ -326,4 +327,15 @@ tasks.register('visualScaleCheck', JavaExec) {
 }
 tasks.register('visualChecks') {
     dependsOn 'membershipCheck', 'hoverCheck', 'visualPriorityCheck', 'membershipMutationCheck', 'visualScaleCheck'
+}
+
+// Explicit full-limit stage 09 benchmark, separate from routine visual regression checks.
+tasks.register('membershipCapacityScaleCheck', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.example.compiledcircuits.client.MembershipCapacityScaleTest'
+    maxHeapSize = '2g'
+    workingDir = layout.buildDirectory.dir('membership-capacity-scale').get().asFile
+    doFirst { workingDir.mkdirs() }
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
 }

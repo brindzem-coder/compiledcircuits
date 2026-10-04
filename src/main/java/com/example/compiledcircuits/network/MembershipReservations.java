@@ -13,44 +13,49 @@ final class MembershipReservations {
     final Map<Key, Set<String>> claims = new HashMap<>();
     final Map<String, Map<Long, Set<BlockPos>>> chunks = new HashMap<>();
     final Set<Integer> networkIds = new HashSet<>();
+    final Map<String,Long> capacity=new HashMap<>();
+    final Map<String,Set<BlockPos>> byDimension=new HashMap<>();
     boolean unknown;
 
-    void add(CompoundTag record) {
-        CompoundTag raw = record.getCompound("raw");
-        String recordId = record.getString("recordId");
-        if (raw.contains("id", Tag.TAG_INT) && raw.getInt("id") > 0) networkIds.add(raw.getInt("id"));
-        ResourceLocation dimension = raw.contains("dimension", Tag.TAG_STRING)
-                ? ResourceLocation.tryParse(raw.getString("dimension")) : null;
-        Set<BlockPos> positions = new HashSet<>();
-        boolean complete = dimension != null;
-        // Union both representations: disagreement must never free either claimed position.
-        for (String field : List.of("wires", "inputs", "outputs")) {
-            Tag value = raw.get(field);
-            if (!(value instanceof ListTag list) || (!list.isEmpty() && list.getElementType() != Tag.TAG_COMPOUND)) {
-                complete = false; continue;
-            }
-            for (Tag tag : list) {
-                CompoundTag position = (CompoundTag) tag;
-                if (position.contains("x", Tag.TAG_INT) && position.contains("y", Tag.TAG_INT) && position.contains("z", Tag.TAG_INT))
-                    positions.add(new BlockPos(position.getInt("x"), position.getInt("y"), position.getInt("z")));
-                else complete = false;
-            }
+    void add(CompoundTag record){var builder=new RecordBuilder(record);while(builder.step()){};}
+    RecordBuilder prepare(CompoundTag record){return new RecordBuilder(record);}
+    /** The same conservative parser is used synchronously on load and incrementally for admin cleanup. */
+    final class RecordBuilder {
+        final CompoundTag raw;final String recordId,dimension;
+        final Set<BlockPos> positions=new HashSet<>();
+        Iterator<Tag> values=Collections.emptyIterator();Iterator<BlockPos> publish;
+        int field;boolean complete,done;long legacyCount,elementCount;
+        RecordBuilder(CompoundTag record){
+            raw=record.getCompound("raw");recordId=record.getString("recordId");
+            var dim=raw.contains("dimension",Tag.TAG_STRING)?ResourceLocation.tryParse(raw.getString("dimension")):null;
+            dimension=dim==null?null:dim.toString();complete=dim!=null;
+            if(raw.contains("id",Tag.TAG_INT)&&raw.getInt("id")>0)networkIds.add(raw.getInt("id"));
         }
-        if (raw.contains("elements")) {
-            Tag value = raw.get("elements");
-            if (!(value instanceof ListTag list) || (!list.isEmpty() && list.getElementType() != Tag.TAG_COMPOUND)) complete = false;
-            else for (Tag tag : list) {
-                CompoundTag element = (CompoundTag) tag;
-                if (element.contains("pos", Tag.TAG_LONG)) positions.add(BlockPos.of(element.getLong("pos")));
-                else complete = false;
+        boolean step(){
+            if(done)return false;
+            if(values.hasNext()){
+                var value=(CompoundTag)values.next();
+                if(field==4){if(value.contains("pos",Tag.TAG_LONG))positions.add(BlockPos.of(value.getLong("pos")));else complete=false;}
+                else if(value.contains("x",Tag.TAG_INT)&&value.contains("y",Tag.TAG_INT)&&value.contains("z",Tag.TAG_INT))positions.add(new BlockPos(value.getInt("x"),value.getInt("y"),value.getInt("z")));
+                else complete=false;
+                return true;
             }
+            if(field<4){
+                String name=List.of("wires","inputs","outputs","elements").get(field++);var value=raw.get(name);
+                if(field==4&&value==null)return true;
+                if(!(value instanceof ListTag list)||!list.isEmpty()&&list.getElementType()!=Tag.TAG_COMPOUND){complete=false;return true;}
+                if(field==4)elementCount=list.size();else legacyCount=Math.addExact(legacyCount,list.size());
+                values=list.iterator();return true;
+            }
+            if(publish==null){publish=positions.iterator();return true;}
+            if(dimension!=null&&publish.hasNext()){
+                var pos=publish.next();claims.computeIfAbsent(new Key(dimension,pos),k->new TreeSet<>()).add(recordId);
+                chunks.computeIfAbsent(dimension,k->new HashMap<>()).computeIfAbsent(net.minecraft.world.level.ChunkPos.asLong(pos),k->new HashSet<>()).add(pos);
+                byDimension.computeIfAbsent(dimension,k->new HashSet<>()).add(pos);return true;
+            }
+            if(dimension!=null)capacity.merge(dimension,Math.max(positions.size(),Math.max(legacyCount,elementCount)),Math::addExact);
+            unknown|=!complete;done=true;return false;
         }
-        if (dimension != null) for (BlockPos pos : positions) {
-            claims.computeIfAbsent(new Key(dimension.toString(), pos), key -> new TreeSet<>()).add(recordId);
-            chunks.computeIfAbsent(dimension.toString(), key -> new HashMap<>())
-                    .computeIfAbsent(net.minecraft.world.level.ChunkPos.asLong(pos), key -> new HashSet<>()).add(pos);
-        }
-        unknown |= !complete;
     }
 
     Set<String> at(String dimension, BlockPos pos) {

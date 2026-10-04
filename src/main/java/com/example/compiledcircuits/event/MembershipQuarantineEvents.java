@@ -2,7 +2,6 @@ package com.example.compiledcircuits.event;
 
 import com.example.compiledcircuits.CompiledCircuits;
 import com.example.compiledcircuits.network.NetworkSavedData;
-import com.example.compiledcircuits.networking.CompiledElementSync;
 import com.example.compiledcircuits.registry.ModBlocks;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.core.BlockPos;
@@ -27,7 +26,6 @@ public final class MembershipQuarantineEvents {
         Map<ServerLevel, Set<BlockPos>> pending = new HashMap<>();
         if (data.consumeReservationsChanged()) for (var level : event.getServer().getAllLevels()) {
             String dimension = level.dimension().location().toString();
-            CompiledElementSync.markDimensionDirty(dimension);
             pending.computeIfAbsent(level, key -> new HashSet<>()).addAll(data.getBlockedPositions(dimension));
         }
         LoadedChunk chunk;

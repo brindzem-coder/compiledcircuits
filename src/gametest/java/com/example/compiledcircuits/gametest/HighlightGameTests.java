@@ -40,7 +40,7 @@ public class HighlightGameTests {
   var server=h.getLevel().getServer();var storage=server.overworld().getDataStorage();var original=NetworkSavedData.get(server);var data=new NetworkSavedData();
   var p=new net.minecraftforge.common.util.FakePlayer(h.getLevel(),new com.mojang.authlib.GameProfile(UUID.randomUUID(),"highlight-test"));
   try{
-   storage.set("compiledcircuits_networks",data);var a=network(data,1,"minecraft:overworld",3,0);network(data,2,"minecraft:the_nether",POSITIONS+1,0);
+   storage.set("compiledcircuits_networks",data);var a=network(data,1,"minecraft:overworld",3,0);network(data,2,"minecraft:the_nether",POSITIONS,0);
    var single=NetworkActionC2SPacket.execute(new NetworkActionC2SPacket(NetworkActionC2SPacket.Action.HIGHLIGHT,2,""),p);
    check(single.success()&&single.networks().isEmpty()&&single.message().contains("1"),"foreign oversize network filtered before capacity traversal");
    var group=NetworkBulkActionC2SPacket.execute(new NetworkBulkActionC2SPacket(NetworkBulkActionC2SPacket.BulkAction.HIGHLIGHT_NETWORKS,List.of(1,1,2),0),p);
@@ -84,7 +84,7 @@ public class HighlightGameTests {
  @GameTest(template="empty",batch="highlight_limits",timeoutTicks=100)
  public static void limitsAndLargeSelection(GameTestHelper h){
   for(int size:new int[]{POSITIONS-1,POSITIONS,POSITIONS+1}){
-   var f=new Harness();var n=network(f.data,1,"minecraft:overworld",size,0);var p=f.add();f.request(p,List.of(n));
+   var f=new Harness();var n=network(f.data,1,"minecraft:overworld",Math.min(size,POSITIONS),0);var p=f.add();var selected=new ArrayList<CompiledNetwork>();selected.add(n);if(size>POSITIONS)selected.add(network(f.data,2,"minecraft:overworld",1,POSITIONS));f.request(p,selected);
    f.until(()->p.replica.status()!=HighlightReplica.Status.WAITING);
    check(size>POSITIONS?p.replica.status()==HighlightReplica.Status.ERROR&&count(p.replica)==0:count(p.replica)==size,"limit-1/limit/limit+1 contract");
    if(size==POSITIONS)System.out.println("HIGHLIGHT_MAX: positions="+size+", parts="+p.received.size()+", encodedBytes="+f.encodedBytes+", peakStagingBytes="+f.peakStaging+", simulatedTicks="+f.tick);

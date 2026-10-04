@@ -1,0 +1,110 @@
+{
+  "stage": "09",
+  "verifiedDate": "2026-10-04",
+  "baseCommit": "d5d5cf8",
+  "environment": {
+    "minecraft": "1.20.1",
+    "forge": "47.4.10",
+    "java": "17.0.17+10",
+    "gradle": "8.8",
+    "protocol": 14
+  },
+  "status": "Automated verification and all seven user-run manual acceptance checks passed",
+  "commands": [
+    {
+      "command": "gradlew.bat build visualChecks runGameTestServer -Pstage09LegacyInputs=build/stage09-legacy --offline --console=plain",
+      "result": "PASS",
+      "log": "baseline-results/stage09-accepted.log"
+    },
+    {
+      "command": "gradlew.bat membershipCapacityScaleCheck --offline --console=plain",
+      "result": "PASS",
+      "log": "baseline-results/stage09-scale-accepted.log"
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS"
+    }
+  ],
+  "checks": {
+    "requiredGameTests": 66,
+    "stage09GameTests": 8,
+    "optionalLegacyGameTests": 1,
+    "hover": 124,
+    "membershipPacket": 28,
+    "clientMembershipCache": 33,
+    "membershipMutationAndEngine": 87,
+    "visualPriority": 15,
+    "stage7Assertions": 185,
+    "chainNetworks": 512,
+    "chainConvergenceTicks": 25
+  },
+  "copiedLegacyData": {
+    "result": "PASS",
+    "manifest": "legacy-manifest.json",
+    "sourceAndCopyHashesUnchanged": true,
+    "worlds": [
+      {
+        "file": "world-0.dat",
+        "networks": 3,
+        "elements": 233
+      },
+      {
+        "file": "world-1.dat",
+        "networks": 1,
+        "elements": 1026
+      },
+      {
+        "file": "world-2.dat",
+        "networks": 32,
+        "elements": 1024
+      }
+    ],
+    "roundTrip": "Normal and over-capacity load/save preserve counts; no isolated records introduced"
+  },
+  "fullLimitProbe": {
+    "records": 1000000,
+    "parts": 245,
+    "bytes": 9013102,
+    "maxPartBytes": 36918,
+    "admissionMs": 10667.813,
+    "buildMs": 531.623,
+    "encodeMs": 136.516,
+    "decodeMs": 211.783,
+    "applyMs": 1867.128,
+    "maxApplyTickMs": 66.322,
+    "applyTicks": 245,
+    "heapBeforeBytes": 828375040,
+    "heapPoolPeakSumBytes": 1686110208
+  },
+  "sharedDeliveryProbe": {
+    "players": 64,
+    "recordsPerPlayer": 1000000,
+    "packets": 15680,
+    "maxGlobalPacketsPerTick": 8,
+    "maxPlayerPacketsPerTick": 1,
+    "sharedRetainedUpperBytes": 13250880,
+    "simulatedTicks": 3179,
+    "drainWallMs": 8181.684,
+    "slowPeerAck": false
+  },
+  "measurementLimits": [
+    "One 2-GiB JVM contains server data, snapshots and client maps. Pool peak sum is not simultaneous live heap or incremental transport allocation.",
+    "64 recipients are simulated, not 64 running Minecraft clients. One real client-replica implementation consumes its full stream at a simulated 20-TPS clock.",
+    "Record budgets do not guarantee frame-time deadlines: the observed maximum client application tick was 66.322 ms. No FPS/MSPT improvement is claimed."
+  ],
+  "resolvedVerificationIssues": [
+    "Copied NBT probe requires Forge bootstrap and now runs as an optional namespaced GameTest generator.",
+    "Moving the GameTest source briefly excluded its stale class during incremental compilation; a forced rebuild restored it and final count is verified as 66.",
+    "The existing chain test inherited tiny integrity quotas and checked upstream state as soon as the last output was HIGH. Its fixture now selects/restores normal integrity quotas and waits for all 512 HIGH within the unchanged deadline. Earlier timeout and early-assertion failures are not counted as passing runs."
+  ],
+  "manualAcceptance": {
+    "status": "PASS",
+    "checks": 7,
+    "instructions": "src/main/java/com/example/compiledcircuits/STAGE09_MEMBERSHIP_CAPACITY.md",
+    "reportedBy": "User",
+    "notes": "User reports all seven checks passed, including dedicated server with three clients. Initial loss of C after restart did not reproduce after save-all flush followed by graceful stop; user confirmed persistence and correct behavior on repeat. No persistence code change was required."
+  },
+  "userWorldsModified": false,
+  "commitCreated": false
+}

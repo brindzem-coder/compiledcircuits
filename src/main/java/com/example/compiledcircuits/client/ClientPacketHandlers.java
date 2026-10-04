@@ -15,11 +15,7 @@ public final class ClientPacketHandlers {
 
     public static void handleCompiledElements(com.example.compiledcircuits.networking.CompiledElementPositionsS2CPacket packet,
                                               net.minecraft.network.Connection connection) {
-        var minecraft = Minecraft.getInstance();
-        if (minecraft.getConnection() == null || minecraft.getConnection().getConnection() != connection) return;
-        var level = minecraft.level;
-        ClientCompiledElements.onLevelChanged(level, level == null ? "" : level.dimension().location().toString());
-        ClientCompiledElements.accept(packet, System.nanoTime());
+        ClientMembershipSync.accept(packet,connection);
     }
 
     public static void handleDamage(com.example.compiledcircuits.networking.DamagePartS2CPacket packet,net.minecraft.network.Connection connection){ClientDamageSync.accept(packet,connection);}
@@ -45,11 +41,19 @@ public final class ClientPacketHandlers {
     }
 
     public static void openNetworkManagerAt(OpenNetworkManagerAtS2CPacket packet) {
+        if(!listAvailable(packet.getListPacket()))return;
         Minecraft.getInstance().setScreen(new NetworkManagerScreen(packet.getListPacket().entries,
                 packet.getListPacket().folders, packet.getNetworkId()));
     }
 
+    private static boolean listAvailable(NetworkListS2CPacket packet){
+        if(packet.available)return true;var mc=Minecraft.getInstance();
+        if(mc.screen instanceof NetworkManagerScreen)mc.setScreen(null);
+        if(mc.player!=null)mc.player.displayClientMessage(net.minecraft.network.chat.Component.literal("Network list exceeds the GUI budget. Use /circuit list, /circuit capacity, /circuit rename <id> <name>, or /circuit decompile <id>."),false);
+        return false;
+    }
     public static void openNetworkManager(NetworkListS2CPacket packet) {
+        if(!listAvailable(packet))return;
         if (Minecraft.getInstance().screen instanceof NetworkManagerScreen screen) {
             screen.updateData(packet.entries, packet.folders);
             return;

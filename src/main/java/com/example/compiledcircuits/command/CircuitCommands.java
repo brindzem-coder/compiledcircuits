@@ -40,7 +40,7 @@ public final class CircuitCommands {
         dispatcher.register(
                 Commands.literal("circuit")
                         .then(Commands.literal("conflicts").requires(source -> source.hasPermission(2))
-                                .then(Commands.literal("list").executes(context -> listConflicts(context.getSource())))
+                                .then(Commands.literal("list").executes(context -> listConflicts(context.getSource(),0)).then(Commands.argument("offset",IntegerArgumentType.integer(0)).executes(c->listConflicts(c.getSource(),IntegerArgumentType.getInteger(c,"offset")))))
                                 .then(Commands.literal("remove")
                                         .then(Commands.argument("record", StringArgumentType.word())
                                                 .executes(context -> removeConflict(context.getSource(),
@@ -55,6 +55,7 @@ public final class CircuitCommands {
                                         )
                         )
 
+                        .then(Commands.literal("capacity").executes(c->capacity(c.getSource())))
                         .then(Commands.literal("debug_elements")
                                 .executes(context -> debugElements(context.getSource())))
 
@@ -66,6 +67,7 @@ public final class CircuitCommands {
 
                         .then(
                                 Commands.literal("decompile")
+                                        .then(Commands.argument("id",IntegerArgumentType.integer(1)).executes(c->NetworkOperations.reply(c.getSource(),request(c.getSource(),NetworkOperations.Action.DECOMPILE,List.of(IntegerArgumentType.getInteger(c,"id")),0,""))))
                                         .executes(context ->
                                                 decompile(
                                                         context.getSource()
@@ -75,6 +77,7 @@ public final class CircuitCommands {
 
                         .then(
                                 Commands.literal("list")
+                                        .then(Commands.argument("after",IntegerArgumentType.integer(0)).executes(c->listNetworks(c.getSource(),IntegerArgumentType.getInteger(c,"after"))))
                                         .executes(context ->
                                                 listNetworks(
                                                         context.getSource()
@@ -151,12 +154,13 @@ public final class CircuitCommands {
                                                      List<Integer> ids, int target, String value) {
         return NetworkOperations.execute(source, action, ids, target, value);
     }
-    private static int listConflicts(CommandSourceStack source) {
+    private static int listConflicts(CommandSourceStack source,int offset) {
         var result = request(source, NetworkOperations.Action.LIST_CONFLICTS, List.of(), 0, "");
         if (!result.success()) return NetworkOperations.reply(source,result);
         var data = NetworkSavedData.get(source.getServer());
         source.sendSuccess(() -> Component.literal("Blocked saved records: " + data.getInvalidMembershipRecordCount()),false);
-        for (String line : data.getInvalidMembershipSummaries()) source.sendSuccess(() -> Component.literal(line),false);
+        for (String line : data.getInvalidMembershipSummaries(offset,20)) source.sendSuccess(() -> Component.literal(line),false);
+        if((long)offset+20<data.getInvalidMembershipRecordCount())source.sendSuccess(()->Component.literal("Next: /circuit conflicts list "+(offset+20)),false);
         return data.getInvalidMembershipRecordCount();
     }
     private static int removeConflict(CommandSourceStack source, String record) {
@@ -206,15 +210,18 @@ public final class CircuitCommands {
         return NetworkOperations.reply(source,request(source,NetworkOperations.Action.DECOMPILE,
                 network==null?List.of():List.of(network.getId()),0,""));
     }
-    private static int listNetworks(CommandSourceStack source) {
-        var result=request(source,NetworkOperations.Action.LIST,List.of(),0,"");
-        if (!result.success()) return NetworkOperations.reply(source,result);
-        var data=NetworkSavedData.get(source.getServer());
-        var networks=new java.util.ArrayList<>(data.getNetworks()); networks.sort(java.util.Comparator.comparingInt(CompiledNetwork::getId));
-        source.sendSuccess(() -> Component.literal("Compiled networks: "+networks.size()),false);
-        for (var n:networks) source.sendSuccess(() -> Component.literal("#"+n.getId()+" "+n.getName()+" ["+(n.getEffectiveSignal() > 0?"ON":"OFF")
-                +"] folder="+data.getFolderPath(n.getFolderId())+" wires="+n.getWires().size()+" inputs="+n.getInputs().size()+" outputs="+n.getOutputs().size()),false);
-        return 1;
+    private static int capacity(CommandSourceStack source){
+        var r=request(source,NetworkOperations.Action.LIST,List.of(),0,"");if(!r.success())return NetworkOperations.reply(source,r);
+        var data=NetworkSavedData.get(source.getServer());String dim=source.getLevel().dimension().location().toString();var u=data.capacity().usage(dim);
+        source.sendSuccess(()->Component.literal("Membership "+dim+": "+u.state()+", records="+u.records()+"/"+u.limit()+", network limit="+data.capacity().networkLimit()+", oversized networks="+data.capacity().oversizedNetworks(dim)+", snapshot upper bytes="+u.encodedUpperBound()+", parts="+u.parts()),false);return 1;
+    }
+    private static int listNetworks(CommandSourceStack source){return listNetworks(source,0);}
+    private static int listNetworks(CommandSourceStack source,int after){
+        var result=request(source,NetworkOperations.Action.LIST,List.of(),0,"");if(!result.success())return NetworkOperations.reply(source,result);
+        var data=NetworkSavedData.get(source.getServer());var page=data.capacity().page(after,20);
+        source.sendSuccess(()->Component.literal("Compiled networks: "+data.getNetworks().size()+"; IDs after "+after),false);
+        for(var n:page)source.sendSuccess(()->Component.literal("#"+n.getId()+" "+n.getName().substring(0,Math.min(64,n.getName().length()))+" "+n.getDimension()+" elements="+n.getElements().size()+(data.capacity().oversized(n)?" OVER_CAPACITY":"")),false);
+        if(page.size()==20)source.sendSuccess(()->Component.literal("Next: /circuit list "+page.get(page.size()-1).getId()),false);return 1;
     }
     private static int renameNetwork(CommandSourceStack source,int id,String name) {
         return NetworkOperations.reply(source,request(source,NetworkOperations.Action.RENAME_NETWORK,List.of(id),0,name));
