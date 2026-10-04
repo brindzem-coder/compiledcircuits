@@ -1,0 +1,56 @@
+{
+  "stage": "10",
+  "date": "2026-10-04",
+  "baseCommit": "f910325",
+  "status": "Completed; automated checks passed and all seven manual scenarios passed as reported by the user",
+  "protocol": 14,
+  "commands": [
+    {
+      "command": "gradlew.bat build visualChecks runGameTestServer -Pstage09LegacyInputs=build/stage09-legacy --offline --console=plain",
+      "result": "PASS",
+      "log": "baseline-results/stage10-verification.log"
+    },
+    {
+      "command": "gradlew.bat build managerCheck --offline --console=plain",
+      "result": "PASS",
+      "log": "baseline-results/stage10-final.log",
+      "note": "After final rendering/layout delegation and dead-helper cleanup; server logic unchanged since full run."
+    },
+    {
+      "command": "git diff --check",
+      "result": "PASS"
+    }
+  ],
+  "checks": {
+    "gameTests": 66,
+    "managerAssertions": 78,
+    "hover": 124,
+    "membershipPacket": 28,
+    "membershipCache": 33,
+    "membershipMutationEngine": 87,
+    "visualPriority": 15,
+    "stage7Assertions": 185
+  },
+  "finalModelProbe": {
+    "records": 1024,
+    "folders": 256,
+    "networks": 768,
+    "buildMs": 4.485,
+    "unchanged10000ReadsMs": 3.026,
+    "frameRebuilds": 0,
+    "scope": "Pure model/layout observations, not rendered frames or before/after FPS comparison"
+  },
+  "manualAcceptance": {
+    "status": "PASS",
+    "scenarios": 7,
+    "instructions": "src/main/java/com/example/compiledcircuits/STAGE10_MANAGER.md",
+    "reportedBy": "User",
+    "notes": "User confirmed every scenario in STAGE10_MANAGER.md passed as expected, including the two-player scenario. GUI boundary/clipping changes and teleport remain separate follow-ups."
+  },
+  "deferredByScope": [
+    "GUI boundary/clipping redesign requested as a separate follow-up",
+    "Teleport-to-network button",
+    "Stage 11"
+  ],
+  "commitCreated": false
+}

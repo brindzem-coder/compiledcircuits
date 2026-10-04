@@ -143,6 +143,7 @@ public final class CircuitCommands {
                         )
                         .then(
                                 Commands.literal("gui")
+                                        .then(Commands.literal("refresh").executes(context -> refreshGui(context.getSource())))
                                         .executes(context ->
                                                 openGui(context.getSource())
                                         )
@@ -229,9 +230,16 @@ public final class CircuitCommands {
     private static int moveNetworkToFolder(CommandSourceStack source,int id,String path) {
         return NetworkOperations.reply(source,request(source,NetworkOperations.Action.MOVE_PATH,List.of(id),0,path));
     }
+    private static int refreshGui(CommandSourceStack source) {
+        var result = request(source, NetworkOperations.Action.GUI, List.of(), 0, "");
+        if (!result.success()) return NetworkOperations.reply(source, result);
+        NetworkGuiSync.sendList((ServerPlayer) source.getEntity());
+        return 1;
+    }
+
     private static int openGui(CommandSourceStack source) {
         var result=request(source,NetworkOperations.Action.GUI,List.of(),0,"");
         if (!result.success()) return NetworkOperations.reply(source,result);
-        NetworkGuiSync.sendList((ServerPlayer)source.getEntity()); return 1;
+        NetworkGuiSync.sendListAndNavigate((ServerPlayer)source.getEntity(), 0); return 1;
     }
 }

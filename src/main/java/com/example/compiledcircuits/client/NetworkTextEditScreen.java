@@ -21,6 +21,8 @@ public class NetworkTextEditScreen
 
     private EditBox editBox;
     private final int maxLength;
+    private final Runnable onCancel;
+    private boolean finished, returningToParent;
 
     public NetworkTextEditScreen(
             Screen parent,
@@ -34,9 +36,12 @@ public class NetworkTextEditScreen
 
     public NetworkTextEditScreen(Screen parent, String title, String label, String initialValue,
                                  Consumer<String> onSave, int maxLength) {
-        super(
-                Component.literal(title)
-        );
+        this(parent, title, label, initialValue, onSave, maxLength, () -> {});
+    }
+    public NetworkTextEditScreen(Screen parent, String title, String label, String initialValue,
+                                 Consumer<String> onSave, int maxLength, Runnable onCancel) {
+        super(Component.literal(title));
+        this.onCancel = onCancel;
 
         this.parent = parent;
         this.label = label;
@@ -54,6 +59,9 @@ public class NetworkTextEditScreen
         int centerY =
                 this.height / 2;
 
+        String text = editBox == null ? initialValue : editBox.getValue();
+        int cursor = editBox == null ? text.length() : editBox.getCursorPosition();
+        boolean focused = editBox == null || editBox.isFocused();
         editBox =
                 new EditBox(
                         this.font,
@@ -65,11 +73,12 @@ public class NetworkTextEditScreen
                 );
 
         editBox.setMaxLength(maxLength);
-        editBox.setValue(initialValue);
+        editBox.setValue(text);
+        editBox.setCursorPosition(cursor);
 
         addRenderableWidget(editBox);
 
-        setInitialFocus(editBox);
+        if (focused) { setInitialFocus(editBox); editBox.setFocused(true); }
 
         addRenderableWidget(
                 Button.builder(
@@ -88,9 +97,7 @@ public class NetworkTextEditScreen
         addRenderableWidget(
                 Button.builder(
                                 Component.literal("Cancel"),
-                                button ->
-                                        Minecraft.getInstance()
-                                                .setScreen(parent)
+                                button -> onClose()
                         )
                         .bounds(
                                 centerX + 5,
@@ -102,14 +109,37 @@ public class NetworkTextEditScreen
         );
     }
 
+    NetworkManagerScreen parentManager() { return parent instanceof NetworkManagerScreen manager ? manager : null; }
+    private void returnToParent() {
+        var manager = parentManager();
+        returningToParent = manager == null || manager.contextValid();
+        Minecraft.getInstance().setScreen(returningToParent ? parent : null);
+    }
     private void save() {
-
-        onSave.accept(
-                editBox.getValue()
-        );
-
-        Minecraft.getInstance()
-                .setScreen(parent);
+        if (finished || Minecraft.getInstance().screen != this) return;
+        finished = true;
+        onSave.accept(editBox.getValue());
+        if (Minecraft.getInstance().screen == this) returnToParent();
+    }
+    @Override public void onClose() {
+        if (!finished) { finished = true; onCancel.run(); }
+        returnToParent();
+    }
+    @Override public void tick() {
+        var manager = parentManager();
+        if (manager != null && !manager.contextValid()) {
+            manager.closeSession(); finished = true; onCancel.run(); Minecraft.getInstance().setScreen(null); return;
+        }
+        if (manager != null) manager.sessionTick();
+        super.tick();
+    }
+    @Override public void removed() {
+        var manager = parentManager();
+        if (!returningToParent) {
+            if (!finished) { finished = true; onCancel.run(); }
+            if (manager != null) manager.closeSession();
+        }
+        super.removed();
     }
 
     @Override

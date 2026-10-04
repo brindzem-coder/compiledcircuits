@@ -15,158 +15,63 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
-import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
+
+import static com.example.compiledcircuits.client.ManagerState.*;
+import static com.example.compiledcircuits.client.ManagerModel.*;
+import static com.example.compiledcircuits.client.ManagerLayout.*;
 
 public class NetworkManagerScreen
         extends Screen {
 
-    // -------------------------
-    // Layout
-    // -------------------------
-
-    private enum MainViewMode { NETWORKS, BROKEN }
-    private MainViewMode mainViewMode = MainViewMode.NETWORKS;
-    private Button mainViewButton;
-    private Button brokenSelectAllButton, brokenOpenNetworkButton, brokenDecompileButton;
-    private Button brokenRepairButton;
-    private Integer selectAllArmedNetworkId;
-    private List<com.example.compiledcircuits.networking.BrokenElementListS2CPacket.Entry> brokenEntries = new ArrayList<>();
-    private int brokenScroll;
-    private final Set<Integer> brokenNetworkIds = new HashSet<>();
-    private record BrokenKey(int networkId, int elementId) {}
-    private final Set<BrokenKey> selectedBrokenKeys = new LinkedHashSet<>();
-    private boolean restoreBrokenFocus = true;
-    private boolean brokenPaintSelecting;
-    private final Set<BrokenKey> brokenPaintVisited = new HashSet<>();
-    private double brokenPaintX, brokenPaintY;
-    private static final int BROKEN_ROW_HEIGHT = 36;
-
-    private static final int TOP = 55;
-    private static final int LIST_TOP = 92;
-    private static final int SEARCH_WIDTH = 190;
-    private static final int SEARCH_HEIGHT = 20;
-    private static final int SEARCH_ROW_HEIGHT = 30;
-    private static final int SEARCH_FILTER_WIDTH = 72;
-    private static final int SEARCH_GAP = 4;
-    private static final int BOTTOM_MARGIN = 40;
-
-    private static final int FOLDER_ROW_HEIGHT = 18;
-    private static final int NETWORK_ROW_HEIGHT = 31;
-
-    // Ліва панель займає приблизно 38%.
-    private int folderPanelWidth;
-
-    // -------------------------
-    // Data
-    // -------------------------
-
-    private final List<NetworkListS2CPacket.Entry> entries;
-
-    private final List<NetworkListS2CPacket.FolderEntry> folders;
-
-    private FolderNode rootFolder;
-
-
-    private final Set<Integer> selectedFolderIds = new LinkedHashSet<>();
-    private final Set<Integer> selectedNetworkIds = new LinkedHashSet<>();
-    private enum SelectionType { NONE, FOLDERS, NETWORKS }
-    private SelectionType selectionType = SelectionType.NONE;
-
-    /*
-     * Це вже "розгорнутий" список дерева,
-     * який реально зараз видно.
-     */
-    private final List<VisibleFolderRow> visibleFolderRows =
-            new ArrayList<>();
-
-    /*
-     * Мережі правої панелі.
-     */
-    private final List<NetworkListS2CPacket.Entry> visibleNetworks =
-            new ArrayList<>();
-
-    // -------------------------
-    // Buttons
-    // -------------------------
-
-    private Button highlightButton;
-    private Button renameButton;
-    private Button decompileButton;
-
-    private Button newFolderButton;
-    private Button renameFolderButton;
-    private Button deleteFolderButton;
+    private final ManagerState state = new ManagerState();
+    private final ManagerModel model = new ManagerModel(state);
+    private final ManagerLayout layout = new ManagerLayout();
+    private final ManagerActions actions;
+    private final Object connectionContext, levelContext;
+    private ManagerRenderer renderer;
+    private Button mainViewButton, brokenSelectAllButton, brokenOpenNetworkButton, brokenDecompileButton, brokenRepairButton;
+    private Button highlightButton, renameButton, decompileButton, newFolderButton, renameFolderButton, deleteFolderButton, searchFilterButton;
     private EditBox searchBox;
-    private Button searchFilterButton;
-    private enum SearchFilter { BOTH, NETWORKS, FOLDERS }
-    private SearchFilter searchFilter = SearchFilter.BOTH;
-    private enum SearchResultType { FOLDER, NETWORK }
-    private record SearchResult(SearchResultType type, int id, String name, String path,
-                                NetworkListS2CPacket.Entry network) { }
-    private final List<SearchResult> searchResults = new ArrayList<>();
-    private int searchScroll = 0;
-
     private Integer initialNavigateNetworkId;
-    private int selectedFolderId = 0;
-    private int folderScroll = 0;
-    private int networkScroll = 0;
+    private boolean openingChild;
 
-    public NetworkManagerScreen(
-            List<NetworkListS2CPacket.Entry> entries,
-            List<NetworkListS2CPacket.FolderEntry> folders
-    ) {
-        this(entries, folders, null);
+    public NetworkManagerScreen(List<NetworkListS2CPacket.Entry> nextEntries,
+                                List<NetworkListS2CPacket.FolderEntry> nextFolders) {
+        this(nextEntries, nextFolders, null);
     }
-
-    public NetworkManagerScreen(List<NetworkListS2CPacket.Entry> entries,
-                                List<NetworkListS2CPacket.FolderEntry> folders,
-                                Integer initialNavigateNetworkId) {
-        super(
-                Component.literal(
-                        "Network Manager"
-                )
-        );
-
+    public NetworkManagerScreen(List<NetworkListS2CPacket.Entry> nextEntries,
+                                List<NetworkListS2CPacket.FolderEntry> nextFolders, Integer initialNavigateNetworkId) {
+        super(Component.literal("Network Manager"));
         this.initialNavigateNetworkId = initialNavigateNetworkId;
-        this.entries =
-                new ArrayList<>(entries);
-
-        this.folders =
-                new ArrayList<>(folders);
-
-        buildFolderTree();
-        rebuildVisibleNetworks();
+        var mc = Minecraft.getInstance();
+        connectionContext = mc.getConnection(); levelContext = mc.level;
+        model.update(nextEntries, nextFolders);
+        actions = new ManagerActions(model, new ManagerActions.Transport() {
+            public void single(NetworkActionC2SPacket.Action action, int id, String value) {
+                ModNetworking.CHANNEL.sendToServer(new NetworkActionC2SPacket(action, id, value));
+            }
+            public void bulk(NetworkBulkActionC2SPacket.BulkAction action, Set<Integer> ids, int target) {
+                ModNetworking.CHANNEL.sendToServer(new NetworkBulkActionC2SPacket(action, ids, target));
+            }
+            public void highlight(Set<Integer> ids) { ClientHighlightSync.request(ids); }
+            public void refresh() { Minecraft.getInstance().getConnection().sendCommand("circuit gui refresh"); }
+        }, System::nanoTime, this::contextValid);
     }
-
-    public void updateData(List<NetworkListS2CPacket.Entry> entries,
-                           List<NetworkListS2CPacket.FolderEntry> folders) {
-        java.util.Set<Integer> collapsed = new java.util.HashSet<>();
-        rememberCollapsed(rootFolder, collapsed);
-        this.entries.clear();
-        this.entries.addAll(entries);
-        this.folders.clear();
-        this.folders.addAll(folders);
-        buildFolderTree();
-        for (int id : collapsed) {
-            FolderNode node = findFolderNode(id);
-            if (node != null) node.toggleExpanded();
-        }
-        if (findFolderNode(selectedFolderId) == null) {
-            selectedFolderId = 0;
-            networkScroll = 0;
-        }
-        clearSelection();
-        clearDrag();
-        rebuildVisibleFolderRows();
-        rebuildVisibleNetworks();
-        rebuildSearchResults();
+    boolean contextValid() {
+        var mc = Minecraft.getInstance();
+        return mc.getConnection() == connectionContext && mc.level == levelContext && mc.player != null;
     }
+    void closeSession() { actions.close(); }
+    void sessionTick() { actions.tick(); }
 
-    private void rememberCollapsed(FolderNode node, java.util.Set<Integer> collapsed) {
-        if (!node.isExpanded()) collapsed.add(node.getId());
-        for (FolderNode child : node.getChildren()) rememberCollapsed(child, collapsed);
+    public void updateData(List<NetworkListS2CPacket.Entry> nextEntries,
+                           List<NetworkListS2CPacket.FolderEntry> nextFolders) {
+        if (!actions.active()) return;
+        model.update(nextEntries, nextFolders);
+        actions.refreshed();
+        layout.clamp(model, state);
+        updateButtonsSafe();
     }
 
     // =========================================================
@@ -175,16 +80,15 @@ public class NetworkManagerScreen
 
     @Override
     protected void init() {
+        openingChild = false;
         stopBrokenPaint();
         clearDrag();
 
-        folderPanelWidth =
-                Math.max(
-                        140,
-                        (int) (this.width * 0.38F)
-                );
+        layout.resize(width, height);
+        renderer = new ManagerRenderer(model, state, layout, font);
 
-        String searchText = searchBox == null ? "" : searchBox.getValue();
+        String searchText = state.searchText;
+        boolean restoreSearchFocus = state.searchFocused;
         mainViewButton = addRenderableWidget(Button.builder(Component.literal(getMainViewButtonText()),
                 button -> toggleMainView()).bounds(8, 30, 72, 20).build());
         int searchWidth = Math.max(40, Math.min(SEARCH_WIDTH, width - 96 - SEARCH_FILTER_WIDTH));
@@ -196,12 +100,14 @@ public class NetworkManagerScreen
         searchBox.setMaxLength(64);
         searchBox.setValue(searchText);
         searchBox.setResponder(value -> {
-            searchScroll = 0;
+            state.searchText = value;
+            state.searchScroll = 0;
             clearDrag();
             rebuildSearchResults();
             updateButtonsSafe();
         });
         addRenderableWidget(searchBox);
+        if (restoreSearchFocus) { setInitialFocus(searchBox); searchBox.setFocused(true); }
         searchFilterButton = addRenderableWidget(Button.builder(
                         Component.literal(getSearchFilterLabel()), button -> cycleSearchFilter())
                 .bounds(searchX + searchWidth + SEARCH_GAP, 30, SEARCH_FILTER_WIDTH, SEARCH_HEIGHT)
@@ -218,7 +124,7 @@ public class NetworkManagerScreen
         brokenDecompileButton = addRenderableWidget(Button.builder(Component.literal("Decompile Network"),
                 button -> decompileSelectedBrokenNetworks()).bounds(12 + actionWidth, buttonY, actionWidth, 20).build());
 
-        int x = folderPanelWidth + 4;
+        int x = layout.folderPanelWidth + 4;
         int networkButtonWidth = (this.width - x - 16) / 3;
 
         highlightButton =
@@ -257,7 +163,6 @@ public class NetworkManagerScreen
 
         x += networkButtonWidth + 4;
 
-
         decompileButton =
                 addRenderableWidget(
                         Button.builder(
@@ -278,7 +183,7 @@ public class NetworkManagerScreen
                 this.height - 28;
 
         int available =
-                folderPanelWidth - 16;
+                layout.folderPanelWidth - 16;
 
         int folderButtonWidth =
                 (available - 8) / 3;
@@ -368,197 +273,36 @@ public class NetworkManagerScreen
     // =========================================================
 
     private void createFolder() {
-
-        Minecraft.getInstance()
-                .setScreen(
-                        new NetworkTextEditScreen(
-                                this,
-                                "Create Folder",
-                                "Folder name:",
-                                "",
-                                value ->
-                                        ModNetworking.CHANNEL.sendToServer(
-                                                new NetworkActionC2SPacket(
-                                                        NetworkActionC2SPacket.Action.CREATE_FOLDER,
-                                                        selectedFolderId,
-                                                        value
-                                                )
-                                        )
-                        )
-                );
+        openEdit("Create Folder", "Folder name:", "", NetworkActionC2SPacket.Action.CREATE_FOLDER, state.selectedFolderId);
     }
 
     private void renameFolder() {
-        if (selectedFolderIds.size() != 1) return;
-        int id = selectedFolderIds.iterator().next();
-        FolderNode folder = findFolderNode(id);
-        if (folder == null) return;
-        Minecraft.getInstance().setScreen(new NetworkTextEditScreen(this,
-                "Rename Folder", "Folder name:", folder.getName(),
-                value -> ModNetworking.CHANNEL.sendToServer(new NetworkActionC2SPacket(
-                        NetworkActionC2SPacket.Action.RENAME_FOLDER, id, value))));
+        if (state.selectedFolderIds.size() != 1) return;
+        int id = state.selectedFolderIds.iterator().next(); var folder = model.folder(id);
+        if (folder != null) openEdit("Rename Folder", "Folder name:", folder.getName(), NetworkActionC2SPacket.Action.RENAME_FOLDER, id);
     }
 
     private void deleteFolder() {
-        sendBulk(NetworkBulkActionC2SPacket.BulkAction.DELETE_FOLDERS, selectedFolderIds, 0);
+        sendBulk(NetworkBulkActionC2SPacket.BulkAction.DELETE_FOLDERS, state.selectedFolderIds, 0);
     }
 
-    private void buildFolderTree() {
+    private void rebuildVisibleNetworks() { model.rebuildVisibleNetworks(); updateButtonsSafe(); clampScrolls(); }
 
-        rootFolder =
-                new FolderNode(
-                        0,
-                        "/",
-                        -1
-                );
+    private int getVisibleFolderRowCount() { return layout.folders().count(); }
 
-        java.util.Map<Integer, FolderNode> map =
-                new java.util.HashMap<>();
+    private int getVisibleNetworkRowCount() { return layout.networks().count(); }
 
-        map.put(
-                0,
-                rootFolder
-        );
-
-        /*
-         * Спочатку створюємо nodes.
-         */
-        for (NetworkListS2CPacket.FolderEntry folder
-                : folders) {
-
-            map.put(
-                    folder.id(),
-                    new FolderNode(
-                            folder.id(),
-                            folder.name(),
-                            folder.parentId()
-                    )
-            );
-        }
-
-        /*
-         * Потім зв'язуємо parent → child.
-         */
-        for (NetworkListS2CPacket.FolderEntry folder
-                : folders) {
-
-            FolderNode node =
-                    map.get(
-                            folder.id()
-                    );
-
-            FolderNode parent =
-                    map.get(
-                            folder.parentId()
-                    );
-
-            if (parent == null) {
-                parent = rootFolder;
-            }
-
-            parent.addChild(node);
-        }
-
-        rebuildVisibleFolderRows();
-    }
-
-    private void rebuildVisibleFolderRows() {
-
-        visibleFolderRows.clear();
-
-        /*
-         * Root завжди показуємо.
-         */
-        addVisibleFolder(
-                rootFolder,
-                0
-        );
-        if (this.height > 0) clampScrolls();
-    }
-
-    private void addVisibleFolder(
-            FolderNode node,
-            int depth
-    ) {
-
-        visibleFolderRows.add(
-                new VisibleFolderRow(
-                        node,
-                        depth
-                )
-        );
-
-        if (!node.isExpanded()) {
-            return;
-        }
-
-        for (FolderNode child
-                : node.getChildren()) {
-
-            addVisibleFolder(
-                    child,
-                    depth + 1
-            );
-        }
-    }
-
-    private void rebuildVisibleNetworks() {
-
-        visibleNetworks.clear();
-
-        for (NetworkListS2CPacket.Entry entry : entries) {
-
-            if (entry.folderId()
-                    == selectedFolderId) {
-
-                visibleNetworks.add(
-                        entry
-                );
-            }
-
-        }
-
-        visibleNetworks.sort(
-                Comparator.comparingInt(
-                        NetworkListS2CPacket.Entry::id
-                )
-        );
-
-        updateButtonsSafe();
-        if (this.height > 0) clampScrolls();
-    }
-
-    private int getVisibleFolderRowCount() {
-        return Math.max(1, (this.height - BOTTOM_MARGIN - LIST_TOP) / FOLDER_ROW_HEIGHT);
-    }
-
-    private int getVisibleNetworkRowCount() {
-        return Math.max(1, (this.height - BOTTOM_MARGIN - LIST_TOP) / NETWORK_ROW_HEIGHT);
-    }
-
-    private int getMaxFolderScroll() {
-        return Math.max(0, visibleFolderRows.size() - getVisibleFolderRowCount());
-    }
-
-    private int getMaxNetworkScroll() {
-        return Math.max(0, visibleNetworks.size() - getVisibleNetworkRowCount());
-    }
-
-    private void clampScrolls() {
-        folderScroll = Math.max(0, Math.min(folderScroll, getMaxFolderScroll()));
-        networkScroll = Math.max(0, Math.min(networkScroll, getMaxNetworkScroll()));
-        clampSearchScroll();
-    }
+    private void clampScrolls() { layout.clamp(model, state); }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        if (mainViewMode == MainViewMode.BROKEN) {
-            if (mouseX >= 10 && mouseX <= width - 10 && mouseY >= TOP && mouseY < getBrokenBottom()) {
-                brokenScroll -= (int) Math.signum(delta);
+        if (state.mainViewMode == MainViewMode.BROKEN) {
+            if (layout.brokenWheelContains(mouseX, mouseY)) {
+                state.brokenScroll -= (int) Math.signum(delta);
                 clampBrokenScroll();
-                if (brokenPaintSelecting) {
-                    brokenPaintX = mouseX;
-                    brokenPaintY = mouseY;
+                if (state.brokenPaintSelecting) {
+                    state.brokenPaintX = mouseX;
+                    state.brokenPaintY = mouseY;
                     if (Screen.hasShiftDown()) paintBrokenTo(mouseX, mouseY);
                     else stopBrokenPaint();
                 }
@@ -567,9 +311,8 @@ public class NetworkManagerScreen
             return super.mouseScrolled(mouseX, mouseY, delta);
         }
         if (isSearchMode()) {
-            if (mouseX >= 10 && mouseX <= width - 10
-                    && mouseY >= LIST_TOP && mouseY < height - BOTTOM_MARGIN) {
-                searchScroll += delta > 0 ? -1 : delta < 0 ? 1 : 0;
+            if (layout.search().contains(mouseX, mouseY)) {
+                state.searchScroll += delta > 0 ? -1 : delta < 0 ? 1 : 0;
                 clampSearchScroll();
                 return true;
             }
@@ -577,13 +320,13 @@ public class NetworkManagerScreen
         }
         if (mouseY >= LIST_TOP && mouseY < this.height - BOTTOM_MARGIN) {
             int step = delta > 0 ? -1 : delta < 0 ? 1 : 0;
-            if (mouseX >= 7 && mouseX < folderPanelWidth - 2) {
-                folderScroll += step;
+            if (layout.folders().contains(mouseX, mouseY)) {
+                state.folderScroll += step;
                 clampScrolls();
                 return true;
             }
-            if (mouseX >= folderPanelWidth + 8 && mouseX <= this.width - 8) {
-                networkScroll += step;
+            if (layout.networks().contains(mouseX, mouseY)) {
+                state.networkScroll += step;
                 clampScrolls();
                 return true;
             }
@@ -592,34 +335,15 @@ public class NetworkManagerScreen
     }
 
     // Only complete rendered rows are interactive; the bottom remainder is blank.
-    private int getFolderIndexAt(double mouseX, double mouseY) {
-        if (mouseX < 7 || mouseX >= folderPanelWidth - 2 || mouseY < LIST_TOP) return -1;
-        int row = (int) ((mouseY - LIST_TOP) / FOLDER_ROW_HEIGHT);
-        if (row >= getVisibleFolderRowCount()
-                || LIST_TOP + (row + 1) * FOLDER_ROW_HEIGHT > height - BOTTOM_MARGIN) return -1;
-        int index = folderScroll + row;
-        return index < visibleFolderRows.size() ? index : -1;
-    }
+    private int getFolderIndexAt(double x, double y) { return layout.folders().index(x, y, state.folderScroll, model.visibleFolderRows.size()); }
 
     // =========================================================
     // MOUSE
     // =========================================================
 
-    private void clearSelection() {
-        selectedFolderIds.clear();
-        selectedNetworkIds.clear();
-        selectionType = SelectionType.NONE;
-        updateButtonsSafe();
-    }
+    private void clearSelection() { state.clearSelection(); updateButtonsSafe(); }
 
-    private void selectItem(SelectionType type, int id, boolean additive) {
-        if (type == SelectionType.FOLDERS && id == 0) return;
-        if (selectionType != type || !additive) clearSelection();
-        Set<Integer> selected = type == SelectionType.FOLDERS ? selectedFolderIds : selectedNetworkIds;
-        if (!additive || !selected.remove(id)) selected.add(id);
-        selectionType = selected.isEmpty() ? SelectionType.NONE : type;
-        updateButtonsSafe();
-    }
+    private void selectItem(SelectionType type, int id, boolean additive) { state.selectItem(type, id, additive); updateButtonsSafe(); }
 
     private void selectFolderItem(int id, boolean additive) {
         selectItem(SelectionType.FOLDERS, id, additive);
@@ -629,19 +353,14 @@ public class NetworkManagerScreen
         selectItem(SelectionType.NETWORKS, id, additive);
     }
 
-    private NetworkListS2CPacket.Entry getVisibleNetworkAt(double mouseX, double mouseY) {
-        if (mouseX < folderPanelWidth + 8 || mouseX > width - 8 || mouseY < LIST_TOP) return null;
-        int row = (int) ((mouseY - LIST_TOP) / NETWORK_ROW_HEIGHT);
-        int index = networkScroll + row;
-        if (row >= getVisibleNetworkRowCount()
-                || LIST_TOP + (row + 1) * NETWORK_ROW_HEIGHT > height - BOTTOM_MARGIN
-                || index >= visibleNetworks.size()) return null;
-        return visibleNetworks.get(index);
+    private NetworkListS2CPacket.Entry getVisibleNetworkAt(double x, double y) {
+        int index = layout.networks().index(x, y, state.networkScroll, model.visibleNetworks.size());
+        return index < 0 ? null : model.visibleNetworks.get(index);
     }
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        if (mainViewMode == MainViewMode.BROKEN) {
+        if (state.mainViewMode == MainViewMode.BROKEN) {
             if (button == 0 && isInsideBrokenList(mouseX, mouseY)) {
                 var entry = getBrokenEntryAt(mouseX, mouseY);
                 stopBrokenPaint();
@@ -649,10 +368,10 @@ public class NetworkManagerScreen
                     if (Screen.hasShiftDown()) toggleBrokenSelection(entry);
                     else selectOnlyBroken(entry);
                     if (Screen.hasShiftDown()) {
-                        brokenPaintSelecting = true;
-                        brokenPaintVisited.add(getBrokenKey(entry));
-                        brokenPaintX = mouseX;
-                        brokenPaintY = mouseY;
+                        state.brokenPaintSelecting = true;
+                        state.brokenPaintVisited.add(getBrokenKey(entry));
+                        state.brokenPaintX = mouseX;
+                        state.brokenPaintY = mouseY;
                     }
                 } else if (!Screen.hasShiftDown()) clearBrokenSelection();
                 return true;
@@ -670,8 +389,7 @@ public class NetworkManagerScreen
                 return true;
             }
             // Hidden folder/network rows must never receive search-mode clicks.
-            if (mouseX >= 10 && mouseX <= width - 10
-                    && mouseY >= LIST_TOP && mouseY < height - BOTTOM_MARGIN) {
+            if (layout.search().contains(mouseX, mouseY)) {
                 if (!shift) clearSelection();
                 return true;
             }
@@ -679,16 +397,16 @@ public class NetworkManagerScreen
         }
         int folderIndex = getFolderIndexAt(mouseX, mouseY);
         if (folderIndex >= 0) {
-            VisibleFolderRow row = visibleFolderRows.get(folderIndex);
+            VisibleFolderRow row = model.visibleFolderRows.get(folderIndex);
             FolderNode folder = row.node();
             int arrowX = 12 + row.depth() * 14;
             if (mouseX >= arrowX && mouseX <= arrowX + 12 && !folder.getChildren().isEmpty()) {
-                folder.toggleExpanded();
-                rebuildVisibleFolderRows();
+                model.toggleFolder(folder.getId());
+                clampScrolls();
                 return true;
             }
-            selectedFolderId = folder.getId();
-            networkScroll = 0;
+            state.selectedFolderId = folder.getId();
+            state.networkScroll = 0;
             if (folder.getId() == 0) {
                 clearSelection();
             } else {
@@ -703,121 +421,86 @@ public class NetworkManagerScreen
             return true;
         }
         if (mouseY >= LIST_TOP && mouseY < height - BOTTOM_MARGIN
-                && ((mouseX >= 7 && mouseX < folderPanelWidth - 2)
-                || (mouseX >= folderPanelWidth + 8 && mouseX <= width - 8))) {
+                && ((layout.folders().contains(mouseX, mouseY))
+                || (layout.networks().contains(mouseX, mouseY)))) {
             if (!shift) clearSelection();
             return true;
         }
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
-    private enum DragType { NONE, NETWORK, FOLDER }
-    private DragType dragType = DragType.NONE;
-    private int dragId = -1;
-    private double dragStartX;
-    private double dragStartY;
-    private boolean dragging;
-    private boolean shiftPaintSelecting;
-    private SelectionType paintSelectionType = SelectionType.NONE;
-    private final Set<Integer> paintVisitedIds = new HashSet<>();
-    private int paintStartId = -1;
-    private double paintLastX;
-    private double paintLastY;
-    private boolean paintDragging;
-
     private void beginItemPress(SelectionType type, int id, boolean shift, double x, double y) {
-        dragStartX = x;
-        dragStartY = y;
+        state.dragStartX = x;
+        state.dragStartY = y;
         if (shift) {
             selectItem(type, id, true);
-            shiftPaintSelecting = true;
-            paintSelectionType = type;
-            paintStartId = id;
-            paintLastX = x;
-            paintLastY = y;
+            state.shiftPaintSelecting = true;
+            state.paintSelectionType = type;
+            state.paintStartId = id;
+            state.paintLastX = x;
+            state.paintLastY = y;
         } else {
-            Set<Integer> selected = type == SelectionType.FOLDERS ? selectedFolderIds : selectedNetworkIds;
+            Set<Integer> selected = type == SelectionType.FOLDERS ? state.selectedFolderIds : state.selectedNetworkIds;
             // Preserve a group until release distinguishes an ordinary click from a move.
             if (!selected.contains(id)) selectItem(type, id, false);
-            dragType = type == SelectionType.FOLDERS ? DragType.FOLDER : DragType.NETWORK;
-            dragId = id;
+            state.dragType = type == SelectionType.FOLDERS ? DragType.FOLDER : DragType.NETWORK;
+            state.dragId = id;
         }
     }
 
-    private boolean searchPaintSelecting;
-    private SelectionType searchPaintSelectionType = SelectionType.NONE;
-    private final Set<Integer> searchPaintVisitedIds = new HashSet<>();
-    private double searchPaintLastX;
-    private double searchPaintLastY;
-
     private void beginSearchPaintSelection(SearchResult result, double x, double y) {
-        searchPaintSelecting = true;
-        searchPaintSelectionType = result.type() == SearchResultType.NETWORK
+        state.searchPaintSelecting = true;
+        state.searchPaintSelectionType = result.type() == SearchResultType.NETWORK
                 ? SelectionType.NETWORKS : SelectionType.FOLDERS;
-        searchPaintVisitedIds.clear();
+        state.searchPaintVisitedIds.clear();
         activateSearchResult(result, true);
-        searchPaintVisitedIds.add(result.id());
-        searchPaintLastX = x;
-        searchPaintLastY = y;
+        state.searchPaintVisitedIds.add(result.id());
+        state.searchPaintLastX = x;
+        state.searchPaintLastY = y;
     }
 
     private void addSearchResultToPaintSelection(SearchResult result) {
-        if (!searchPaintSelecting || result == null) return;
+        if (!state.searchPaintSelecting || result == null) return;
         SelectionType type = result.type() == SearchResultType.NETWORK
                 ? SelectionType.NETWORKS : SelectionType.FOLDERS;
         // IDs are separate namespaces: ignore the other type before marking an ID visited.
-        if (type != searchPaintSelectionType || (type == SelectionType.FOLDERS && result.id() == 0)
-                || !searchPaintVisitedIds.add(result.id())) return;
-        if (selectionType != type) clearSelection();
-        selectionType = type;
-        if (type == SelectionType.NETWORKS) selectedNetworkIds.add(result.id());
-        else selectedFolderIds.add(result.id());
+        if (type != state.searchPaintSelectionType || (type == SelectionType.FOLDERS && result.id() == 0)
+                || !state.searchPaintVisitedIds.add(result.id())) return;
+        state.addPaint(type, result.id());
         updateButtonsSafe();
     }
 
     private void paintSearchTo(double x, double y, boolean shift) {
         if (shift && isSearchMode()) {
             // Sample the travelled segment so fast movement does not skip complete rows.
-            int steps = Math.max(1, (int) Math.ceil(Math.max(Math.abs(x - searchPaintLastX),
-                    Math.abs(y - searchPaintLastY)) / 8.0D));
+            int steps = Math.max(1, (int) Math.ceil(Math.max(Math.abs(x - state.searchPaintLastX),
+                    Math.abs(y - state.searchPaintLastY)) / 8.0D));
             for (int i = 1; i <= steps; i++) {
                 double fraction = (double) i / steps;
                 addSearchResultToPaintSelection(getSearchResultAt(
-                        searchPaintLastX + (x - searchPaintLastX) * fraction,
-                        searchPaintLastY + (y - searchPaintLastY) * fraction));
+                        state.searchPaintLastX + (x - state.searchPaintLastX) * fraction,
+                        state.searchPaintLastY + (y - state.searchPaintLastY) * fraction));
             }
         }
-        searchPaintLastX = x;
-        searchPaintLastY = y;
+        state.searchPaintLastX = x;
+        state.searchPaintLastY = y;
     }
 
-    private void clearDrag() {
-        searchPaintSelecting = false;
-        searchPaintSelectionType = SelectionType.NONE;
-        searchPaintVisitedIds.clear();
-        dragType = DragType.NONE;
-        dragId = -1;
-        dragging = false;
-        shiftPaintSelecting = false;
-        paintSelectionType = SelectionType.NONE;
-        paintVisitedIds.clear();
-        paintStartId = -1;
-        paintDragging = false;
-    }
+    private void clearDrag() { state.clearDrag(); }
 
     private void addToPaintSelection(int id) {
-        if (paintSelectionType == SelectionType.NONE
-                || (paintSelectionType == SelectionType.FOLDERS && id == 0)
-                || !paintVisitedIds.add(id)) return;
-        if (selectionType != paintSelectionType) clearSelection();
-        selectionType = paintSelectionType;
-        if (selectionType == SelectionType.FOLDERS) selectedFolderIds.add(id);
-        else selectedNetworkIds.add(id);
+        if (state.paintSelectionType == SelectionType.NONE
+                || (state.paintSelectionType == SelectionType.FOLDERS && id == 0)
+                || !state.paintVisitedIds.add(id)) return;
+        if (state.selectionType != state.paintSelectionType) clearSelection();
+        state.selectionType = state.paintSelectionType;
+        if (state.selectionType == SelectionType.FOLDERS) state.selectedFolderIds.add(id);
+        else state.selectedNetworkIds.add(id);
         updateButtonsSafe();
     }
 
     private void paintAt(double x, double y) {
-        if (paintSelectionType == SelectionType.FOLDERS) {
+        if (state.paintSelectionType == SelectionType.FOLDERS) {
             FolderNode folder = getFolderAt(x, y);
             if (folder != null) addToPaintSelection(folder.getId());
         } else {
@@ -827,80 +510,80 @@ public class NetworkManagerScreen
     }
 
     private void paintTo(double x, double y) {
-        double dx = x - dragStartX;
-        double dy = y - dragStartY;
-        if (!paintDragging && dx * dx + dy * dy <= 16.0D) return;
-        paintDragging = true;
+        double dx = x - state.dragStartX;
+        double dy = y - state.dragStartY;
+        if (!state.paintDragging && dx * dx + dy * dy <= 16.0D) return;
+        state.paintDragging = true;
         // A Shift-click toggles; once it becomes a drag, every traversed row is added.
-        addToPaintSelection(paintStartId);
-        int steps = Math.max(1, (int) Math.ceil(Math.max(Math.abs(x - paintLastX),
-                Math.abs(y - paintLastY)) / 8.0D));
+        addToPaintSelection(state.paintStartId);
+        int steps = Math.max(1, (int) Math.ceil(Math.max(Math.abs(x - state.paintLastX),
+                Math.abs(y - state.paintLastY)) / 8.0D));
         for (int i = 1; i <= steps; i++) {
             double fraction = (double) i / steps;
-            paintAt(paintLastX + (x - paintLastX) * fraction, paintLastY + (y - paintLastY) * fraction);
+            paintAt(state.paintLastX + (x - state.paintLastX) * fraction, state.paintLastY + (y - state.paintLastY) * fraction);
         }
-        paintLastX = x;
-        paintLastY = y;
+        state.paintLastX = x;
+        state.paintLastY = y;
     }
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
-        if (mainViewMode == MainViewMode.BROKEN) {
-            if (button == 0 && brokenPaintSelecting) {
+        if (state.mainViewMode == MainViewMode.BROKEN) {
+            if (button == 0 && state.brokenPaintSelecting) {
                 if (Screen.hasShiftDown()) paintBrokenTo(mouseX, mouseY);
                 else stopBrokenPaint();
                 return true;
             }
             return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
         }
-        if (button == 0 && searchPaintSelecting) {
+        if (button == 0 && state.searchPaintSelecting) {
             paintSearchTo(mouseX, mouseY, Screen.hasShiftDown());
             return true;
         }
-        if (button == 0 && shiftPaintSelecting) {
+        if (button == 0 && state.shiftPaintSelecting) {
             if (Screen.hasShiftDown()) paintTo(mouseX, mouseY);
             else {
-                paintLastX = mouseX;
-                paintLastY = mouseY;
+                state.paintLastX = mouseX;
+                state.paintLastY = mouseY;
             }
             return true;
         }
-        if (button == 0 && dragType != DragType.NONE) {
+        if (button == 0 && state.dragType != DragType.NONE) {
             if (Screen.hasShiftDown()) return true;
-            double dx = mouseX - dragStartX;
-            double dy = mouseY - dragStartY;
-            if (dx * dx + dy * dy > 16.0D) dragging = true;
-            if (dragging) return true;
+            double dx = mouseX - state.dragStartX;
+            double dy = mouseY - state.dragStartY;
+            if (dx * dx + dy * dy > 16.0D) state.dragging = true;
+            if (state.dragging) return true;
         }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
     }
 
     private FolderNode getFolderAt(double mouseX, double mouseY) {
         int index = getFolderIndexAt(mouseX, mouseY);
-        return index < 0 ? null : visibleFolderRows.get(index).node();
+        return index < 0 ? null : model.visibleFolderRows.get(index).node();
     }
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
         if (button == 0) stopBrokenPaint();
-        if (mainViewMode == MainViewMode.BROKEN) return super.mouseReleased(mouseX, mouseY, button);
-        if (button == 0 && (searchPaintSelecting || shiftPaintSelecting)) {
+        if (state.mainViewMode == MainViewMode.BROKEN) return super.mouseReleased(mouseX, mouseY, button);
+        if (button == 0 && (state.searchPaintSelecting || state.shiftPaintSelecting)) {
             clearDrag();
             return true;
         }
-        if (button == 0 && dragType != DragType.NONE) {
-            if (dragging) {
+        if (button == 0 && state.dragType != DragType.NONE) {
+            if (state.dragging) {
                 FolderNode target = getFolderAt(mouseX, mouseY);
                 if (target != null && !Screen.hasShiftDown()) {
-                    sendBulk(dragType == DragType.NETWORK
+                    sendBulk(state.dragType == DragType.NETWORK
                                     ? NetworkBulkActionC2SPacket.BulkAction.MOVE_NETWORKS
                                     : NetworkBulkActionC2SPacket.BulkAction.MOVE_FOLDERS,
-                            dragType == DragType.NETWORK ? selectedNetworkIds : selectedFolderIds,
+                            state.dragType == DragType.NETWORK ? state.selectedNetworkIds : state.selectedFolderIds,
                             target.getId());
                 }
             } else {
-                selectItem(dragType == DragType.NETWORK ? SelectionType.NETWORKS : SelectionType.FOLDERS,
-                        dragId, false);
+                selectItem(state.dragType == DragType.NETWORK ? SelectionType.NETWORKS : SelectionType.FOLDERS,
+                        state.dragId, false);
             }
             clearDrag();
             return true;
@@ -919,22 +602,11 @@ public class NetworkManagerScreen
         }
     }
 
-    private void expandPathToFolder(int folderId) {
-        Set<Integer> visited = new HashSet<>();
-        int current = folderId;
-        rootFolder.setExpanded(true);
-        while (current != 0 && visited.add(current) && visited.size() <= 1024) {
-            FolderNode folder = findFolderNode(current);
-            if (folder == null) break;
-            folder.setExpanded(true);
-            current = folder.getParentId();
-        }
-        rebuildVisibleFolderRows();
-    }
+    private void expandPathToFolder(int id) { model.expandPathToFolder(id); clampScrolls(); }
 
     private int findVisibleFolderRowIndex(int folderId) {
-        for (int i = 0; i < visibleFolderRows.size(); i++) {
-            if (visibleFolderRows.get(i).node().getId() == folderId) return i;
+        for (int i = 0; i < model.visibleFolderRows.size(); i++) {
+            if (model.visibleFolderRows.get(i).node().getId() == folderId) return i;
         }
         return -1;
     }
@@ -943,14 +615,14 @@ public class NetworkManagerScreen
         int index = findVisibleFolderRowIndex(folderId);
         if (index < 0) return;
         int count = getVisibleFolderRowCount();
-        if (index < folderScroll) folderScroll = index;
-        else if (index >= folderScroll + count) folderScroll = index - count + 1;
+        if (index < state.folderScroll) state.folderScroll = index;
+        else if (index >= state.folderScroll + count) state.folderScroll = index - count + 1;
         clampScrolls();
     }
 
     private int findVisibleNetworkIndex(int networkId) {
-        for (int i = 0; i < visibleNetworks.size(); i++) {
-            if (visibleNetworks.get(i).id() == networkId) return i;
+        for (int i = 0; i < model.visibleNetworks.size(); i++) {
+            if (model.visibleNetworks.get(i).id() == networkId) return i;
         }
         return -1;
     }
@@ -959,8 +631,8 @@ public class NetworkManagerScreen
         int index = findVisibleNetworkIndex(networkId);
         if (index < 0) return;
         int count = getVisibleNetworkRowCount();
-        if (index < networkScroll) networkScroll = index;
-        else if (index >= networkScroll + count) networkScroll = index - count + 1;
+        if (index < state.networkScroll) state.networkScroll = index;
+        else if (index >= state.networkScroll + count) state.networkScroll = index - count + 1;
         clampScrolls();
     }
 
@@ -971,15 +643,15 @@ public class NetworkManagerScreen
             searchBox.setFocused(false);
             if (getFocused() == searchBox) setFocused(null);
         }
-        searchResults.clear();
-        searchScroll = 0;
+        model.rebuildSearchResults();
+        state.searchScroll = 0;
     }
 
     private void navigateToFolder(int folderId) {
         if (folderId == 0 || findFolderNode(folderId) == null) return;
         expandPathToFolder(folderId);
-        selectedFolderId = folderId;
-        networkScroll = 0;
+        state.selectedFolderId = folderId;
+        state.networkScroll = 0;
         rebuildVisibleNetworks();
         selectFolderItem(folderId, false);
         exitSearchMode();
@@ -988,13 +660,12 @@ public class NetworkManagerScreen
     }
 
     private void navigateToNetwork(int networkId) {
-        NetworkListS2CPacket.Entry target = entries.stream()
-                .filter(entry -> entry.id() == networkId).findFirst().orElse(null);
+        NetworkListS2CPacket.Entry target = model.network(networkId);
         if (target == null || findFolderNode(target.folderId()) == null) return;
         // Expand root as well, including when navigating to a root network.
         expandPathToFolder(target.folderId());
-        selectedFolderId = target.folderId();
-        networkScroll = 0;
+        state.selectedFolderId = target.folderId();
+        state.networkScroll = 0;
         rebuildVisibleNetworks();
         selectNetworkItem(networkId, false);
         exitSearchMode();
@@ -1003,18 +674,7 @@ public class NetworkManagerScreen
         updateButtonsSafe();
     }
 
-    private FolderNode findFolderNode(int id) {
-        return findFolderRecursive(rootFolder, id);
-    }
-
-    private FolderNode findFolderRecursive(FolderNode node, int id) {
-        if (node.getId() == id) return node;
-        for (FolderNode child : node.getChildren()) {
-            FolderNode found = findFolderRecursive(child, id);
-            if (found != null) return found;
-        }
-        return null;
-    }
+    private FolderNode findFolderNode(int id) { return model.folder(id); }
 
     // =========================================================
     // ACTION BUTTONS
@@ -1028,175 +688,73 @@ public class NetworkManagerScreen
     }
 
     private void updateButtons() {
-        boolean networks = selectionType == SelectionType.NETWORKS && !selectedNetworkIds.isEmpty();
-        boolean folders = selectionType == SelectionType.FOLDERS && !selectedFolderIds.isEmpty();
+        boolean networks = state.selectionType == SelectionType.NETWORKS && !state.selectedNetworkIds.isEmpty();
+        boolean foldersSelected = state.selectionType == SelectionType.FOLDERS && !state.selectedFolderIds.isEmpty();
         newFolderButton.active = !isSearchMode();
         highlightButton.active = networks;
-        renameButton.active = networks && selectedNetworkIds.size() == 1;
+        renameButton.active = networks && state.selectedNetworkIds.size() == 1;
         decompileButton.active = networks;
-        renameFolderButton.active = folders && selectedFolderIds.size() == 1;
-        deleteFolderButton.active = folders;
+        renameFolderButton.active = foldersSelected && state.selectedFolderIds.size() == 1;
+        deleteFolderButton.active = foldersSelected;
     }
 
-    private void highlightSelected() {
-        ClientHighlightSync.request(selectedNetworkIds);
-    }
+    private void highlightSelected() { actions.highlight(state.selectedNetworkIds); }
 
     private void renameSelected() {
-        if (selectedNetworkIds.size() != 1) return;
-        int id = selectedNetworkIds.iterator().next();
-        NetworkListS2CPacket.Entry network = entries.stream().filter(entry -> entry.id() == id)
-                .findFirst().orElse(null);
-        if (network == null) return;
-        Minecraft.getInstance().setScreen(new NetworkTextEditScreen(this,
-                "Rename Network", "Network name:", network.name(),
-                value -> ModNetworking.CHANNEL.sendToServer(new NetworkActionC2SPacket(
-                        NetworkActionC2SPacket.Action.RENAME_NETWORK, id, value))));
+        if (state.selectedNetworkIds.size() != 1) return;
+        int id = state.selectedNetworkIds.iterator().next(); var network = model.network(id);
+        if (network != null) openEdit("Rename Network", "Network name:", network.name(), NetworkActionC2SPacket.Action.RENAME_NETWORK, id);
+    }
+    private void openEdit(String title, String label, String initial, NetworkActionC2SPacket.Action action, int id) {
+        var edit = actions.edit(action, id);
+        openingChild = true;
+        Minecraft.getInstance().setScreen(new NetworkTextEditScreen(this, title, label, initial,
+                value -> {
+                    if (!edit.save(value) && Minecraft.getInstance().player != null)
+                        Minecraft.getInstance().player.displayClientMessage(Component.literal("Action unavailable: target changed, request pending, or session closed."), false);
+                }, com.example.compiledcircuits.network.OperationLimits.NAME, edit::cancel));
     }
 
     private void decompileSelected() {
-        sendBulk(NetworkBulkActionC2SPacket.BulkAction.DECOMPILE_NETWORKS, selectedNetworkIds, 0);
+        sendBulk(NetworkBulkActionC2SPacket.BulkAction.DECOMPILE_NETWORKS, state.selectedNetworkIds, 0);
     }
 
-    private void sendBulk(NetworkBulkActionC2SPacket.BulkAction action, Collection<Integer> ids, int targetId) {
-        if (!ids.isEmpty()) {
-            ModNetworking.CHANNEL.sendToServer(new NetworkBulkActionC2SPacket(action, ids, targetId));
-        }
+    private void sendBulk(NetworkBulkActionC2SPacket.BulkAction action, Collection<Integer> ids, int targetId) { actions.bulk(action, ids, targetId); }
+
+    @Override
+    public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        renderBackground(graphics);
+        renderer.render(graphics, mouseX, mouseY, partialTick);
+        super.render(graphics, mouseX, mouseY, partialTick);
+    }
+    @Override
+    public void tick() {
+        if (!contextValid()) { actions.close(); Minecraft.getInstance().setScreen(null); return; }
+        sessionTick();
+        if (searchBox != null) state.searchFocused = searchBox.isFocused();
+        super.tick();
     }
 
     // =========================================================
     // RENDER
     // =========================================================
 
-    @Override
-    public void render(
-            GuiGraphics graphics,
-            int mouseX,
-            int mouseY,
-            float partialTick
-    ) {
-
-        renderBackground(graphics);
-
-        /*
-         * Main window background.
-         */
-        graphics.fill(
-                5,
-                TOP,
-                this.width - 5,
-                this.height - 35,
-                0xAA111111
-        );
-
-        if (mainViewMode == MainViewMode.BROKEN) {
-            graphics.drawCenteredString(font, "Compiled Circuits - Network Manager", width / 2, 12, 0xFFFFFF);
-            renderBrokenMode(graphics, mouseX, mouseY);
-            super.render(graphics, mouseX, mouseY, partialTick);
-            return;
-        }
-
-        if (!isSearchMode()) {
-            /*
-             * Left folder background.
-             */
-            graphics.fill(
-                    7,
-                    TOP + 2,
-                    folderPanelWidth - 2,
-                    this.height - 37,
-                    0xAA181818
-            );
-
-            /*
-             * Separator.
-             */
-            graphics.fill(
-                    folderPanelWidth,
-                    TOP + 2,
-                    folderPanelWidth + 1,
-                    this.height - 37,
-                    0xFF555555
-            );
-        }
-
-        graphics.drawCenteredString(
-                this.font,
-                "Compiled Circuits - Network Manager",
-                this.width / 2,
-                12,
-                0xFFFFFF
-        );
-
-        if (isSearchMode()) {
-            graphics.drawString(font, "Search Results (last output)", 12, TOP + 2, 0xAAAAAA);
-            renderSearchResults(graphics, mouseX, mouseY);
-        } else {
-            graphics.drawString(
-                    this.font,
-                    "Folders (" + selectedFolderIds.size() + " selected)",
-                    12,
-                    TOP + 2,
-                    0xAAAAAA
-            );
-
-            graphics.drawString(
-                    this.font,
-                    "Networks (last output)",
-                    folderPanelWidth + 10,
-                    TOP + 2,
-                    0xAAAAAA
-            );
-
-            graphics.drawString(font, "Folder: " + getFolderPath(selectedFolderId),
-                    folderPanelWidth + 10, TOP + 13, 0x999999, false);
-            graphics.drawString(font, "Selected networks: " + selectedNetworkIds.size(),
-                    folderPanelWidth + 10, TOP + 24, 0x999999, false);
-
-            renderFolderTree(
-                    graphics,
-                    mouseX,
-                    mouseY
-            );
-
-            renderNetworks(
-                    graphics,
-                    mouseX,
-                    mouseY
-            );
-        }
-
-        if (dragging) {
-            graphics.drawString(font, dragType == DragType.NETWORK
-                    ? "Move " + selectedNetworkIds.size() + " networks"
-                    : "Move " + selectedFolderIds.size() + " folders",
-                    mouseX + 10, mouseY + 10, 0xFFFFAA);
-        }
-
-        super.render(
-                graphics,
-                mouseX,
-                mouseY,
-                partialTick
-        );
-    }
-
     private String getMainViewButtonText() {
-        return mainViewMode == MainViewMode.NETWORKS ? "Networks" : "Broken";
+        return state.mainViewMode == MainViewMode.NETWORKS ? "Networks" : "Broken";
     }
 
     private void toggleMainView() {
         exitSearchMode();
         setFocused(null);
-        mainViewMode = mainViewMode == MainViewMode.NETWORKS ? MainViewMode.BROKEN : MainViewMode.NETWORKS;
-        brokenScroll = 0;
+        state.mainViewMode = state.mainViewMode == MainViewMode.NETWORKS ? MainViewMode.BROKEN : MainViewMode.NETWORKS;
+        state.brokenScroll = 0;
         clearBrokenSelection();
         mainViewButton.setMessage(Component.literal(getMainViewButtonText()));
         updateWidgetVisibility();
     }
 
     private void updateWidgetVisibility() {
-        boolean networkMode = mainViewMode == MainViewMode.NETWORKS;
+        boolean networkMode = state.mainViewMode == MainViewMode.NETWORKS;
         searchBox.visible = networkMode;
         searchBox.active = networkMode;
         for (Button button : List.of(searchFilterButton, highlightButton, renameButton, decompileButton,
@@ -1209,19 +767,18 @@ public class NetworkManagerScreen
     }
 
     public void onBrokenListUpdated() {
-        brokenEntries = new ArrayList<>(ClientBrokenElementList.getEntries());
-        if (restoreBrokenFocus) {
-            restoreBrokenFocus = false;
-            for (var entry : brokenEntries) {
+        model.updateBroken(ClientBrokenElementList.getEntries());
+        if (state.restoreBrokenFocus) {
+            state.restoreBrokenFocus = false;
+            for (var entry : model.brokenEntries) {
                 if (ClientBrokenElements.getFocused().contains(
                         new ClientBrokenElements.FocusedBrokenPos(entry.dimension(), entry.pos()))) {
-                    selectedBrokenKeys.add(getBrokenKey(entry));
+                    state.selectedBrokenKeys.add(getBrokenKey(entry));
                 }
             }
         }
-        rebuildBrokenNetworkIds();
         clampBrokenScroll();
-        validateBrokenSelection();
+        syncBrokenFocusToRenderer();
     }
 
     public void onDamageUnconfirmed() {
@@ -1230,61 +787,31 @@ public class NetworkManagerScreen
         stopBrokenPaint();
     }
 
-    private void rebuildBrokenNetworkIds() {
-        brokenNetworkIds.clear();
-        for (var entry : brokenEntries) brokenNetworkIds.add(entry.networkId());
-    }
-
-    private boolean isNetworkBroken(int networkId) { return brokenNetworkIds.contains(networkId); }
-
-    private BrokenKey getBrokenKey(com.example.compiledcircuits.networking.BrokenElementListS2CPacket.Entry entry) {
-        return new BrokenKey(entry.networkId(), entry.elementId());
-    }
+    private BrokenKey getBrokenKey(com.example.compiledcircuits.networking.BrokenElementListS2CPacket.Entry entry) { return ManagerModel.key(entry); }
 
     private boolean isBrokenSelected(com.example.compiledcircuits.networking.BrokenElementListS2CPacket.Entry entry) {
-        return selectedBrokenKeys.contains(getBrokenKey(entry));
-    }
-
-    private void validateBrokenSelection() {
-        Set<BrokenKey> valid = new HashSet<>();
-        for (var entry : brokenEntries) valid.add(getBrokenKey(entry));
-        if (selectedBrokenKeys.retainAll(valid)) selectAllArmedNetworkId = null;
-        stopBrokenPaint();
-        syncBrokenFocusToRenderer();
+        return state.selectedBrokenKeys.contains(getBrokenKey(entry));
     }
 
     private void selectOnlyBroken(com.example.compiledcircuits.networking.BrokenElementListS2CPacket.Entry entry) {
-        selectAllArmedNetworkId = null;
-        selectedBrokenKeys.clear();
-        selectedBrokenKeys.add(getBrokenKey(entry));
+        state.selectAllArmedNetworkId = null;
+        state.selectedBrokenKeys.clear();
+        state.selectedBrokenKeys.add(getBrokenKey(entry));
         syncBrokenFocusToRenderer();
     }
 
     private void toggleBrokenSelection(com.example.compiledcircuits.networking.BrokenElementListS2CPacket.Entry entry) {
-        selectAllArmedNetworkId = null;
+        state.selectAllArmedNetworkId = null;
         BrokenKey key = getBrokenKey(entry);
-        if (!selectedBrokenKeys.add(key)) selectedBrokenKeys.remove(key);
+        if (!state.selectedBrokenKeys.add(key)) state.selectedBrokenKeys.remove(key);
         syncBrokenFocusToRenderer();
     }
 
-    private Set<Integer> getSelectedBrokenNetworkIds() {
-        Set<Integer> result = new LinkedHashSet<>();
-        for (var entry : brokenEntries) if (isBrokenSelected(entry)) result.add(entry.networkId());
-        return result;
-    }
+    private Set<Integer> getSelectedBrokenNetworkIds() { return model.selectedBrokenNetworks(); }
 
     private void selectAllBrokenSmart() {
-        if (!ClientDamageSync.ready() || brokenEntries.isEmpty()) return;
-        stopBrokenPaint();
-        Set<Integer> networks = getSelectedBrokenNetworkIds();
-        Integer onlyNetwork = networks.size() == 1 ? networks.iterator().next() : null;
-        boolean selectWholeList = onlyNetwork == null || java.util.Objects.equals(selectAllArmedNetworkId, onlyNetwork);
-        selectedBrokenKeys.clear();
-        for (var entry : brokenEntries) {
-            if (selectWholeList || entry.networkId() == onlyNetwork) selectedBrokenKeys.add(getBrokenKey(entry));
-        }
-        selectAllArmedNetworkId = selectWholeList ? null : onlyNetwork;
-        syncBrokenFocusToRenderer();
+        if (!ClientDamageSync.ready()) return;
+        model.selectAllBroken(); syncBrokenFocusToRenderer();
     }
 
     private void openSelectedBrokenNetwork() {
@@ -1292,8 +819,8 @@ public class NetworkManagerScreen
         Set<Integer> networks = getSelectedBrokenNetworkIds();
         if (networks.size() != 1) return;
         stopBrokenPaint();
-        selectAllArmedNetworkId = null;
-        mainViewMode = MainViewMode.NETWORKS;
+        state.selectAllArmedNetworkId = null;
+        state.mainViewMode = MainViewMode.NETWORKS;
         mainViewButton.setMessage(Component.literal(getMainViewButtonText()));
         updateWidgetVisibility();
         navigateToNetwork(networks.iterator().next());
@@ -1303,28 +830,26 @@ public class NetworkManagerScreen
         if (!ClientDamageSync.ready()) return;
         Set<Integer> networks = getSelectedBrokenNetworkIds();
         if (networks.isEmpty()) return;
-        ModNetworking.CHANNEL.sendToServer(new NetworkBulkActionC2SPacket(
-                NetworkBulkActionC2SPacket.BulkAction.REPAIR_NETWORKS, networks, 0));
+        sendBulk(NetworkBulkActionC2SPacket.BulkAction.REPAIR_NETWORKS, networks, 0);
     }
 
     private void decompileSelectedBrokenNetworks() {
         if (!ClientDamageSync.ready()) return;
         Set<Integer> networks = getSelectedBrokenNetworkIds();
         if (networks.isEmpty()) return;
-        ModNetworking.CHANNEL.sendToServer(new NetworkBulkActionC2SPacket(
-                NetworkBulkActionC2SPacket.BulkAction.DECOMPILE_NETWORKS, networks, 0));
+        sendBulk(NetworkBulkActionC2SPacket.BulkAction.DECOMPILE_NETWORKS, networks, 0);
     }
 
     private void updateBrokenActionButtons() {
         if (brokenSelectAllButton == null || brokenOpenNetworkButton == null || brokenDecompileButton == null || brokenRepairButton == null) return;
-        boolean visible = mainViewMode == MainViewMode.BROKEN;
+        boolean visible = state.mainViewMode == MainViewMode.BROKEN;
         brokenSelectAllButton.visible = visible;
         brokenOpenNetworkButton.visible = visible;
         brokenDecompileButton.visible = visible;
         brokenRepairButton.visible = visible;
         int count = getSelectedBrokenNetworkIds().size();
         boolean ready = visible && ClientDamageSync.ready();
-        brokenSelectAllButton.active = ready && !brokenEntries.isEmpty();
+        brokenSelectAllButton.active = ready && !model.brokenEntries.isEmpty();
         brokenOpenNetworkButton.active = ready && count == 1;
         brokenDecompileButton.active = ready && count > 0;
         brokenRepairButton.active = ready && count > 0;
@@ -1332,14 +857,11 @@ public class NetworkManagerScreen
         brokenDecompileButton.setMessage(Component.literal(count <= 1 ? "Decompile Network" : "Decompile Networks (" + count + ")"));
     }
 
-    private void stopBrokenPaint() {
-        brokenPaintSelecting = false;
-        brokenPaintVisited.clear();
-    }
+    private void stopBrokenPaint() { state.stopBrokenPaint(); }
 
     private void clearBrokenSelection() {
-        selectAllArmedNetworkId = null;
-        selectedBrokenKeys.clear();
+        state.selectAllArmedNetworkId = null;
+        state.selectedBrokenKeys.clear();
         stopBrokenPaint();
         ClientBrokenElements.clearFocused();
         updateBrokenActionButtons();
@@ -1347,7 +869,7 @@ public class NetworkManagerScreen
 
     private void syncBrokenFocusToRenderer() {
         Set<ClientBrokenElements.FocusedBrokenPos> focused = new LinkedHashSet<>();
-        for (var entry : brokenEntries) {
+        for (var entry : model.brokenEntries) {
             if (isBrokenSelected(entry)) focused.add(new ClientBrokenElements.FocusedBrokenPos(entry.dimension(), entry.pos()));
         }
         ClientBrokenElements.setFocused(focused);
@@ -1355,112 +877,38 @@ public class NetworkManagerScreen
     }
 
     private void paintBrokenTo(double mouseX, double mouseY) {
-        selectAllArmedNetworkId = null;
+        state.selectAllArmedNetworkId = null;
         // Sample the movement so fast drags do not skip rows between mouse events.
-        int steps = Math.max(1, (int) Math.ceil(Math.max(Math.abs(mouseX - brokenPaintX), Math.abs(mouseY - brokenPaintY)) / 4));
+        int steps = Math.max(1, (int) Math.ceil(Math.max(Math.abs(mouseX - state.brokenPaintX), Math.abs(mouseY - state.brokenPaintY)) / 4));
         for (int i = 1; i <= steps; i++) {
             double t = (double) i / steps;
-            var entry = getBrokenEntryAt(brokenPaintX + (mouseX - brokenPaintX) * t,
-                    brokenPaintY + (mouseY - brokenPaintY) * t);
-            if (entry != null && brokenPaintVisited.add(getBrokenKey(entry))) selectedBrokenKeys.add(getBrokenKey(entry));
+            var entry = getBrokenEntryAt(state.brokenPaintX + (mouseX - state.brokenPaintX) * t,
+                    state.brokenPaintY + (mouseY - state.brokenPaintY) * t);
+            if (entry != null && state.brokenPaintVisited.add(getBrokenKey(entry))) state.selectedBrokenKeys.add(getBrokenKey(entry));
         }
-        brokenPaintX = mouseX;
-        brokenPaintY = mouseY;
+        state.brokenPaintX = mouseX;
+        state.brokenPaintY = mouseY;
         syncBrokenFocusToRenderer();
     }
 
-    private boolean isInsideBrokenList(double mouseX, double mouseY) {
-        return mouseX >= 10 && mouseX < width - 10 && mouseY >= LIST_TOP && mouseY < getBrokenBottom();
+    private boolean isInsideBrokenList(double x, double y) { return layout.broken().contains(x, y); }
+
+    private com.example.compiledcircuits.networking.BrokenElementListS2CPacket.Entry getBrokenEntryAt(double x, double y) {
+        int index = ClientDamageSync.ready() ? layout.broken().index(x, y, state.brokenScroll, model.brokenEntries.size()) : -1;
+        return index < 0 ? null : model.brokenEntries.get(index);
     }
 
-    private com.example.compiledcircuits.networking.BrokenElementListS2CPacket.Entry getBrokenEntryAt(double mouseX, double mouseY) {
-        if (!ClientDamageSync.ready() || !isInsideBrokenList(mouseX, mouseY)) return null;
-        int row = (int) ((mouseY - LIST_TOP) / BROKEN_ROW_HEIGHT);
-        // Only complete rows are rendered; the trailing space is not clickable.
-        if (row >= getVisibleBrokenRowCount()) return null;
-        int index = brokenScroll + row;
-        return index >= 0 && index < brokenEntries.size() ? brokenEntries.get(index) : null;
-    }
-
-    private String getDimensionDisplayName(String dimension) {
-        return switch (dimension) {
-            case "minecraft:overworld" -> "Overworld";
-            case "minecraft:the_nether" -> "Nether";
-            case "minecraft:the_end" -> "End";
-            default -> dimension;
-        };
-    }
-
-    private int getBrokenBottom() { return height - 64; }
-
-    private int getVisibleBrokenRowCount() {
-        return Math.max(0, (getBrokenBottom() - LIST_TOP) / BROKEN_ROW_HEIGHT);
-    }
+    private int getVisibleBrokenRowCount() { return layout.broken().count(); }
 
     private void clampBrokenScroll() {
-        brokenScroll = Math.max(0, Math.min(brokenScroll,
-                Math.max(0, brokenEntries.size() - getVisibleBrokenRowCount())));
+        state.brokenScroll = Math.max(0, Math.min(state.brokenScroll,
+                Math.max(0, model.brokenEntries.size() - getVisibleBrokenRowCount())));
     }
 
-    private void renderBrokenMode(GuiGraphics graphics, int mouseX, int mouseY) {
-        graphics.drawString(font, "Broken Elements", 13, TOP + 6, 0xFFFFFF, false);
-        graphics.drawString(font, "Total: " + brokenEntries.size() + " | Selected: " + selectedBrokenKeys.size(), 13, TOP + 18, 0xAAAAAA, false);
-        if(!ClientDamageSync.ready()){
-            graphics.drawString(font,"Damage data: "+ClientDamageSync.status()+" — synchronizing",13,LIST_TOP+3,0xFFBB55,false);return;
-        }
-        if (brokenEntries.isEmpty()) {
-            graphics.drawString(font, "All compiled networks are healthy.", 13, LIST_TOP + 3, 0xAAAAAA, false);
-            return;
-        }
-        graphics.enableScissor(10, LIST_TOP, Math.max(10, width - 10), Math.max(LIST_TOP, getBrokenBottom()));
-        try {
-            for (int row = 0; row < getVisibleBrokenRowCount() && brokenScroll + row < brokenEntries.size(); row++) {
-                var entry = brokenEntries.get(brokenScroll + row);
-                int y = LIST_TOP + row * BROKEN_ROW_HEIGHT;
-                boolean selected = isBrokenSelected(entry);
-                boolean hovered = entry.equals(getBrokenEntryAt(mouseX, mouseY));
-                if (selected || hovered) {
-                    graphics.fill(10, y, width - 10, y + BROKEN_ROW_HEIGHT - 1,
-                            selected ? 0x663399FF : 0x33222222);
-                }
-                String line1 = entry.networkName() + " (#" + entry.networkId() + ") | Element #"
-                        + entry.elementId() + " | " + getBlockDisplayName(entry.blockId());
-                var pos = entry.pos();
-                String line2 = ClientDamageSync.folderPath(entry.networkId());
-                String line3 = "X: " + pos.getX() + " Y: " + pos.getY() + " Z: " + pos.getZ()
-                        + " | " + entry.type().name() + " | " + getDimensionDisplayName(entry.dimension());
-                graphics.drawString(font, line1, 13, y + 3, 0xFFFFFF, false);
-                graphics.drawString(font, line2, 13, y + 14, 0xAAAAAA, false);
-                graphics.drawString(font, line3, 13, y + 25, 0x999999, false);
-            }
-        } finally {
-            graphics.disableScissor();
-        }
-        var hoveredEntry = getBrokenEntryAt(mouseX, mouseY);
-        if (hoveredEntry != null) {
-            graphics.renderTooltip(font, List.of(
-                    Component.literal("Expected: " + getBlockDisplayName(hoveredEntry.blockId())),
-                    Component.literal("Actual: " + getBlockDisplayName(hoveredEntry.actualBlockId()))
-            ), java.util.Optional.empty(), mouseX, mouseY);
-        }
-    }
-
-    private String getBlockDisplayName(String blockId) {
-        StringBuilder result = new StringBuilder();
-        for (String part : blockId.substring(blockId.indexOf(':') + 1).split("_")) {
-            if (part.isEmpty()) continue;
-            if (result.length() > 0) result.append(' ');
-            result.append(Character.toUpperCase(part.charAt(0))).append(part.substring(1));
-        }
-        return result.toString();
-    }
-
-    private boolean isSearchMode() {
-        return searchBox != null && !searchBox.getValue().trim().isEmpty();
-    }
+    private boolean isSearchMode() { return model.isSearchMode(); }
 
     private String getSearchFilterLabel() {
-        return switch (searchFilter) {
+        return switch (state.searchFilter) {
             case BOTH -> "Both";
             case NETWORKS -> "Networks";
             case FOLDERS -> "Folders";
@@ -1468,7 +916,7 @@ public class NetworkManagerScreen
     }
 
     private void cycleSearchFilter() {
-        searchFilter = switch (searchFilter) {
+        state.searchFilter = switch (state.searchFilter) {
             case BOTH -> SearchFilter.NETWORKS;
             case NETWORKS -> SearchFilter.FOLDERS;
             case FOLDERS -> SearchFilter.BOTH;
@@ -1476,306 +924,27 @@ public class NetworkManagerScreen
         if (searchFilterButton != null) {
             searchFilterButton.setMessage(Component.literal(getSearchFilterLabel()));
         }
-        searchScroll = 0;
+        state.searchScroll = 0;
         clearDrag();
         clearSelection();
         rebuildSearchResults();
     }
 
-    private void rebuildSearchResults() {
-        searchResults.clear();
-        if (!isSearchMode()) {
-            searchScroll = 0;
-            return;
-        }
-        String query = searchBox.getValue().trim().toLowerCase(java.util.Locale.ROOT);
-        if (searchFilter != SearchFilter.FOLDERS) {
-            for (NetworkListS2CPacket.Entry entry : entries) {
-                if (entry.name().toLowerCase(java.util.Locale.ROOT).contains(query)) {
-                    searchResults.add(new SearchResult(SearchResultType.NETWORK, entry.id(), entry.name(),
-                            getFolderPath(entry.folderId()), entry));
-                }
-            }
-        }
-        if (searchFilter != SearchFilter.NETWORKS) {
-            for (NetworkListS2CPacket.FolderEntry folder : folders) {
-                if (folder.id() != 0 && folder.name().toLowerCase(java.util.Locale.ROOT).contains(query)) {
-                    searchResults.add(new SearchResult(SearchResultType.FOLDER, folder.id(), folder.name(),
-                            getFolderPath(folder.id()), null));
-                }
-            }
-        }
-        // Folders first, then case-insensitive name and ID within each type.
-        searchResults.sort(Comparator.comparing(SearchResult::type)
-                .thenComparing(SearchResult::name, String.CASE_INSENSITIVE_ORDER)
-                .thenComparingInt(SearchResult::id));
-        clampSearchScroll();
-    }
+    private void rebuildSearchResults() { model.rebuildSearchResults(); clampSearchScroll(); }
 
-    private int getVisibleSearchRowCount() {
-        return Math.max(1, (height - BOTTOM_MARGIN - LIST_TOP) / SEARCH_ROW_HEIGHT);
-    }
+    private int getVisibleSearchRowCount() { return layout.search().count(); }
 
     private int getMaxSearchScroll() {
-        return Math.max(0, searchResults.size() - getVisibleSearchRowCount());
+        return Math.max(0, model.searchResults.size() - getVisibleSearchRowCount());
     }
 
     private void clampSearchScroll() {
-        searchScroll = Math.max(0, Math.min(searchScroll, getMaxSearchScroll()));
+        state.searchScroll = Math.max(0, Math.min(state.searchScroll, getMaxSearchScroll()));
     }
 
     private SearchResult getSearchResultAt(double x, double y) {
-        if (!isSearchMode()) return null;
-        if (x < 10 || x > width - 10 || y < LIST_TOP) return null;
-        int row = (int) ((y - LIST_TOP) / SEARCH_ROW_HEIGHT);
-        int index = searchScroll + row;
-        if (row >= getVisibleSearchRowCount()
-                || LIST_TOP + (row + 1) * SEARCH_ROW_HEIGHT > height - BOTTOM_MARGIN
-                || index >= searchResults.size()) return null;
-        return searchResults.get(index);
-    }
-
-    private String getFolderPath(int folderId) {
-        List<String> parts = new ArrayList<>();
-        Set<Integer> visited = new HashSet<>();
-        int current = folderId;
-        while (current != 0 && visited.add(current) && visited.size() <= 1024) {
-            int id = current;
-            NetworkListS2CPacket.FolderEntry folder = folders.stream()
-                    .filter(entry -> entry.id() == id).findFirst().orElse(null);
-            if (folder == null) break;
-            parts.add(folder.name());
-            current = folder.parentId();
-        }
-        java.util.Collections.reverse(parts);
-        return parts.isEmpty() ? "/" : String.join("/", parts);
-    }
-
-    private void renderSearchResults(GuiGraphics graphics, int mouseX, int mouseY) {
-        int left = 10;
-        int right = width - 10;
-        int rowY = LIST_TOP;
-        if (searchResults.isEmpty()) {
-            graphics.drawString(font, "No results.", left + 5, rowY + 6, 0x888888, false);
-            return;
-        }
-        int end = Math.min(searchResults.size(), searchScroll + getVisibleSearchRowCount());
-        for (int i = searchScroll; i < end; i++) {
-            if (rowY + SEARCH_ROW_HEIGHT > height - BOTTOM_MARGIN) break;
-            SearchResult result = searchResults.get(i);
-            boolean network = result.type() == SearchResultType.NETWORK;
-            boolean selected = network ? selectedNetworkIds.contains(result.id())
-                    : selectedFolderIds.contains(result.id());
-            boolean hovered = mouseX >= left && mouseX <= right
-                    && mouseY >= rowY && mouseY < rowY + SEARCH_ROW_HEIGHT;
-            if (selected || hovered) {
-                graphics.fill(left, rowY, right, rowY + SEARCH_ROW_HEIGHT - 2,
-                        selected ? 0x663399FF : 0x33222222);
-            }
-            String typeLabel = network ? "[NETWORK]" : "[FOLDER]";
-            graphics.drawString(font, typeLabel, left + 6, rowY + 4,
-                    network ? 0xAAAAFF : 0xFFCC66, false);
-            int nameX = left + 12 + font.width(typeLabel);
-            String title = network ? "#" + result.id() + "  " + result.name() : result.name();
-            int nameRight = network ? right - 46 : right - 6;
-            graphics.drawString(font, font.plainSubstrByWidth(title, Math.max(0, nameRight - nameX)),
-                    nameX, rowY + 4, 0xFFFFFF, false);
-            if (network && result.network() != null) {
-                boolean powered = result.network().powered() && !isNetworkBroken(result.network().id());
-                graphics.drawString(font, powered ? "[ON]" : "[OFF]", right - 38,
-                        rowY + 4, powered ? 0x55FF55 : 0xFF5555, false);
-            }
-            graphics.drawString(font, font.plainSubstrByWidth(result.path(),
-                    Math.max(0, right - left - 12)), left + 6, rowY + 17, 0x999999, false);
-            rowY += SEARCH_ROW_HEIGHT;
-        }
-    }
-
-    private void renderFolderTree(
-            GuiGraphics graphics,
-            int mouseX,
-            int mouseY
-    ) {
-
-        int rowY = LIST_TOP;
-
-        int endIndex = Math.min(visibleFolderRows.size(), folderScroll + getVisibleFolderRowCount());
-        for (int i = folderScroll; i < endIndex; i++) {
-            VisibleFolderRow row = visibleFolderRows.get(i);
-
-            if (rowY + FOLDER_ROW_HEIGHT
-                    > this.height - BOTTOM_MARGIN) {
-                break;
-            }
-
-            FolderNode folder =
-                    row.node();
-
-            boolean selected =
-                    selectedFolderIds.contains(folder.getId());
-
-            boolean hovered =
-                    mouseX >= 7
-                            && mouseX < folderPanelWidth - 2
-                            && mouseY >= rowY
-                            && mouseY < rowY + FOLDER_ROW_HEIGHT;
-
-            if (selected) {
-
-                graphics.fill(
-                        8,
-                        rowY,
-                        folderPanelWidth - 3,
-                        rowY + FOLDER_ROW_HEIGHT,
-                        0x884477AA
-                );
-
-            } else if (hovered) {
-
-                graphics.fill(
-                        8,
-                        rowY,
-                        folderPanelWidth - 3,
-                        rowY + FOLDER_ROW_HEIGHT,
-                        0x44333333
-                );
-            }
-
-            int x =
-                    12 + row.depth() * 14;
-
-            String arrow;
-
-            if (folder.getChildren().isEmpty()) {
-
-                arrow = " ";
-
-            } else if (folder.isExpanded()) {
-
-                arrow = "▼";
-
-            } else {
-
-                arrow = "▶";
-            }
-
-            graphics.drawString(
-                    this.font,
-                    arrow,
-                    x,
-                    rowY + 5,
-                    0xAAAAAA,
-                    false
-            );
-
-            graphics.drawString(
-                    this.font,
-                    folder.getName(),
-                    x + 13,
-                    rowY + 5,
-                    selected
-                            ? 0xFFFFFF
-                            : 0xCCCCCC,
-                    false
-            );
-
-            rowY +=
-                    FOLDER_ROW_HEIGHT;
-        }
-    }
-
-    private void renderNetworks(
-            GuiGraphics graphics,
-            int mouseX,
-            int mouseY
-    ) {
-
-        int left =
-                folderPanelWidth + 8;
-
-        int rowY = LIST_TOP;
-
-        if (visibleNetworks.isEmpty()) {
-
-            graphics.drawString(
-                    this.font,
-                    "No networks in this folder.",
-                    left + 5,
-                    rowY + 6,
-                    0x888888,
-                    false
-            );
-
-            return;
-        }
-
-        int endIndex = Math.min(visibleNetworks.size(), networkScroll + getVisibleNetworkRowCount());
-        for (int i = networkScroll; i < endIndex; i++) {
-            NetworkListS2CPacket.Entry entry = visibleNetworks.get(i);
-
-            if (rowY + NETWORK_ROW_HEIGHT
-                    > this.height - BOTTOM_MARGIN) {
-                break;
-            }
-
-            boolean selected =
-                    selectedNetworkIds.contains(entry.id());
-
-            boolean hovered =
-                    mouseX >= left
-                            && mouseX <= this.width - 8
-                            && mouseY >= rowY
-                            && mouseY < rowY
-                            + NETWORK_ROW_HEIGHT;
-
-            if (selected) {
-
-                graphics.fill(
-                        left,
-                        rowY,
-                        this.width - 8,
-                        rowY + NETWORK_ROW_HEIGHT - 2,
-                        0x663399FF
-                );
-
-            } else if (hovered) {
-
-                graphics.fill(
-                        left,
-                        rowY,
-                        this.width - 8,
-                        rowY + NETWORK_ROW_HEIGHT - 2,
-                        0x33222222
-                );
-            }
-
-            int stateColor =
-                    entry.powered() && !isNetworkBroken(entry.id())
-                            ? 0x55FF55
-                            : 0xFF5555;
-
-            String state =
-                    entry.powered() && !isNetworkBroken(entry.id())
-                            ? "ON"
-                            : "OFF";
-
-            String status = "[" + state + "]";
-            boolean broken = isNetworkBroken(entry.id());
-            int right = width - 12;
-            int stateX = right - font.width(status);
-            graphics.drawString(font, font.plainSubstrByWidth("#" + entry.id() + "  " + entry.name(),
-                    Math.max(0, stateX - left - 12)), left + 6, rowY + 4, 0xFFFFFF, false);
-            graphics.drawString(font, status, stateX, rowY + 4, stateColor, false);
-            int brokenX = right - font.width("BROKEN");
-            String counts = "W:" + entry.wires() + "  I:" + entry.inputs() + "  O:" + entry.outputs();
-            graphics.drawString(font, font.plainSubstrByWidth(counts,
-                    Math.max(0, (broken ? brokenX - 6 : right) - left - 6)),
-                    left + 6, rowY + 17, 0x999999, false);
-            if (broken) graphics.drawString(font, "BROKEN", brokenX, rowY + 17, 0xFF5555, false);
-
-            rowY +=
-                    NETWORK_ROW_HEIGHT;
-        }
+        int index = isSearchMode() ? layout.search().index(x, y, state.searchScroll, model.searchResults.size()) : -1;
+        return index < 0 ? null : model.searchResults.get(index);
     }
 
     // =========================================================
@@ -1784,7 +953,8 @@ public class NetworkManagerScreen
 
     @Override
     public void onClose() {
-        selectAllArmedNetworkId = null;
+        actions.close();
+        state.selectAllArmedNetworkId = null;
         ClientBrokenElements.onGuiClosed();
         super.onClose();
     }
@@ -1793,6 +963,8 @@ public class NetworkManagerScreen
     public void removed() {
         stopBrokenPaint();
         clearDrag();
+        if (searchBox != null) state.searchFocused = searchBox.isFocused();
+        if (!openingChild) actions.close();
         super.removed();
     }
 
@@ -1801,9 +973,4 @@ public class NetworkManagerScreen
         return false;
     }
 
-    private record VisibleFolderRow(
-            FolderNode node,
-            int depth
-    ) {
-    }
 }

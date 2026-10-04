@@ -106,7 +106,7 @@ public class NetworkListS2CPacket {
         context.enqueueWork(() ->
                 DistExecutor.unsafeRunWhenOn(
                         Dist.CLIENT,
-                        () -> () -> ClientPacketHandlers.openNetworkManager(packet)
+                        () -> () -> ClientPacketHandlers.openNetworkManager(packet, context.getNetworkManager())
                 )
         );
 

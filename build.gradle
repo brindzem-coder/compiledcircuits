@@ -339,3 +339,14 @@ tasks.register('membershipCapacityScaleCheck', JavaExec) {
     doFirst { workingDir.mkdirs() }
     javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
 }
+
+// Stage 10 pure manager model, selection, action and geometry checks.
+tasks.register('managerCheck', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.example.compiledcircuits.client.ManagerComponentsTest'
+    workingDir = layout.buildDirectory.dir('manager-check').get().asFile
+    doFirst { workingDir.mkdirs() }
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
+}
+tasks.named('visualChecks').configure { dependsOn 'managerCheck' }

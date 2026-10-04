@@ -18,7 +18,7 @@ public final class ClientDamageSync {
         connection=c;level=mc.level;player=mc.player;dimension=mc.level==null?"":mc.level.dimension().location().toString();
         context=c==null||level==null||player==null?null:UUID.randomUUID();replica.reset(context);projection=null;presented=0;lastRequest=-1000;
         paths=Map.of();ClientBrokenElements.clear();ClientBrokenElements.confirmed(false);ClientBrokenElementList.clear();
-        if(mc.screen instanceof NetworkManagerScreen screen)screen.onBrokenListUpdated();
+        ClientPacketHandlers.managerDamageUpdated();
     }
     public static void accept(DamagePartS2CPacket packet,net.minecraft.network.Connection sender){
         refresh();if(sender!=connection||context==null)return;
@@ -36,7 +36,7 @@ public final class ClientDamageSync {
                 var completed=projection;projection=null;presented=completed.batch;paths=completed.paths();
                 ClientBrokenElementList.publish(completed.entries());ClientBrokenElements.publish(dimension,completed.positions());
                 ClientBrokenElements.retainFocused(p->completed.contains(p.dimension(),p.pos()));
-                if(Minecraft.getInstance().screen instanceof NetworkManagerScreen screen)screen.onBrokenListUpdated();
+                ClientPacketHandlers.managerDamageUpdated();
                 ModNetworking.CHANNEL.sendToServer(new DamageAckC2SPacket(context,completed.batch,completed.revision));break;
             }
         }
@@ -48,7 +48,7 @@ public final class ClientDamageSync {
     public static String status(){return projection!=null?"SYNCING":replica.status().name();}
     private static void unconfirmed(){
         projection=null;ClientBrokenElements.confirmed(false);
-        if(Minecraft.getInstance().screen instanceof NetworkManagerScreen screen)screen.onDamageUnconfirmed();
+        ClientPacketHandlers.managerDamageUnconfirmed();
     }
     public static boolean ready(){return projection==null&&replica.status()==DamageReplica.Status.READY;}
     public static String folderPath(int network){return paths.getOrDefault(network,"");}
