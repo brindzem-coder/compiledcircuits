@@ -66,6 +66,44 @@ public class BasicWireBlock extends Block implements IWireConnectable {
                     10.5D, 5.5D, 10.5D
             );
 
+    // N=1, S=2, E=4, W=8, U=16, D=32. Geometry depends only on these six flags.
+    // Initialized after the shared primitives; never exposed or mutated after publication.
+    private static final VoxelShape[] SHAPES = buildShapes();
+
+    private static VoxelShape[] buildShapes() {
+        VoxelShape[] shapes = new VoxelShape[64];
+        for (int mask = 0; mask < shapes.length; mask++) {
+            VoxelShape shape = CENTER;
+
+            if ((mask & 1) != 0) {
+                shape = Shapes.joinUnoptimized(shape, NORTH_SHAPE, BooleanOp.OR);
+            }
+
+            if ((mask & 2) != 0) {
+                shape = Shapes.joinUnoptimized(shape, SOUTH_SHAPE, BooleanOp.OR);
+            }
+
+            if ((mask & 4) != 0) {
+                shape = Shapes.joinUnoptimized(shape, EAST_SHAPE, BooleanOp.OR);
+            }
+
+            if ((mask & 8) != 0) {
+                shape = Shapes.joinUnoptimized(shape, WEST_SHAPE, BooleanOp.OR);
+            }
+
+            if ((mask & 16) != 0) {
+                shape = Shapes.joinUnoptimized(shape, UP_SHAPE, BooleanOp.OR);
+            }
+
+            if ((mask & 32) != 0) {
+                shape = Shapes.joinUnoptimized(shape, DOWN_SHAPE, BooleanOp.OR);
+            }
+
+            shapes[mask] = shape;
+        }
+        return shapes;
+    }
+
     public BasicWireBlock(Properties properties) {
         super(properties);
 
@@ -171,33 +209,13 @@ public class BasicWireBlock extends Block implements IWireConnectable {
             CollisionContext context
     ) {
 
-        VoxelShape shape = CENTER;
-
-        if (state.getValue(NORTH)) {
-            shape = Shapes.joinUnoptimized(shape, NORTH_SHAPE, BooleanOp.OR);
-        }
-
-        if (state.getValue(SOUTH)) {
-            shape = Shapes.joinUnoptimized(shape, SOUTH_SHAPE, BooleanOp.OR);
-        }
-
-        if (state.getValue(EAST)) {
-            shape = Shapes.joinUnoptimized(shape, EAST_SHAPE, BooleanOp.OR);
-        }
-
-        if (state.getValue(WEST)) {
-            shape = Shapes.joinUnoptimized(shape, WEST_SHAPE, BooleanOp.OR);
-        }
-
-        if (state.getValue(UP)) {
-            shape = Shapes.joinUnoptimized(shape, UP_SHAPE, BooleanOp.OR);
-        }
-
-        if (state.getValue(DOWN)) {
-            shape = Shapes.joinUnoptimized(shape, DOWN_SHAPE, BooleanOp.OR);
-        }
-
-        return shape;
+        int mask = (state.getValue(NORTH) ? 1 : 0)
+                | (state.getValue(SOUTH) ? 2 : 0)
+                | (state.getValue(EAST) ? 4 : 0)
+                | (state.getValue(WEST) ? 8 : 0)
+                | (state.getValue(UP) ? 16 : 0)
+                | (state.getValue(DOWN) ? 32 : 0);
+        return SHAPES[mask];
     }
 
     @Override

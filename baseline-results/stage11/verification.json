@@ -1,0 +1,48 @@
+{
+  "stage": "11",
+  "baseCommit": "125e23d",
+  "verifiedDate": "2026-10-04",
+  "status": "Completed; automated verification and all four user-run manual scenarios passed",
+  "command": "gradlew.bat build visualChecks runGameTestServer -Pstage09LegacyInputs=build/stage09-legacy --offline --console=plain",
+  "result": "PASS",
+  "log": "baseline-results/stage11-verification.log",
+  "requiredGameTests": 68,
+  "newGameTests": 2,
+  "shapeVerification": {
+    "states": 64,
+    "comparison": "Empty symmetric difference using Shapes.joinIsNotEmpty with BooleanOp.NOT_SAME; independent legacy primitives/rules",
+    "sameCachedInstanceAcrossPositionAndContext": "PASS",
+    "directAndBlockStateCollisionEmpty": "PASS",
+    "singleDirectionsAndCenterAndFullShape": "PASS",
+    "neighborDirections": 6,
+    "neighborTypes": [
+      "basic_wire",
+      "input_endpoint",
+      "output_endpoint"
+    ],
+    "addRemoveAndNonConnectable": "PASS"
+  },
+  "microbenchmark": {
+    "warmupCallsPerRoute": 4096,
+    "callsPerRoute": 131072,
+    "rounds": 4,
+    "alternatingOrder": true,
+    "legacyMs": 475.358,
+    "cachedMs": 27.058,
+    "staticInitializationExcluded": true,
+    "timingPassThreshold": null,
+    "limitation": "Direct warmed calls only; Minecraft has additional caches. No FPS/TPS improvement claimed."
+  },
+  "steadyStateJoins": {
+    "value": 0,
+    "evidence": "Source inspection of getShape; not a profiler counter"
+  },
+  "manualAcceptance": {
+    "status": "PASS",
+    "scenarios": 4,
+    "instructions": "src/main/java/com/example/compiledcircuits/STAGE11_WIRE_SHAPES.md",
+    "reportedBy": "User",
+    "notes": "User reproduced all four documented scenarios and confirmed expected results."
+  },
+  "gitDiffCheck": "PASS"
+}
