@@ -2,5 +2,10 @@
   "block.compiledcircuits.basic_wire": "Basic Wire",
   "block.compiledcircuits.input_endpoint": "Input Endpoint",
   "block.compiledcircuits.output_endpoint": "Output Endpoint",
-  "item.compiledcircuits.network_selector": "Network Selector"
+  "item.compiledcircuits.network_selector": "Network Selector",
+  "block.compiledcircuits.and_gate": "AND gate body",
+  "block.compiledcircuits.or_gate": "OR gate body",
+  "block.compiledcircuits.gate_input": "Gate input",
+  "block.compiledcircuits.gate_output": "Gate output",
+  "block.compiledcircuits.not_gate": "NOT gate"
 }

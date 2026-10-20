@@ -23,6 +23,11 @@ public class ModCreativeTabEvents {
             event.accept(ModItems.INPUT_ENDPOINT);
             event.accept(ModItems.OUTPUT_ENDPOINT);
             event.accept(ModItems.NETWORK_SELECTOR);
+            event.accept(ModItems.AND_GATE);
+            event.accept(ModItems.OR_GATE);
+            event.accept(ModItems.NOT_GATE);
+            event.accept(ModItems.GATE_INPUT);
+            event.accept(ModItems.GATE_OUTPUT);
         }
     }
 

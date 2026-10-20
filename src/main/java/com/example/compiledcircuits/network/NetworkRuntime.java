@@ -78,10 +78,12 @@ public final class NetworkRuntime {
         Iterator<BlockPos> inputs;
         Iterator<BlockPos> outputs = Collections.emptyIterator();
         boolean dirtyInputs = true, inputOr, available;
+        final Map<BlockPos, Boolean> inputValues = new HashMap<>();
         final LinkedHashSet<ChunkKey> waiting = new LinkedHashSet<>();
         int waitingChecks;
         Entry(CompiledNetwork network) {
             this.network = network;
+            network.restoreLogic();
             dimension = network.getDimension();
             initial = network.getElements().iterator();
         }
@@ -282,6 +284,7 @@ public final class NetworkRuntime {
         if (!entry.dirtyInputs) return;
         if (entry.inputs == null) {
             entry.inputs = entry.network.getInputs().iterator(); entry.inputOr = false; entry.available = true;
+            entry.inputValues.clear();
         }
         if (entry.inputs.hasNext()) {
             BlockPos pos = entry.inputs.next();
@@ -289,7 +292,9 @@ public final class NetworkRuntime {
             entry.available &= loaded;
             if (loaded) {
                 RuntimeSignalReader reader = new RuntimeSignalReader(level);
-                entry.inputOr |= reader.readInput(pos) > 0;
+                boolean value = reader.readInput(pos) > 0;
+                entry.inputOr |= value;
+                if (entry.network.hasLogic()) entry.inputValues.put(pos, value);
                 entry.available &= reader.available();
                 PerformanceDiagnostics.add("runtime.inputReads", 1);
             }
@@ -297,9 +302,12 @@ public final class NetworkRuntime {
         }
         entry.dirtyInputs = false;
         int before = entry.network.getEffectiveSignal();
-        if (entry.network.isPowered() != entry.inputOr) { entry.network.setPowered(entry.inputOr); data.setDirty(); }
+        boolean logicChanged = false;
+        if (entry.network.hasLogic()) {
+            logicChanged = entry.network.evaluateLogic(entry.inputValues);
+        } else if (entry.network.isPowered() != entry.inputOr) { entry.network.setPowered(entry.inputOr); data.setDirty(); }
         entry.network.runtimeState(entry.waiting.isEmpty(), entry.available);
-        if (before != entry.network.getEffectiveSignal()) entry.outputs = entry.network.getOutputs().iterator();
+        if (logicChanged || before != entry.network.getEffectiveSignal()) entry.outputs = entry.network.getOutputs().iterator();
         if (!entry.firstReady && entry.waiting.isEmpty() && entry.available) {
             entry.firstReady = true;
             PerformanceDiagnostics.max("runtime.initializationTicksPeak", server.getTickCount() - entry.startedAt);

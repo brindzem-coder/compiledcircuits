@@ -92,19 +92,7 @@ public final class ClientNetworkSelection {
                     continue;
                 }
 
-                boolean currentAllows =
-                        currentConnectable.canWireConnect(
-                                currentState,
-                                direction
-                        );
-
-                boolean neighborAllows =
-                        neighborConnectable.canWireConnect(
-                                neighborState,
-                                direction.getOpposite()
-                        );
-
-                if (currentAllows && neighborAllows) {
+                if (com.example.compiledcircuits.block.CircuitConnections.connects(currentState, neighborState, direction)) {
                     queue.add(neighborPos.immutable());
                 }
             }

@@ -111,7 +111,6 @@ public final class ClientHoveredCircuit {
         var current = loadedState(level, from);
         var neighbor = loadedState(level, to);
         return current != null && neighbor != null
-                && current.getBlock() instanceof IWireConnectable a && neighbor.getBlock() instanceof IWireConnectable b
-                && a.canWireConnect(current, direction) && b.canWireConnect(neighbor, direction.getOpposite());
+                && com.example.compiledcircuits.block.CircuitConnections.connects(current, neighbor, direction);
     }
 }

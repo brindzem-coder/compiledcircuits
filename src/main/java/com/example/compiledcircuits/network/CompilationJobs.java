@@ -145,7 +145,7 @@ public final class CompilationJobs {
         final Set<Chunk> watched = new LinkedHashSet<>();
         final CompiledNetwork.Builder builder = new CompiledNetwork.Builder();
         Phase phase = Phase.SCANNING;
-        boolean changed, initialized, notified;
+        boolean changed, initialized, notified, hasLogic;
         int direction, frontierWork, elementId, tickWork, retained;
         int minX, maxX, minZ, maxZ;
         long tickNanos;
@@ -182,11 +182,15 @@ public final class CompilationJobs {
                     if (validation.hasNext()) {
                         var item = validation.next(); var state = item.getValue();
                         CircuitElementType type = state.getBlock() instanceof InputEndpointBlock ? CircuitElementType.INPUT
-                                : state.getBlock() instanceof OutputEndpointBlock ? CircuitElementType.OUTPUT : CircuitElementType.WIRE;
+                                : state.getBlock() instanceof OutputEndpointBlock ? CircuitElementType.OUTPUT
+                                : state.getBlock() instanceof GatePortBlock port ? (port.isInput() ? CircuitElementType.GATE_INPUT : CircuitElementType.GATE_OUTPUT)
+                                : state.getBlock() instanceof GateBodyBlock || state.getBlock() instanceof NotGateBlock ? CircuitElementType.GATE : CircuitElementType.WIRE;
                         builder.add(new CompiledCircuitElement(++elementId, item.getKey(), type, CompiledBlockStateCodec.capture(state)));
                     } else {
                         if (builder.inputsEmpty() || builder.outputsEmpty()) { fail(Code.INVALID_START, "Circuit needs an input and an output."); return; }
-                        candidate = builder.seal(name, dimension); admission = data.prepareCompilation(candidate);
+                        candidate = builder.seal(name, dimension);
+                        if (hasLogic) candidate.prepareLogic(snapshots);
+                        admission = data.prepareCompilation(candidate);
                         preparation = candidate.getElements().iterator(); phase = Phase.PREPARING;
                     }
                 }
@@ -233,6 +237,10 @@ public final class CompilationJobs {
         }
         void enqueue(BlockPos pos, BlockState state) {
             if (snapshots.containsKey(pos)) return;
+            hasLogic |= state.getBlock() instanceof GateBodyBlock || CircuitConnections.isTerminal(state);
+            if (hasLogic && snapshots.size() >= LogicProgram.MAX_ELEMENTS) {
+                fail(Code.TOO_LARGE, "Logic circuits support at most " + LogicProgram.MAX_ELEMENTS + " elements."); return;
+            }
             if (snapshots.size() >= data.capacity().networkLimit()) { fail(Code.TOO_LARGE, "Circuit exceeds configured network limit " + data.capacity().networkLimit() + "."); return; }
             if (manager.retainedElements >= MAX_TOTAL_ELEMENTS) { fail(Code.BUSY, "Server compilation memory budget is full."); return; }
             pos = pos.immutable(); snapshots.put(pos, state); frontier.addLast(new Node(pos, state));
@@ -256,11 +264,12 @@ public final class CompilationJobs {
                 return;
             }
             Direction dir = DIRECTIONS[direction++];
-            if (((IWireConnectable)current.state.getBlock()).canWireConnect(current.state, dir)) {
+            if (current.state.getBlock() instanceof GateBodyBlock
+                    || ((IWireConnectable) current.state.getBlock()).canWireConnect(current.state, dir)) {
                 BlockPos next = current.pos.relative(dir);
                 if (!level.isOutsideBuildHeight(next) && !snapshots.containsKey(next)) {
                     BlockState state = read(next); if (state == null) return;
-                    if (state.getBlock() instanceof IWireConnectable neighbor && neighbor.canWireConnect(state, dir.getOpposite())) enqueue(next, state);
+                    if (CircuitConnections.connects(current.state, state, dir)) enqueue(next, state);
                 }
             }
             if (direction == DIRECTIONS.length) current = null;

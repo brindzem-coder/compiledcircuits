@@ -1,0 +1,42 @@
+{
+  "textures": {
+    "all": "minecraft:block/quartz_block_side",
+    "particle": "minecraft:block/quartz_block_side",
+    "input": "minecraft:block/green_concrete",
+    "output": "minecraft:block/blue_concrete"
+  },
+  "elements": [
+    {
+      "from": [
+        5,
+        5,
+        5
+      ],
+      "to": [
+        11,
+        11,
+        11
+      ],
+      "faces": {
+        "north": {
+          "texture": "#output"
+        },
+        "up": {
+          "texture": "#all"
+        },
+        "down": {
+          "texture": "#all"
+        },
+        "west": {
+          "texture": "#all"
+        },
+        "south": {
+          "texture": "#input"
+        },
+        "east": {
+          "texture": "#all"
+        }
+      }
+    }
+  ]
+}

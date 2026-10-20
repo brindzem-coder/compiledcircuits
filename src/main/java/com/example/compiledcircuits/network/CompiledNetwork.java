@@ -58,6 +58,39 @@ public class CompiledNetwork {
     // Never persisted: saved input OR is not an authorization to emit power.
     private boolean runtimeReady;
     private boolean inputsAvailable;
+    private LogicProgram logic;
+    private boolean logicPrepared, logicInvalid, hasGateElements;
+    private Map<BlockPos, Boolean> outputSignals = Map.of();
+    void prepareLogic(Map<BlockPos, net.minecraft.world.level.block.state.BlockState> states) {
+        logic = LogicProgram.hasLogic(states.values()) ? LogicProgram.compile(states) : null;
+        logicPrepared = true;
+    }
+    void restoreLogic() {
+        if (logicPrepared) return;
+        logicPrepared = true;
+        if (!hasGateElements) return;
+        try {
+            Map<BlockPos, net.minecraft.world.level.block.state.BlockState> states = new java.util.HashMap<>();
+            for (var element : elements.values()) states.put(element.getPos(), element.resolveState().state().orElseThrow(
+                    () -> new IllegalArgumentException("Unresolved logic element")));
+            prepareLogic(states);
+        } catch (IllegalArgumentException invalid) {
+            logicInvalid = true;
+            org.slf4j.LoggerFactory.getLogger(CompiledNetwork.class).warn("Network {} logic unavailable: {}", id, invalid.getMessage());
+        }
+    }
+    boolean hasLogic() { return logic != null || logicInvalid; }
+    boolean evaluateLogic(Map<BlockPos, Boolean> values) {
+        Map<BlockPos, Boolean> next = logic == null ? Map.of() : logic.evaluate(values);
+        boolean changed = !next.equals(outputSignals); outputSignals = next;
+        powered = next.containsValue(true);
+        return changed;
+    }
+    public int getEffectiveSignal(BlockPos output) {
+        if (!hasLogic()) return getEffectiveSignal();
+        return runtimeReady && inputsAvailable && !logicInvalid && !isIntegrityPending() && !isDamaged()
+                && outputSignals.getOrDefault(output, false) ? 15 : 0;
+    }
     public int getEffectiveSignal() { return runtimeReady && inputsAvailable && !isIntegrityPending() && !isDamaged() && powered ? 15 : 0; }
     public String getRuntimeStatus() {
         if (isDamaged()) return "DAMAGED";
@@ -113,10 +146,14 @@ public class CompiledNetwork {
                 case "compiledcircuits:basic_wire" -> CircuitElementType.WIRE;
                 case "compiledcircuits:input_endpoint" -> CircuitElementType.INPUT;
                 case "compiledcircuits:output_endpoint" -> CircuitElementType.OUTPUT;
+                case "compiledcircuits:and_gate", "compiledcircuits:or_gate", "compiledcircuits:not_gate" -> CircuitElementType.GATE;
+                case "compiledcircuits:gate_input" -> CircuitElementType.GATE_INPUT;
+                case "compiledcircuits:gate_output" -> CircuitElementType.GATE_OUTPUT;
                 default -> element.getType();
             };
             if (element.getType() != requiredRole)
                 throw new IllegalArgumentException("Block/role mismatch for element " + element.getId());
+            hasGateElements |= isLogicRole(element.getType());
             BlockPos pos = element.getPos().immutable();
             if (elementsByPosition.putIfAbsent(pos, element) != null) throw new IllegalArgumentException("Duplicate compiled position: " + pos);
             switch (element.getType()) {
@@ -137,10 +174,12 @@ public class CompiledNetwork {
         private final Map<BlockPos, CompiledCircuitElement> positions = new java.util.HashMap<>();
         private final Set<BlockPos> wires = new HashSet<>(), inputs = new HashSet<>(), outputs = new HashSet<>();
         private boolean sealed;
+        private boolean hasGates;
         void add(CompiledCircuitElement element) {
             if (sealed || element.getId() != elements.size() + 1 || positions.containsKey(element.getPos()))
                 throw new IllegalArgumentException("Invalid staged element");
             elements.put(element.getId(), element); positions.put(element.getPos(), element);
+            hasGates |= isLogicRole(element.getType());
             switch (element.getType()) {
                 case INPUT -> inputs.add(element.getPos());
                 case OUTPUT -> outputs.add(element.getPos());
@@ -158,6 +197,7 @@ public class CompiledNetwork {
         this.id = 0; this.published = false; this.name = name;
         this.dimension = new net.minecraft.resources.ResourceLocation(dimension).toString();
         this.elements = builder.elements; this.elementsByPosition = builder.positions;
+        this.hasGateElements = builder.hasGates;
         this.wires = Collections.unmodifiableSet(builder.wires);
         this.inputs = Collections.unmodifiableSet(builder.inputs);
         this.outputs = Collections.unmodifiableSet(builder.outputs);
@@ -167,6 +207,10 @@ public class CompiledNetwork {
         Set<BlockPos> copy = new HashSet<>();
         for (BlockPos pos : positions) copy.add(pos.immutable());
         return Collections.unmodifiableSet(copy);
+    }
+
+    private static boolean isLogicRole(CircuitElementType type) {
+        return type == CircuitElementType.GATE || type == CircuitElementType.GATE_INPUT || type == CircuitElementType.GATE_OUTPUT;
     }
 
     public Collection<CompiledCircuitElement> getElements() {

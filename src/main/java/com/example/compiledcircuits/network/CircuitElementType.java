@@ -7,6 +7,8 @@ public enum CircuitElementType {
 
     // future
     GATE,
+    GATE_INPUT,
+    GATE_OUTPUT,
     CHANNEL_WIRE,
     BUNDLE_WIRE,
     OTHER

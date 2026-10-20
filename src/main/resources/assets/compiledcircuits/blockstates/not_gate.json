@@ -1,0 +1,34 @@
+{
+  "variants": {
+    "facing=north": {
+      "y": 0,
+      "x": 0,
+      "model": "compiledcircuits:block/not_gate"
+    },
+    "facing=east": {
+      "y": 90,
+      "x": 0,
+      "model": "compiledcircuits:block/not_gate"
+    },
+    "facing=down": {
+      "y": 0,
+      "x": 90,
+      "model": "compiledcircuits:block/not_gate"
+    },
+    "facing=west": {
+      "y": 270,
+      "x": 0,
+      "model": "compiledcircuits:block/not_gate"
+    },
+    "facing=up": {
+      "y": 0,
+      "x": 270,
+      "model": "compiledcircuits:block/not_gate"
+    },
+    "facing=south": {
+      "y": 180,
+      "x": 0,
+      "model": "compiledcircuits:block/not_gate"
+    }
+  }
+}

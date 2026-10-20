@@ -77,6 +77,6 @@ public class OutputEndpointBlock
             return 0;
         }
 
-        return network.getEffectiveSignal();
+        return network.getEffectiveSignal(pos);
     }
 }
