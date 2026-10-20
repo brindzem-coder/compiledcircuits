@@ -10,6 +10,17 @@ import net.minecraft.world.level.block.Block;
 public final class NetworkRepairManager {
     private NetworkRepairManager() {}
     public enum Outcome { PLACED, OCCUPIED, UNSUPPORTED, FAILED, CORRECT, UNLOADED, INVALID, PROTECTED, CHANGED }
+    /** Explicitly supported placements; arbitrary saved block IDs must not bypass repair policy. */
+    private static boolean supports(Block block) {
+        return block == ModBlocks.BASIC_WIRE.get()
+                || block == ModBlocks.INPUT_ENDPOINT.get() || block == ModBlocks.OUTPUT_ENDPOINT.get()
+                || block == ModBlocks.AND_GATE.get() || block == ModBlocks.OR_GATE.get()
+                || block == ModBlocks.NAND_GATE.get() || block == ModBlocks.NOR_GATE.get()
+                || block == ModBlocks.XOR_GATE.get() || block == ModBlocks.XNOR_GATE.get()
+                || block == ModBlocks.NOT_GATE.get()
+                || block == ModBlocks.D_LATCH.get()
+                || block == ModBlocks.GATE_INPUT.get() || block == ModBlocks.GATE_OUTPUT.get();
+    }
     /** All callers use the same authorized queued operation, including a single-element repair. */
     public static NetworkOperations.Result repairNetwork(ServerLevel level, CompiledNetwork network, ServerPlayer player) {
         if(player==null || NetworkSavedData.get(level.getServer()).getNetwork(network.getId())!=network)
@@ -26,7 +37,7 @@ public final class NetworkRepairManager {
         if(decoded.status()==CompiledBlockStateCodec.Status.UNRESOLVED)return Outcome.INVALID;
         var id=ResourceLocation.tryParse(element.getBlockId());if(id==null || !BuiltInRegistries.BLOCK.containsKey(id))return Outcome.INVALID;
         Block expected=BuiltInRegistries.BLOCK.get(id);
-        if(expected!=ModBlocks.BASIC_WIRE.get() && expected!=ModBlocks.INPUT_ENDPOINT.get() && expected!=ModBlocks.OUTPUT_ENDPOINT.get())return Outcome.UNSUPPORTED;
+        if(!supports(expected))return Outcome.UNSUPPORTED;
         if(level.isOutsideBuildHeight(pos) || !level.getWorldBorder().isWithinBounds(pos))return Outcome.INVALID;
         // Supported blocks inspect their immediate neighborhood and may issue neighbor-shape callbacks.
         // Keep the fixed radius-two neighborhood available before any placement helper can read it.

@@ -20,14 +20,18 @@ public final class CircuitConnections {
         return true;
     }
     public static boolean isTerminal(BlockState state) {
-        return state.getBlock() instanceof GatePortBlock || state.getBlock() instanceof NotGateBlock;
+        return state.getBlock() instanceof GatePortBlock || state.getBlock() instanceof NotGateBlock
+                || state.getBlock() instanceof DLatchBlock;
     }
     public static boolean sends(BlockState state, Direction side) {
         if (state.getBlock() instanceof GatePortBlock port) return !port.isInput();
-        return state.getBlock() instanceof NotGateBlock && state.getValue(EndpointBlock.FACING) == side;
+        return (state.getBlock() instanceof NotGateBlock || state.getBlock() instanceof DLatchBlock)
+                && state.getValue(EndpointBlock.FACING) == side;
     }
     public static boolean receives(BlockState state, Direction side) {
         if (state.getBlock() instanceof GatePortBlock port) return port.isInput();
+        if (state.getBlock() instanceof DLatchBlock)
+            return state.getValue(EndpointBlock.FACING).getOpposite() == side || DLatchBlock.enableSide(state) == side;
         return state.getBlock() instanceof NotGateBlock && state.getValue(EndpointBlock.FACING).getOpposite() == side;
     }
 }

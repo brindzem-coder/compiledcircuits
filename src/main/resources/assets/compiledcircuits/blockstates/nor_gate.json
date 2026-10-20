@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "compiledcircuits:block/nor_gate"
+    }
+  }
+}

@@ -10,7 +10,7 @@ import com.example.compiledcircuits.network.NetworkIntegrityManager;
 
 /** Structural blocks join only bodies of the same kind and gate ports. */
 public class GateBodyBlock extends Block implements IWireConnectable {
-    public enum Kind { AND, OR }
+    public enum Kind { AND, OR, NAND, NOR, XOR, XNOR }
     private final Kind kind;
     public GateBodyBlock(Properties properties, Kind kind) { super(properties); this.kind = kind; }
     public Kind kind() { return kind; }

@@ -184,7 +184,8 @@ public final class CompilationJobs {
                         CircuitElementType type = state.getBlock() instanceof InputEndpointBlock ? CircuitElementType.INPUT
                                 : state.getBlock() instanceof OutputEndpointBlock ? CircuitElementType.OUTPUT
                                 : state.getBlock() instanceof GatePortBlock port ? (port.isInput() ? CircuitElementType.GATE_INPUT : CircuitElementType.GATE_OUTPUT)
-                                : state.getBlock() instanceof GateBodyBlock || state.getBlock() instanceof NotGateBlock ? CircuitElementType.GATE : CircuitElementType.WIRE;
+                                : state.getBlock() instanceof GateBodyBlock || state.getBlock() instanceof NotGateBlock
+                                || state.getBlock() instanceof DLatchBlock ? CircuitElementType.GATE : CircuitElementType.WIRE;
                         builder.add(new CompiledCircuitElement(++elementId, item.getKey(), type, CompiledBlockStateCodec.capture(state)));
                     } else {
                         if (builder.inputsEmpty() || builder.outputsEmpty()) { fail(Code.INVALID_START, "Circuit needs an input and an output."); return; }

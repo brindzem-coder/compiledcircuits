@@ -26,6 +26,12 @@ public class ModCreativeTabEvents {
             event.accept(ModItems.AND_GATE);
             event.accept(ModItems.OR_GATE);
             event.accept(ModItems.NOT_GATE);
+            event.accept(ModItems.D_LATCH);
+            event.accept(ModItems.WDE_PORT);
+            event.accept(ModItems.NAND_GATE);
+            event.accept(ModItems.NOR_GATE);
+            event.accept(ModItems.XOR_GATE);
+            event.accept(ModItems.XNOR_GATE);
             event.accept(ModItems.GATE_INPUT);
             event.accept(ModItems.GATE_OUTPUT);
         }

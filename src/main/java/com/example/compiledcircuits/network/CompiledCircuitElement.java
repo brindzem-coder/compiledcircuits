@@ -19,7 +19,8 @@ public class CompiledCircuitElement {
                     case "compiledcircuits:input_endpoint" -> "INPUT";
                     case "compiledcircuits:output_endpoint" -> "OUTPUT";
                     case "compiledcircuits:basic_wire" -> "WIRE";
-                    case "compiledcircuits:and_gate", "compiledcircuits:or_gate", "compiledcircuits:not_gate" -> "GATE";
+                    case "compiledcircuits:and_gate", "compiledcircuits:or_gate", "compiledcircuits:not_gate", "compiledcircuits:d_latch",
+                        "compiledcircuits:nand_gate", "compiledcircuits:nor_gate", "compiledcircuits:xor_gate", "compiledcircuits:xnor_gate" -> "GATE";
                     case "compiledcircuits:gate_input" -> "GATE_INPUT";
                     case "compiledcircuits:gate_output" -> "GATE_OUTPUT";
                     default -> type.name();

@@ -79,6 +79,7 @@ public final class NetworkRuntime {
         Iterator<BlockPos> outputs = Collections.emptyIterator();
         boolean dirtyInputs = true, inputOr, available;
         final Map<BlockPos, Boolean> inputValues = new HashMap<>();
+        long lastFeedbackNotice = Long.MIN_VALUE / 2;
         final LinkedHashSet<ChunkKey> waiting = new LinkedHashSet<>();
         int waitingChecks;
         Entry(CompiledNetwork network) {
@@ -304,7 +305,23 @@ public final class NetworkRuntime {
         int before = entry.network.getEffectiveSignal();
         boolean logicChanged = false;
         if (entry.network.hasLogic()) {
-            logicChanged = entry.network.evaluateLogic(entry.inputValues);
+            // Unavailable inputs and integrity checks must never overwrite stored latch state.
+            if (entry.available && entry.waiting.isEmpty() && !entry.network.isDamaged() && !entry.network.isIntegrityPending()) {
+                String previousError = entry.network.getLogicError();
+                logicChanged = entry.network.evaluateLogic(entry.inputValues);
+                if (entry.network.logicMemoryChanged()) data.setDirty();
+                String error = entry.network.getLogicError();
+                if (!error.isEmpty() && !error.equals(previousError)
+                        && level.getGameTime() - entry.lastFeedbackNotice >= 100) {
+                    entry.lastFeedbackNotice = level.getGameTime();
+                    var message = net.minecraft.network.chat.Component.literal(
+                            "Compiled Circuits: " + entry.network.getName() + " (#" + entry.network.getId()
+                                    + "): " + error + ". Outputs disabled; change the inputs or rebuild the circuit.");
+                    BlockPos pos = entry.network.getLogicErrorPosition();
+                    for (var player : level.players()) if (player.distanceToSqr(pos.getX(), pos.getY(), pos.getZ()) <= 64 * 64)
+                        player.sendSystemMessage(message);
+                }
+            }
         } else if (entry.network.isPowered() != entry.inputOr) { entry.network.setPowered(entry.inputOr); data.setDirty(); }
         entry.network.runtimeState(entry.waiting.isEmpty(), entry.available);
         if (logicChanged || before != entry.network.getEffectiveSignal()) entry.outputs = entry.network.getOutputs().iterator();

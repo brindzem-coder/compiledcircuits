@@ -60,6 +60,11 @@ public class CompiledNetwork {
     private boolean inputsAvailable;
     private LogicProgram logic;
     private boolean logicPrepared, logicInvalid, hasGateElements;
+    private CompoundTag savedLogicMemory = new CompoundTag();
+    private LogicProgram.UnstableFeedback feedbackError;
+    public String getLogicError() { return feedbackError == null ? "" : feedbackError.getMessage(); }
+    public BlockPos getLogicErrorPosition() { return feedbackError == null ? null : feedbackError.position; }
+    boolean logicMemoryChanged() { return logic != null && logic.memoryChanged(); }
     private Map<BlockPos, Boolean> outputSignals = Map.of();
     void prepareLogic(Map<BlockPos, net.minecraft.world.level.block.state.BlockState> states) {
         logic = LogicProgram.hasLogic(states.values()) ? LogicProgram.compile(states) : null;
@@ -74,6 +79,8 @@ public class CompiledNetwork {
             for (var element : elements.values()) states.put(element.getPos(), element.resolveState().state().orElseThrow(
                     () -> new IllegalArgumentException("Unresolved logic element")));
             prepareLogic(states);
+            if (logic != null) logic.restoreMemory(savedLogicMemory);
+            savedLogicMemory = new CompoundTag();
         } catch (IllegalArgumentException invalid) {
             logicInvalid = true;
             org.slf4j.LoggerFactory.getLogger(CompiledNetwork.class).warn("Network {} logic unavailable: {}", id, invalid.getMessage());
@@ -81,21 +88,31 @@ public class CompiledNetwork {
     }
     boolean hasLogic() { return logic != null || logicInvalid; }
     boolean evaluateLogic(Map<BlockPos, Boolean> values) {
-        Map<BlockPos, Boolean> next = logic == null ? Map.of() : logic.evaluate(values);
-        boolean changed = !next.equals(outputSignals); outputSignals = next;
+        boolean hadError = feedbackError != null;
+        Map<BlockPos, Boolean> next;
+        try {
+            next = logic == null || logicInvalid ? Map.of() : logic.evaluate(values);
+            feedbackError = null;
+        } catch (LogicProgram.UnstableFeedback unstable) {
+            feedbackError = unstable;
+            next = Map.of();
+        }
+        boolean changed = hadError != (feedbackError != null) || !next.equals(outputSignals); outputSignals = next;
         powered = next.containsValue(true);
         return changed;
     }
     public int getEffectiveSignal(BlockPos output) {
         if (!hasLogic()) return getEffectiveSignal();
-        return runtimeReady && inputsAvailable && !logicInvalid && !isIntegrityPending() && !isDamaged()
+        return runtimeReady && inputsAvailable && !logicInvalid && feedbackError == null && !isIntegrityPending() && !isDamaged()
                 && outputSignals.getOrDefault(output, false) ? 15 : 0;
     }
-    public int getEffectiveSignal() { return runtimeReady && inputsAvailable && !isIntegrityPending() && !isDamaged() && powered ? 15 : 0; }
+    public int getEffectiveSignal() { return runtimeReady && inputsAvailable && !logicInvalid && feedbackError == null && !isIntegrityPending() && !isDamaged() && powered ? 15 : 0; }
     public String getRuntimeStatus() {
         if (isDamaged()) return "DAMAGED";
         if (isIntegrityPending()) return "INTEGRITY_PENDING";
         if (!runtimeReady) return "INITIALIZING";
+        if (logicInvalid) return "INVALID_LOGIC";
+        if (feedbackError != null) return "UNSTABLE_FEEDBACK";
         return inputsAvailable ? "READY" : "UNAVAILABLE";
     }
     void runtimeState(boolean ready, boolean available) { runtimeReady = ready; inputsAvailable = available; }
@@ -146,7 +163,8 @@ public class CompiledNetwork {
                 case "compiledcircuits:basic_wire" -> CircuitElementType.WIRE;
                 case "compiledcircuits:input_endpoint" -> CircuitElementType.INPUT;
                 case "compiledcircuits:output_endpoint" -> CircuitElementType.OUTPUT;
-                case "compiledcircuits:and_gate", "compiledcircuits:or_gate", "compiledcircuits:not_gate" -> CircuitElementType.GATE;
+                case "compiledcircuits:and_gate", "compiledcircuits:or_gate", "compiledcircuits:not_gate", "compiledcircuits:d_latch",
+                        "compiledcircuits:nand_gate", "compiledcircuits:nor_gate", "compiledcircuits:xor_gate", "compiledcircuits:xnor_gate" -> CircuitElementType.GATE;
                 case "compiledcircuits:gate_input" -> CircuitElementType.GATE_INPUT;
                 case "compiledcircuits:gate_output" -> CircuitElementType.GATE_OUTPUT;
                 default -> element.getType();
@@ -319,6 +337,8 @@ public class CompiledNetwork {
         tag.putString("dimension", dimension);
 
         tag.putBoolean("powered", powered);
+        CompoundTag memory = logic != null && !logicInvalid ? logic.saveMemory() : savedLogicMemory;
+        if (!memory.isEmpty()) tag.put("logicMemory", memory.copy());
 
         tag.put("wires", savePositions(wires));
         tag.put("inputs", savePositions(inputs));
@@ -409,6 +429,7 @@ public class CompiledNetwork {
 
         network.powered =
                 tag.getBoolean("powered");
+        network.savedLogicMemory = tag.getCompound("logicMemory").copy();
 
         network.savedIntegrityPending = tag.getBoolean("integrityUnverified");
         ListTag brokenList = tag.getList("brokenElements", Tag.TAG_COMPOUND);

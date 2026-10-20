@@ -1,0 +1,76 @@
+{
+  "variants": {
+    "facing=west,wde_side=2": {
+      "model": "compiledcircuits:block/d_latch_west_2"
+    },
+    "facing=east,wde_side=1": {
+      "model": "compiledcircuits:block/d_latch_east_1"
+    },
+    "facing=down,wde_side=2": {
+      "model": "compiledcircuits:block/d_latch_down_2"
+    },
+    "facing=east,wde_side=3": {
+      "model": "compiledcircuits:block/d_latch_east_3"
+    },
+    "facing=south,wde_side=1": {
+      "model": "compiledcircuits:block/d_latch_south_1"
+    },
+    "facing=up,wde_side=0": {
+      "model": "compiledcircuits:block/d_latch_up_0"
+    },
+    "facing=east,wde_side=2": {
+      "model": "compiledcircuits:block/d_latch_east_2"
+    },
+    "facing=west,wde_side=1": {
+      "model": "compiledcircuits:block/d_latch_west_1"
+    },
+    "facing=north,wde_side=2": {
+      "model": "compiledcircuits:block/d_latch_north_2"
+    },
+    "facing=down,wde_side=3": {
+      "model": "compiledcircuits:block/d_latch_down_3"
+    },
+    "facing=east,wde_side=0": {
+      "model": "compiledcircuits:block/d_latch_east_0"
+    },
+    "facing=south,wde_side=0": {
+      "model": "compiledcircuits:block/d_latch_south_0"
+    },
+    "facing=up,wde_side=1": {
+      "model": "compiledcircuits:block/d_latch_up_1"
+    },
+    "facing=down,wde_side=1": {
+      "model": "compiledcircuits:block/d_latch_down_1"
+    },
+    "facing=south,wde_side=2": {
+      "model": "compiledcircuits:block/d_latch_south_2"
+    },
+    "facing=north,wde_side=0": {
+      "model": "compiledcircuits:block/d_latch_north_0"
+    },
+    "facing=north,wde_side=1": {
+      "model": "compiledcircuits:block/d_latch_north_1"
+    },
+    "facing=up,wde_side=3": {
+      "model": "compiledcircuits:block/d_latch_up_3"
+    },
+    "facing=south,wde_side=3": {
+      "model": "compiledcircuits:block/d_latch_south_3"
+    },
+    "facing=up,wde_side=2": {
+      "model": "compiledcircuits:block/d_latch_up_2"
+    },
+    "facing=west,wde_side=0": {
+      "model": "compiledcircuits:block/d_latch_west_0"
+    },
+    "facing=west,wde_side=3": {
+      "model": "compiledcircuits:block/d_latch_west_3"
+    },
+    "facing=down,wde_side=0": {
+      "model": "compiledcircuits:block/d_latch_down_0"
+    },
+    "facing=north,wde_side=3": {
+      "model": "compiledcircuits:block/d_latch_north_3"
+    }
+  }
+}

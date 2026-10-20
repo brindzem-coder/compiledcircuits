@@ -9,7 +9,8 @@ public final class CompiledBlockStateMatcher {
         var decoded = element.resolveState();
         if (decoded.status() == CompiledBlockStateCodec.Status.UNRESOLVED) return Match.UNRESOLVED;
         if (!element.getBlockId().equals(BuiltInRegistries.BLOCK.getKey(actual.getBlock()).toString())) return Match.BLOCK_MISMATCH;
-        boolean functionalState = actual.getBlock() instanceof com.example.compiledcircuits.block.NotGateBlock;
+        boolean functionalState = actual.getBlock() instanceof com.example.compiledcircuits.block.NotGateBlock
+                || actual.getBlock() instanceof com.example.compiledcircuits.block.DLatchBlock;
         if ((exact || functionalState) && decoded.status() == CompiledBlockStateCodec.Status.EXACT && !decoded.state().orElseThrow().equals(actual)) return Match.STATE_MISMATCH;
         return Match.MATCH;
     }

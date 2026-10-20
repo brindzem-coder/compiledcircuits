@@ -18,12 +18,24 @@ public class ModItems {
             () -> new BlockItem(ModBlocks.AND_GATE.get(), new Item.Properties()));
     public static final RegistryObject<Item> OR_GATE = ITEMS.register("or_gate",
             () -> new BlockItem(ModBlocks.OR_GATE.get(), new Item.Properties()));
+    public static final RegistryObject<Item> NAND_GATE = ITEMS.register("nand_gate",
+            () -> new BlockItem(ModBlocks.NAND_GATE.get(), new Item.Properties()));
+    public static final RegistryObject<Item> NOR_GATE = ITEMS.register("nor_gate",
+            () -> new BlockItem(ModBlocks.NOR_GATE.get(), new Item.Properties()));
+    public static final RegistryObject<Item> XOR_GATE = ITEMS.register("xor_gate",
+            () -> new BlockItem(ModBlocks.XOR_GATE.get(), new Item.Properties()));
+    public static final RegistryObject<Item> XNOR_GATE = ITEMS.register("xnor_gate",
+            () -> new BlockItem(ModBlocks.XNOR_GATE.get(), new Item.Properties()));
     public static final RegistryObject<Item> GATE_INPUT = ITEMS.register("gate_input",
             () -> new BlockItem(ModBlocks.GATE_INPUT.get(), new Item.Properties()));
     public static final RegistryObject<Item> GATE_OUTPUT = ITEMS.register("gate_output",
             () -> new BlockItem(ModBlocks.GATE_OUTPUT.get(), new Item.Properties()));
     public static final RegistryObject<Item> NOT_GATE = ITEMS.register("not_gate",
             () -> new BlockItem(ModBlocks.NOT_GATE.get(), new Item.Properties()));
+    public static final RegistryObject<Item> D_LATCH = ITEMS.register("d_latch",
+            () -> new BlockItem(ModBlocks.D_LATCH.get(), new Item.Properties()));
+    public static final RegistryObject<Item> WDE_PORT = ITEMS.register("wde_port",
+            () -> new com.example.compiledcircuits.item.WdePortItem(new Item.Properties().stacksTo(1)));
 
     public static final RegistryObject<Item> BASIC_WIRE =
             ITEMS.register("basic_wire",

@@ -7,47 +7,164 @@ import net.minecraft.world.level.block.state.BlockState;
 import java.util.*;
 
 /**
- * Immutable combinational graph. Structural discovery is not electrical connectivity:
+ * Compiled signal graph with bounded feedback settling. Structural discovery is not electrical connectivity:
  * passive components are buses; each port is an independent directed node.
  * Evaluation reads no world state and publishes only a complete result.
  */
 public final class LogicProgram {
     // A single atomic evaluation must stay bounded, even with deeply nested gates.
     public static final int MAX_ELEMENTS = 8192;
-    private enum Op { OR, AND, NOT }
+    private enum Op { OR, AND, NOT, NAND, NOR, XOR, XNOR, LATCH }
     private static final class Node {
         final Op op;
         final BlockPos position;
         final Set<Integer> parents = new LinkedHashSet<>(), children = new LinkedHashSet<>();
+        int data = -1, enable = -1;
         Node(Op op, BlockPos position) { this.op = op; this.position = position; }
     }
     private final Op[] operations;
     private final int[][] parents;
-    private final int[] order;
+    private final int[][] children;
+    private final int[] component;
+    private final int[] dataSources, enableSources;
+    private final int[][] groups;
+    private final BlockPos[] positions;
+    private boolean[] stable;
+    private boolean memoryChanged;
+    private final boolean feedback;
+    private final boolean hasMemory;
+    private final String signature;
+    public static final int MAX_SETTLE_SWEEPS = 256, MAX_EVALUATION_WORK = 262144;
     private final Map<BlockPos, Integer> inputs, outputs;
 
-    private LogicProgram(List<Node> nodes, int[] order, Map<BlockPos, Integer> inputs, Map<BlockPos, Integer> outputs) {
-        this.order = order; this.inputs = Map.copyOf(inputs); this.outputs = Map.copyOf(outputs);
+    private LogicProgram(List<Node> nodes, int[][] groups, Map<BlockPos, Integer> inputs, Map<BlockPos, Integer> outputs) {
+        this.groups = groups; this.inputs = Map.copyOf(inputs); this.outputs = Map.copyOf(outputs);
         operations = new Op[nodes.size()]; parents = new int[nodes.size()][];
+        children = new int[nodes.size()][]; component = new int[nodes.size()];
+        dataSources = new int[nodes.size()]; enableSources = new int[nodes.size()];
+        for (int g = 0; g < groups.length; g++) for (int id : groups[g]) component[id] = g;
+        positions = new BlockPos[nodes.size()]; stable = new boolean[nodes.size()];
+        StringBuilder topology = new StringBuilder();
         for (int i = 0; i < nodes.size(); i++) {
-            operations[i] = nodes.get(i).op;
-            parents[i] = nodes.get(i).parents.stream().mapToInt(Integer::intValue).toArray();
+            operations[i] = nodes.get(i).op; positions[i] = nodes.get(i).position;
+            dataSources[i] = nodes.get(i).data; enableSources[i] = nodes.get(i).enable;
+            parents[i] = nodes.get(i).parents.stream().mapToInt(Integer::intValue).sorted().toArray();
+            children[i] = nodes.get(i).children.stream().mapToInt(Integer::intValue).sorted().toArray();
+            topology.append(positions[i].asLong()).append(':').append(operations[i]).append(Arrays.toString(parents[i])).append(';');
+            if (operations[i] == Op.LATCH) topology.append("D=").append(dataSources[i]).append(",WDE=").append(enableSources[i]).append(';');
+        }
+        signature = UUID.nameUUIDFromBytes(topology.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
+        feedback = Arrays.stream(groups).anyMatch(g -> g.length > 1);
+        hasMemory = feedback || Arrays.asList(operations).contains(Op.LATCH);
+    }
+    public static final class UnstableFeedback extends IllegalStateException {
+        public final BlockPos position;
+        private UnstableFeedback(String reason, BlockPos position) {
+            super(reason + " at " + position.getX() + ", " + position.getY() + ", " + position.getZ());
+            this.position = position;
         }
     }
-    public Map<BlockPos, Boolean> evaluate(Map<BlockPos, Boolean> externalInputs) {
-        boolean[] values = new boolean[operations.length];
-        inputs.forEach((pos, node) -> values[node] |= externalInputs.getOrDefault(pos, false));
-        for (int node : order) {
-            boolean value = operations[node] == Op.AND || values[node];
-            for (int parent : parents[node]) {
-                if (operations[node] == Op.AND) value &= values[parent];
-                else value |= values[parent];
-            }
-            values[node] = operations[node] == Op.NOT ? !value : value;
+    public boolean memoryChanged() { return memoryChanged; }
+    public boolean hasFeedback() { return feedback; }
+    public net.minecraft.nbt.CompoundTag saveMemory() {
+        var tag = new net.minecraft.nbt.CompoundTag();
+        if (!hasMemory) return tag;
+        tag.putInt("version", 1); tag.putString("graph", signature);
+        BitSet bits = new BitSet(stable.length);
+        for (int i = 0; i < stable.length; i++) if (stable[i]) bits.set(i);
+        tag.putLongArray("values", bits.toLongArray());
+        return tag;
+    }
+    public void restoreMemory(net.minecraft.nbt.CompoundTag tag) {
+        if (tag.isEmpty()) return;
+        if (tag.getInt("version") != 1 || !signature.equals(tag.getString("graph"))
+                || !tag.contains("values", net.minecraft.nbt.Tag.TAG_LONG_ARRAY))
+            throw new IllegalArgumentException("Invalid feedback memory");
+        long[] words = tag.getLongArray("values");
+        if (words.length > (stable.length + 63) / 64) throw new IllegalArgumentException("Oversized feedback memory");
+        BitSet bits = BitSet.valueOf(words);
+        if (bits.length() > stable.length) throw new IllegalArgumentException("Invalid feedback memory size");
+        for (int i = 0; i < stable.length; i++) stable[i] = bits.get(i);
+    }
+    private boolean value(int node, boolean[] values, boolean[] seeds) {
+        Op op = operations[node];
+        if (op == Op.LATCH) return values[enableSources[node]] ? values[dataSources[node]] : values[node];
+        boolean value = op == Op.AND || op == Op.NAND || seeds[node];
+        for (int parent : parents[node]) {
+            if (op == Op.AND || op == Op.NAND) value &= values[parent];
+            else if (op == Op.XOR || op == Op.XNOR) value ^= values[parent];
+            else value |= values[parent];
         }
+        return switch (op) { case NOT, NAND, NOR, XNOR -> !value; default -> value; };
+    }
+    public Map<BlockPos, Boolean> evaluate(Map<BlockPos, Boolean> externalInputs) {
+        memoryChanged = false;
+        boolean[] values = stable.clone(), seeds = new boolean[operations.length];
+        inputs.forEach((pos, node) -> seeds[node] |= externalInputs.getOrDefault(pos, false));
+        int[] work = {0};
+        boolean[] queued = new boolean[operations.length];
+        for (int[] group : groups) {
+            if (group.length == 1) {
+                int node = group[0]; charge(node, work);
+                values[node] = value(node, values, seeds);
+                continue;
+            }
+            Set<BitSet> seen = new HashSet<>();
+            seen.add(snapshot(group, values));
+            boolean settled = false;
+            for (int sweep = 0; sweep < MAX_SETTLE_SWEEPS; sweep++) {
+                // Propagate transparent buses/ports before each gate. Otherwise stale port
+                // values can create an artificial synchronous oscillation in a NOR latch.
+                boolean changed = settleOr(group, component[group[0]], values, seeds, work, queued);
+                for (int node : group) {
+                    if (operations[node] == Op.OR) continue;
+                    charge(node, work);
+                    boolean next = value(node, values, seeds);
+                    if (next != values[node]) {
+                        changed = true; values[node] = next;
+                        settleOr(children[node], component[node], values, seeds, work, queued);
+                    }
+                }
+                if (!changed) { settled = true; break; }
+                if (!seen.add(snapshot(group, values)))
+                    throw new UnstableFeedback("Oscillating feedback", positions[group[0]]);
+            }
+            if (!settled) throw new UnstableFeedback("Feedback did not settle within the sweep limit", positions[group[0]]);
+        }
+        // Never commit partial updates from a failed cycle or downstream component.
+        memoryChanged = hasMemory && !Arrays.equals(stable, values);
+        stable = values;
         Map<BlockPos, Boolean> result = new HashMap<>();
         outputs.forEach((pos, node) -> result.put(pos, values[node]));
         return Map.copyOf(result);
+    }
+    private void charge(int node, int[] work) {
+        work[0] += 1 + parents[node].length;
+        if (work[0] > MAX_EVALUATION_WORK)
+            throw new UnstableFeedback("Feedback settling work limit exceeded", positions[node]);
+    }
+    private boolean settleOr(int[] initial, int group, boolean[] values, boolean[] seeds, int[] work, boolean[] queued) {
+        ArrayDeque<Integer> queue = new ArrayDeque<>();
+        for (int node : initial) if (component[node] == group && operations[node] == Op.OR && !queued[node]) {
+            queued[node] = true; queue.add(node);
+        }
+        boolean changed = false;
+        while (!queue.isEmpty()) {
+            int node = queue.removeFirst(); queued[node] = false; charge(node, work);
+            boolean next = value(node, values, seeds);
+            if (values[node] == next) continue;
+            changed = true; values[node] = next;
+            for (int child : children[node])
+                if (component[child] == group && operations[child] == Op.OR && !queued[child]) {
+                    queued[child] = true; queue.add(child);
+                }
+        }
+        return changed;
+    }
+    private static BitSet snapshot(int[] group, boolean[] values) {
+        BitSet bits = new BitSet(group.length);
+        for (int i = 0; i < group.length; i++) if (values[group[i]]) bits.set(i);
+        return bits;
     }
     public static boolean hasLogic(Collection<BlockState> states) {
         return states.stream().anyMatch(s -> s.getBlock() instanceof GateBodyBlock || CircuitConnections.isTerminal(s));
@@ -55,8 +172,13 @@ public final class LogicProgram {
     public static LogicProgram compile(Map<BlockPos, BlockState> states) {
         if (states.size() > MAX_ELEMENTS)
             throw new IllegalArgumentException("Logic circuits support at most " + MAX_ELEMENTS + " elements.");
+        // Stable node IDs are required for repeatable startup and saved feedback state.
+        Map<BlockPos, BlockState> sorted = new TreeMap<>(Comparator.comparingInt((BlockPos p) -> p.getX())
+                .thenComparingInt(BlockPos::getY).thenComparingInt(BlockPos::getZ));
+        sorted.putAll(states); states = sorted;
         List<Node> nodes = new ArrayList<>();
         Map<BlockPos, Integer> component = new HashMap<>(), source = new HashMap<>(), sink = new HashMap<>();
+        Map<BlockPos, Integer> enableSink = new HashMap<>();
         Map<BlockPos, Integer> inputs = new HashMap<>(), outputs = new HashMap<>();
         Set<Integer> bodies = new HashSet<>(), bodiesWithOutputs = new HashSet<>();
         // Flood-fill only homogeneous bodies or passive bus elements.
@@ -66,7 +188,14 @@ public final class LogicProgram {
             boolean body = state.getBlock() instanceof GateBodyBlock;
             if (!body && !(state.getBlock() instanceof IWireConnectable))
                 throw error("Unsupported circuit element", pos);
-            Op op = body && ((GateBodyBlock) state.getBlock()).kind() == GateBodyBlock.Kind.AND ? Op.AND : Op.OR;
+            Op op = body ? switch (((GateBodyBlock) state.getBlock()).kind()) {
+                case AND -> Op.AND;
+                case OR -> Op.OR;
+                case NAND -> Op.NAND;
+                case NOR -> Op.NOR;
+                case XOR -> Op.XOR;
+                case XNOR -> Op.XNOR;
+            } : Op.OR;
             int id = add(nodes, op, pos);
             if (body) bodies.add(id);
             ArrayDeque<BlockPos> queue = new ArrayDeque<>();
@@ -95,6 +224,11 @@ public final class LogicProgram {
                 int owner = owners.iterator().next(), id = add(nodes, Op.OR, pos);
                 if (port.isInput()) { sink.put(pos, id); edge(nodes, id, owner); }
                 else { source.put(pos, id); edge(nodes, owner, id); bodiesWithOutputs.add(owner); }
+            } else if (state.getBlock() instanceof DLatchBlock) {
+                int input = add(nodes, Op.OR, pos), enable = add(nodes, Op.OR, pos), output = add(nodes, Op.LATCH, pos);
+                sink.put(pos, input); enableSink.put(pos, enable); source.put(pos, output);
+                nodes.get(output).data = input; nodes.get(output).enable = enable;
+                edge(nodes, input, output); edge(nodes, enable, output);
             } else if (state.getBlock() instanceof NotGateBlock) {
                 int input = add(nodes, Op.OR, pos), output = add(nodes, Op.NOT, pos);
                 sink.put(pos, input); source.put(pos, output); edge(nodes, input, output);
@@ -116,6 +250,8 @@ public final class LogicProgram {
             for (Direction direction : Direction.values()) {
                 BlockPos next = pos.relative(direction); BlockState other = states.get(next);
                 Integer to = sink.get(next);
+                if (other != null && other.getBlock() instanceof DLatchBlock
+                        && DLatchBlock.enableSide(other) == direction.getOpposite()) to = enableSink.get(next);
                 if (other == null || to == null || from.equals(to)
                         || !CircuitConnections.connects(state, other, direction)) continue;
                 if (CircuitConnections.isTerminal(state) && !CircuitConnections.sends(state, direction)) continue;
@@ -123,30 +259,51 @@ public final class LogicProgram {
                 edge(nodes, from, to);
             }
         }
-        int[] degrees = new int[nodes.size()], order = new int[nodes.size()];
-        ArrayDeque<Integer> ready = new ArrayDeque<>();
-        for (int i = 0; i < nodes.size(); i++) {
-            degrees[i] = nodes.get(i).parents.size();
-            if (degrees[i] == 0) ready.add(i);
-        }
-        int count = 0;
-        while (!ready.isEmpty()) {
-            int id = ready.removeFirst(); order[count++] = id;
-            for (int child : nodes.get(id).children) if (--degrees[child] == 0) ready.add(child);
-        }
-        if (count != nodes.size()) {
-            // Follow unresolved predecessors to report an actual cycle node, not a downstream output.
-            int id = 0;
-            while (degrees[id] == 0) id++;
-            Set<Integer> visited = new HashSet<>();
-            while (visited.add(id)) {
-                for (int parent : nodes.get(id).parents) if (degrees[parent] != 0) { id = parent; break; }
+        int[][] groups = components(nodes);
+        Set<Integer> seededNodes = new HashSet<>(inputs.values());
+        for (int[] group : groups) {
+            if (group.length < 2) continue;
+            // A closed single-driver ring with odd inversion has no Boolean solution.
+            boolean ring = true; int inversions = 0;
+            for (int id : group) {
+                ring &= nodes.get(id).parents.size() == 1 && !seededNodes.contains(id);
+                if (switch (nodes.get(id).op) { case NOT, NAND, NOR, XNOR -> true; default -> false; }) inversions++;
             }
-            throw error("Feedback cycle", nodes.get(id).position);
+            if (ring && (inversions & 1) != 0)
+                throw error("Feedback cycle has no stable state", nodes.get(group[0]).position);
         }
-        return new LogicProgram(nodes, order, inputs, outputs);
+        return new LogicProgram(nodes, groups, inputs, outputs);
     }
-    private static int add(List<Node> nodes, Op op, BlockPos pos) {
+    /** Iterative Kosaraju: stack-safe even for long chains, components in dependency order. */
+    private static int[][] components(List<Node> nodes) {
+        record Frame(int id, Iterator<Integer> children) {}
+        boolean[] visited = new boolean[nodes.size()];
+        List<Integer> finished = new ArrayList<>();
+        ArrayDeque<Frame> stack = new ArrayDeque<>();
+        for (int root = 0; root < nodes.size(); root++) {
+            if (visited[root]) continue;
+            visited[root] = true; stack.push(new Frame(root, nodes.get(root).children.iterator()));
+            while (!stack.isEmpty()) {
+                Frame frame = stack.peek();
+                if (frame.children.hasNext()) {
+                    int child = frame.children.next();
+                    if (!visited[child]) { visited[child] = true; stack.push(new Frame(child, nodes.get(child).children.iterator())); }
+                } else { finished.add(frame.id); stack.pop(); }
+            }
+        }
+        Arrays.fill(visited, false);
+        List<int[]> groups = new ArrayList<>(); ArrayDeque<Integer> pending = new ArrayDeque<>();
+        for (int i = finished.size() - 1; i >= 0; i--) {
+            int root = finished.get(i); if (visited[root]) continue;
+            List<Integer> group = new ArrayList<>(); visited[root] = true; pending.push(root);
+            while (!pending.isEmpty()) {
+                int id = pending.pop(); group.add(id);
+                for (int parent : nodes.get(id).parents) if (!visited[parent]) { visited[parent] = true; pending.push(parent); }
+            }
+            groups.add(group.stream().mapToInt(Integer::intValue).sorted().toArray());
+        }
+        return groups.toArray(int[][]::new);
+    }    private static int add(List<Node> nodes, Op op, BlockPos pos) {
         int id = nodes.size(); nodes.add(new Node(op, pos)); return id;
     }
     private static void edge(List<Node> nodes, int from, int to) {

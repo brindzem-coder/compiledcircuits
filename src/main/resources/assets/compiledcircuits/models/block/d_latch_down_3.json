@@ -1,0 +1,43 @@
+{
+  "elements": [
+    {
+      "faces": {
+        "south": {
+          "texture": "#wde"
+        },
+        "east": {
+          "texture": "#body"
+        },
+        "up": {
+          "texture": "#d"
+        },
+        "west": {
+          "texture": "#body"
+        },
+        "down": {
+          "texture": "#q"
+        },
+        "north": {
+          "texture": "#body"
+        }
+      },
+      "to": [
+        11,
+        11,
+        11
+      ],
+      "from": [
+        5,
+        5,
+        5
+      ]
+    }
+  ],
+  "textures": {
+    "d": "minecraft:block/green_concrete",
+    "q": "minecraft:block/blue_concrete",
+    "particle": "minecraft:block/gray_concrete",
+    "wde": "minecraft:block/yellow_concrete",
+    "body": "minecraft:block/gray_concrete"
+  }
+}

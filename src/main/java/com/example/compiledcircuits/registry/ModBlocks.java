@@ -23,12 +23,26 @@ public class ModBlocks {
     public static final RegistryObject<Block> OR_GATE = BLOCKS.register("or_gate",
             () -> new com.example.compiledcircuits.block.GateBodyBlock(BlockBehaviour.Properties.of().strength(1),
                     com.example.compiledcircuits.block.GateBodyBlock.Kind.OR));
+    public static final RegistryObject<Block> NAND_GATE = BLOCKS.register("nand_gate",
+            () -> new com.example.compiledcircuits.block.GateBodyBlock(BlockBehaviour.Properties.of().strength(1),
+                    com.example.compiledcircuits.block.GateBodyBlock.Kind.NAND));
+    public static final RegistryObject<Block> NOR_GATE = BLOCKS.register("nor_gate",
+            () -> new com.example.compiledcircuits.block.GateBodyBlock(BlockBehaviour.Properties.of().strength(1),
+                    com.example.compiledcircuits.block.GateBodyBlock.Kind.NOR));
+    public static final RegistryObject<Block> XOR_GATE = BLOCKS.register("xor_gate",
+            () -> new com.example.compiledcircuits.block.GateBodyBlock(BlockBehaviour.Properties.of().strength(1),
+                    com.example.compiledcircuits.block.GateBodyBlock.Kind.XOR));
+    public static final RegistryObject<Block> XNOR_GATE = BLOCKS.register("xnor_gate",
+            () -> new com.example.compiledcircuits.block.GateBodyBlock(BlockBehaviour.Properties.of().strength(1),
+                    com.example.compiledcircuits.block.GateBodyBlock.Kind.XNOR));
     public static final RegistryObject<Block> GATE_INPUT = BLOCKS.register("gate_input",
             () -> new com.example.compiledcircuits.block.GatePortBlock(BlockBehaviour.Properties.of().strength(1).noOcclusion(), true));
     public static final RegistryObject<Block> GATE_OUTPUT = BLOCKS.register("gate_output",
             () -> new com.example.compiledcircuits.block.GatePortBlock(BlockBehaviour.Properties.of().strength(1).noOcclusion(), false));
     public static final RegistryObject<Block> NOT_GATE = BLOCKS.register("not_gate",
             () -> new com.example.compiledcircuits.block.NotGateBlock(BlockBehaviour.Properties.of().strength(1).noOcclusion()));
+    public static final RegistryObject<Block> D_LATCH = BLOCKS.register("d_latch",
+            () -> new com.example.compiledcircuits.block.DLatchBlock(BlockBehaviour.Properties.of().strength(1).noOcclusion()));
 
     public static final RegistryObject<Block> BASIC_WIRE =
             BLOCKS.register("basic_wire",

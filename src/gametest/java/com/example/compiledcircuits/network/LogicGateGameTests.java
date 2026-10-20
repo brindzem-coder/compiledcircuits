@@ -145,4 +145,49 @@ public class LogicGateGameTests {
             cleanup.run();h.succeed();
         }catch(Throwable error){cleanup.run();throw error;}}}.run();
     }
+    @GameTest(template="empty",batch="logic_gates",timeoutTicks=100)
+    public static void extendedGateTruthTablesAndPersistence(GameTestHelper h) {
+        Block[] blocks={ModBlocks.NAND_GATE.get(),ModBlocks.NOR_GATE.get(),ModBlocks.XOR_GATE.get(),ModBlocks.XNOR_GATE.get()};
+        for(int kind=0;kind<blocks.length;kind++)for(int count=1;count<=3;count++) {
+            var states=gate(blocks[kind]);
+            if(count==1){states.remove(p(0,-1));states.remove(p(0,-2));}
+            if(count==3){put(states,0,1,ModBlocks.GATE_INPUT.get());put(states,0,2,ModBlocks.INPUT_ENDPOINT.get());}
+            // Extend the body and add a second output: both must carry the same result.
+            states.put(new BlockPos(0,1,0),blocks[kind].defaultBlockState());
+            states.put(new BlockPos(0,2,0),ModBlocks.GATE_OUTPUT.get().defaultBlockState());
+            states.put(new BlockPos(0,3,0),ModBlocks.OUTPUT_ENDPOINT.get().defaultBlockState());
+            var program=LogicProgram.compile(states);
+            List<CompiledCircuitElement> elements=new ArrayList<>();
+            for(var item:states.entrySet()) {
+                Block b=item.getValue().getBlock();
+                CircuitElementType type=b instanceof GateBodyBlock?CircuitElementType.GATE:b instanceof GatePortBlock port?(port.isInput()?CircuitElementType.GATE_INPUT:CircuitElementType.GATE_OUTPUT):b instanceof InputEndpointBlock?CircuitElementType.INPUT:CircuitElementType.OUTPUT;
+                elements.add(new CompiledCircuitElement(elements.size()+1,item.getKey(),type,CompiledBlockStateCodec.capture(item.getValue())));
+            }
+            var saved=new CompiledNetwork(1,"extended",0,"minecraft:overworld",elements);
+            var loaded=CompiledNetwork.load(saved.save());loaded.restoreLogic();loaded.runtimeState(true,true);
+            for(int mask=0;mask<(1<<count);mask++) {
+                Map<BlockPos,Boolean> inputs=new HashMap<>();
+                inputs.put(p(-2,0),(mask&1)!=0);
+                if(count>=2)inputs.put(p(0,-2),(mask&2)!=0);
+                if(count>=3)inputs.put(p(0,2),(mask&4)!=0);
+                int active=Integer.bitCount(mask);
+                boolean expected=switch(kind){case 0->active<count;case 1->active==0;case 2->active%2==1;default->active%2==0;};
+                var result=program.evaluate(inputs);
+                h.assertTrue(result.get(p(2,0))==expected && result.get(new BlockPos(0,3,0))==expected,"multi-input truth table and all outputs: "+kind+"/"+count+"/"+mask);
+                loaded.evaluateLogic(inputs);
+                h.assertTrue(loaded.getEffectiveSignal(p(2,0))==(expected?15:0),"saved gate retains operation");
+            }
+            rejects(h,Map.of(p(0,0),blocks[kind].defaultBlockState()),"at least one");
+        }
+        // Two input ports reading one bus are still two logical inputs for parity.
+        for(Block block:new Block[]{ModBlocks.XOR_GATE.get(),ModBlocks.XNOR_GATE.get()}) {
+            var states=gate(block);
+            for(BlockPos pos:List.of(p(-2,-1),p(-2,-2),p(-1,-2)))states.put(pos,ModBlocks.BASIC_WIRE.get().defaultBlockState());
+            var result=LogicProgram.compile(states).evaluate(Map.of(p(-2,0),true));
+            h.assertTrue(result.get(p(2,0))==(block==ModBlocks.XNOR_GATE.get()),"parity counts ports, not distinct drivers");
+        }
+        for(Block a:blocks)for(Block b:blocks)
+            h.assertTrue(CircuitConnections.connects(a.defaultBlockState(),b.defaultBlockState(),Direction.EAST)==(a==b),"different gate kinds never merge");
+        h.succeed();
+    }
 }

@@ -7,5 +7,11 @@
   "block.compiledcircuits.or_gate": "OR gate body",
   "block.compiledcircuits.gate_input": "Gate input",
   "block.compiledcircuits.gate_output": "Gate output",
-  "block.compiledcircuits.not_gate": "NOT gate"
+  "block.compiledcircuits.not_gate": "NOT gate",
+  "block.compiledcircuits.nand_gate": "NAND gate body",
+  "block.compiledcircuits.nor_gate": "NOR gate body",
+  "block.compiledcircuits.xor_gate": "XOR gate body",
+  "block.compiledcircuits.xnor_gate": "XNOR gate body",
+  "block.compiledcircuits.d_latch": "D latch (WDE)",
+  "item.compiledcircuits.wde_port": "WDE Port"
 }
