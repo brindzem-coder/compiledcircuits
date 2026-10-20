@@ -41,7 +41,7 @@ public final class CircuitStateOutlineRenderer {
         var minecraft = Minecraft.getInstance();
         var level = minecraft.level;
         if (level == null || !ClientCompiledElements.isReadyFor(level.dimension().location().toString())) return;
-        var exclusions = CircuitVisualPriority.capture(level.dimension().location().toString());
+        var exclusions = CircuitVisualPriority.capture(level.dimension().location().toString(), level);
         var camera = event.getCamera().getPosition();
         double distance = minecraft.options.getEffectiveRenderDistance() * 16.0;
         double distanceSquared = distance * distance;
@@ -75,13 +75,14 @@ public final class CircuitStateOutlineRenderer {
                             continue;
                         }
                         if (exclusions.suppressesOutline(pos)) continue;
+                        boolean blocked = ClientCompiledElements.isBlocked(pos);
                         boolean hovered = ClientHoveredCircuit.contains(pos);
                         if (!hovered && ClientCompiledElements.networkIdAt(pos) != null) continue;
                         LevelRenderer.renderLineBox(poses, lines,
                                 pos.getX() + 0.002, pos.getY() + 0.002, pos.getZ() + 0.002,
                                 pos.getX() + 0.998, pos.getY() + 0.998, pos.getZ() + 0.998,
-                                hovered ? 0.15F : 1.00F, hovered ? 0.85F : 0.30F,
-                                hovered ? 1.00F : 0.72F, hovered ? 0.85F : 0.70F);
+                                blocked ? 1.00F : hovered ? 0.15F : 1.00F, blocked ? 0.65F : hovered ? 0.85F : 0.30F,
+                                blocked ? 0.00F : hovered ? 1.00F : 0.72F, hovered ? 0.85F : 0.70F);
                         outlinedPositions++;
                     }
                 }

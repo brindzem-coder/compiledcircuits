@@ -69,7 +69,8 @@ public class NetworkSelectionRenderer {
             return;
         }
 
-        if (ClientNetworkSelection.getTotalSize() == 0) {
+        ClientHighlightSync.refresh();
+        if (!ClientNetworkSelection.isForLevel(Minecraft.getInstance().level) || ClientNetworkSelection.getTotalSize() == 0) {
             return;
         }
 
@@ -80,7 +81,7 @@ public class NetworkSelectionRenderer {
             return;
         }
 
-        var exclusions = CircuitVisualPriority.capture(minecraft.level.dimension().location().toString());
+        var exclusions = CircuitVisualPriority.capture(minecraft.level.dimension().location().toString(), minecraft.level);
 
         PoseStack poseStack =
                 event.getPoseStack();
@@ -162,7 +163,7 @@ public class NetworkSelectionRenderer {
          */
         for (BlockPos pos
                 : ClientNetworkSelection.getWires()) {
-            if (exclusions.isBrokenReserved(pos)) continue;
+            if (!minecraft.level.hasChunkAt(pos) || exclusions.isBrokenReserved(pos)) continue;
 
             addBox(
                     buffer,
@@ -180,7 +181,7 @@ public class NetworkSelectionRenderer {
          */
         for (BlockPos pos
                 : ClientNetworkSelection.getInputs()) {
-            if (exclusions.isBrokenReserved(pos)) continue;
+            if (!minecraft.level.hasChunkAt(pos) || exclusions.isBrokenReserved(pos)) continue;
 
             addBox(
                     buffer,
@@ -198,7 +199,7 @@ public class NetworkSelectionRenderer {
          */
         for (BlockPos pos
                 : ClientNetworkSelection.getOutputs()) {
-            if (exclusions.isBrokenReserved(pos)) continue;
+            if (!minecraft.level.hasChunkAt(pos) || exclusions.isBrokenReserved(pos)) continue;
 
             addBox(
                     buffer,

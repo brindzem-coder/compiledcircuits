@@ -26,26 +26,9 @@ public final class BrokenElementSync {
         return result;
     }
 
-    public static void sendToPlayer(ServerPlayer player) {
-        String dimension = player.serverLevel().dimension().location().toString();
-        ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                new BrokenElementsS2CPacket(dimension,
-                        collectBrokenPositions(NetworkSavedData.get(player.getServer()), dimension)));
-    }
-
-    public static void broadcastDimension(ServerLevel level) {
-        String dimension = level.dimension().location().toString();
-        BrokenElementsS2CPacket packet = new BrokenElementsS2CPacket(dimension,
-                collectBrokenPositions(NetworkSavedData.get(level.getServer()), dimension));
-        ModNetworking.CHANNEL.send(PacketDistributor.DIMENSION.with(level::dimension), packet);
-    }
-
+    public static void sendToPlayer(ServerPlayer player) { DamageSync.ensure(player); }
+    public static void broadcastDimension(ServerLevel level) { /* The global ledger owns delivery. */ }
     public static void syncRemovedNetworks(MinecraftServer server, Collection<CompiledNetwork> removed) {
-        if (!removed.isEmpty()) NetworkGuiSync.broadcastBrokenList(server);
-        Set<String> dimensions = new HashSet<>();
-        for (CompiledNetwork network : removed) dimensions.add(network.getDimension());
-        for (ServerLevel level : server.getAllLevels()) {
-            if (dimensions.contains(level.dimension().location().toString())) broadcastDimension(level);
-        }
+        // NetworkSavedData/NetworkRuntime removal already records tombstones in the ledger.
     }
 }

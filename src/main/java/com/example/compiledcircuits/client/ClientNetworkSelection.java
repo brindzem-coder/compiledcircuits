@@ -19,10 +19,15 @@ public final class ClientNetworkSelection {
     // Захист від випадкового сканування надто великої мережі.
     private static final int MAX_SCAN_SIZE = 50_000;
 
-    private static final Set<BlockPos> WIRES = new HashSet<>();
-    private static final Set<BlockPos> INPUTS = new HashSet<>();
-    private static final Set<BlockPos> OUTPUTS = new HashSet<>();
+    private static Set<BlockPos> WIRES = new HashSet<>();
+    private static Set<BlockPos> INPUTS = new HashSet<>();
+    private static Set<BlockPos> OUTPUTS = new HashSet<>();
 
+    private static Object selectionLevel;
+    public static boolean isForLevel(Object level){return selectionLevel==level;}
+    public static void publish(Object level,com.example.compiledcircuits.networking.HighlightReplica.Selection selected){
+        selectionLevel=level;WIRES=selected.wires();INPUTS=selected.inputs();OUTPUTS=selected.outputs();
+    }
     private ClientNetworkSelection() {
     }
 
@@ -38,6 +43,7 @@ public final class ClientNetworkSelection {
         }
 
         clear();
+        selectionLevel=level;
 
         Queue<BlockPos> queue = new ArrayDeque<>();
         Set<BlockPos> visited = new HashSet<>();
@@ -129,9 +135,7 @@ public final class ClientNetworkSelection {
     }
 
     public static void clear() {
-        WIRES.clear();
-        INPUTS.clear();
-        OUTPUTS.clear();
+        WIRES=new HashSet<>();INPUTS=new HashSet<>();OUTPUTS=new HashSet<>();selectionLevel=null;
     }
 
     public static Set<BlockPos> getWires() {

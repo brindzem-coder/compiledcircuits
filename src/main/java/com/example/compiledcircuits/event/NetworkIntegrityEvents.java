@@ -25,6 +25,10 @@ public final class NetworkIntegrityEvents {
     @SubscribeEvent
     public static void onPlayerChangedDimension(net.minecraftforge.event.entity.player.PlayerEvent.PlayerChangedDimensionEvent event) {
         if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+            com.example.compiledcircuits.network.CompilationJobs.cancel(player);
+            com.example.compiledcircuits.network.RepairJobs.cancel(player);
+        }
+        if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
             com.example.compiledcircuits.networking.BrokenElementSync.sendToPlayer(player);
         }
     }
@@ -47,6 +51,7 @@ public final class NetworkIntegrityEvents {
     public static void onBlockPlaced(BlockEvent.EntityPlaceEvent event) {
         if (!(event.getLevel() instanceof ServerLevel level)) return;
         if (event instanceof BlockEvent.EntityMultiPlaceEvent multiPlace) {
+            if(multiPlace.getReplacedBlockSnapshots().size()>256){NetworkIntegrityManager.invalidateDimension(level);return;}
             for (var snapshot : multiPlace.getReplacedBlockSnapshots()) {
                 NetworkIntegrityManager.scheduleCheck(level, snapshot.getPos());
             }
@@ -58,22 +63,35 @@ public final class NetworkIntegrityEvents {
     @SubscribeEvent
     public static void onExplosion(ExplosionEvent.Detonate event) {
         if (!(event.getLevel() instanceof ServerLevel level)) return;
+        if(event.getAffectedBlocks().size()>256){NetworkIntegrityManager.invalidateDimension(level);return;}
         for (BlockPos pos : event.getAffectedBlocks()) {
             NetworkIntegrityManager.scheduleCheck(level, pos);
         }
     }
 
     @SubscribeEvent
+    public static void onChunkLoad(net.minecraftforge.event.level.ChunkEvent.Load event) {
+        if (event.getLevel() instanceof ServerLevel level)
+            com.example.compiledcircuits.network.NetworkRuntime.chunkChanged(level, event.getChunk().getPos().toLong(), true);
+    }
+    @SubscribeEvent
     public static void onServerTick(TickEvent.ServerTickEvent event) {
         // Break/explosion events can precede the actual world change.
+        if (event.phase == TickEvent.Phase.START) NetworkIntegrityManager.audit(event.getServer());
         if (event.phase == TickEvent.Phase.END) {
             NetworkIntegrityManager.processPending(event.getServer());
-            NetworkIntegrityManager.audit(event.getServer());
+            com.example.compiledcircuits.network.CompilationJobs.tick(event.getServer());
+            com.example.compiledcircuits.network.NetworkRuntime.tick(event.getServer());
+            com.example.compiledcircuits.network.DamageNotifications.flush(event.getServer());
         }
     }
 
     @SubscribeEvent
     public static void onServerStopped(ServerStoppedEvent event) {
+        com.example.compiledcircuits.network.RepairJobs.stop(event.getServer());
+        com.example.compiledcircuits.network.DamageNotifications.stop(event.getServer());
+        com.example.compiledcircuits.network.CompilationJobs.stop(event.getServer());
+        com.example.compiledcircuits.network.NetworkRuntime.stop(event.getServer());
         NetworkIntegrityManager.clearPending();
     }
 }

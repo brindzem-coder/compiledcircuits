@@ -18,12 +18,19 @@ public final class CircuitVisualPriority {
         }
     }
     public static Exclusions capture(String dimension) {
+        return capture(dimension, true);
+    }
+    public static Exclusions capture(String dimension, Object level) {
+        return capture(dimension, ClientNetworkSelection.isForLevel(level));
+    }
+    private static Exclusions capture(String dimension, boolean selectionCurrent) {
         Set<BlockPos> broken = new HashSet<>();
         if (dimension.equals(ClientBrokenElements.getDimension())) broken.addAll(ClientBrokenElements.getBroken());
         for (var focused : ClientBrokenElements.getFocused()) {
             if (dimension.equals(focused.dimension())) broken.add(focused.pos());
         }
         // Selection renderer is active whenever these sets are nonempty in the active level.
+        if (!selectionCurrent) return new Exclusions(Set.copyOf(broken), Set.of(), Set.of(), Set.of());
         return new Exclusions(Set.copyOf(broken), ClientNetworkSelection.getWires(),
                 ClientNetworkSelection.getInputs(), ClientNetworkSelection.getOutputs());
     }

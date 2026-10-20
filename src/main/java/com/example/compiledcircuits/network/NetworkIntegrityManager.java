@@ -1,5 +1,6 @@
 package com.example.compiledcircuits.network;
 
+import com.example.compiledcircuits.diagnostics.PerformanceDiagnostics;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -14,80 +15,43 @@ import java.util.Map;
 import java.util.Set;
 
 public final class NetworkIntegrityManager {
-    // Accessed only from server events; cleared when the server stops.
-    private static final Map<ResourceKey<Level>, Set<BlockPos>> PENDING_CHECKS = new HashMap<>();
-
-    private static java.util.Iterator<CompiledNetwork> auditNetworks = java.util.Collections.emptyIterator();
-    private static java.util.Iterator<CompiledCircuitElement> auditElements = java.util.Collections.emptyIterator();
-    private static CompiledNetwork auditNetwork;
     private static Boolean exactMode;
     public static boolean exactIntegrityEnabled() {
         if (exactMode == null) exactMode = com.example.compiledcircuits.config.ServerConfig.EXACT_BLOCK_STATE_INTEGRITY.get();
         return exactMode;
     }
-    public static void audit(MinecraftServer server) {
-        var data = NetworkSavedData.get(server);
-        try {
-            for (int slot = 0; slot < 128; slot++) {
-                if (!auditElements.hasNext()) {
-                    if (!auditNetworks.hasNext()) {
-                        auditNetworks = data.getNetworks().iterator();
-                        if (!auditNetworks.hasNext()) break;
-                    }
-                    auditNetwork = auditNetworks.next();
-                    auditElements = auditNetwork.getElements().iterator();
-                    if (!auditElements.hasNext()) continue;
-                }
-                var element = auditElements.next();
-                if (data.getNetwork(auditNetwork.getId()) != auditNetwork) {
-                    auditElements = java.util.Collections.emptyIterator();
-                    continue;
-                }
-                var id = net.minecraft.resources.ResourceLocation.tryParse(auditNetwork.getDimension());
-                var level = id == null ? null : server.getLevel(net.minecraft.resources.ResourceKey.create(
-                        net.minecraft.core.registries.Registries.DIMENSION, id));
-                if (level != null && level.hasChunkAt(element.getPos())) checkElement(level, data, auditNetwork, element);
-            }
-        } catch (java.util.ConcurrentModificationException changed) {
-            auditNetworks = java.util.Collections.emptyIterator();
-            auditElements = java.util.Collections.emptyIterator();
-        }
-    }
+    public static void audit(MinecraftServer server) { NetworkSavedData.get(server).integrity().audit(server); }
     private NetworkIntegrityManager() {}
-
     public static void scheduleCheck(ServerLevel level, BlockPos pos) {
-        PENDING_CHECKS.computeIfAbsent(level.dimension(), key -> new HashSet<>()).add(pos.immutable());
+        if(level.captureBlockSnapshots || level.restoringBlockSnapshots)return;
+        PerformanceDiagnostics.add("pending.scheduleCalls", 1);
+        var data=NetworkSavedData.get(level.getServer());
+        var location=data.findElementLocation(level.dimension().location().toString(),pos);
+        if(location==null){PerformanceDiagnostics.add("pending.unownedSkipped",1);return;}
+        data.integrity().schedule(level,location);
     }
-
+    public static void invalidateDimension(ServerLevel level) { NetworkSavedData.get(level.getServer()).integrity().invalidateDimension(level); }
     public static void clearPending() {
-        auditNetworks = java.util.Collections.emptyIterator();
-        auditElements = java.util.Collections.emptyIterator();
-        auditNetwork = null;
-        exactMode = null;
-        PENDING_CHECKS.clear();
+        exactMode=null;
+        // Test/session compatibility; server-owned schedulers are weakly tracked by saved data.
+        NetworkSavedData.clearIntegritySchedulers();
     }
-
     public static void processPending(MinecraftServer server) {
-        if (PENDING_CHECKS.isEmpty()) return;
-        Map<ResourceKey<Level>, Set<BlockPos>> pending = new HashMap<>(PENDING_CHECKS);
-        PENDING_CHECKS.clear();
-        for (var entry : pending.entrySet()) {
-            ServerLevel level = server.getLevel(entry.getKey());
-            if (level == null) continue;
-            for (BlockPos pos : entry.getValue()) checkPosition(level, pos);
-        }
+        long start=PerformanceDiagnostics.begin();PerformanceDiagnostics.add("processPending.calls",1);
+        try{NetworkSavedData.get(server).integrity().tick(server);}
+        finally{PerformanceDiagnostics.elapsed("processPending",start);}
     }
-
     public static void checkPosition(ServerLevel level, BlockPos pos) {
         NetworkSavedData data = NetworkSavedData.get(level.getServer());
         NetworkSavedData.ElementLocation location =
                 data.findElementLocation(level.dimension().location().toString(), pos);
-        if (location == null || !level.hasChunkAt(pos)) return;
+        if (location == null || !NetworkRuntime.isChunkAvailable(level, RuntimeSignalReader.chunk(pos))) return;
 
         checkElement(level, data, location.network(), location.element());
     }
 
-    private static void checkElement(ServerLevel level, NetworkSavedData data, CompiledNetwork network, CompiledCircuitElement element) {
+    static boolean checkElement(ServerLevel level, NetworkSavedData data, CompiledNetwork network, CompiledCircuitElement element) {
+        if (level.captureBlockSnapshots || level.restoringBlockSnapshots) return false;
         BlockPos pos = element.getPos();
         var actual = level.getBlockState(pos);
         String actualBlockId = BuiltInRegistries.BLOCK.getKey(actual.getBlock()).toString();
@@ -98,39 +62,18 @@ public final class NetworkIntegrityManager {
         boolean changed = repaired
                 ? network.markRepaired(element.getId())
                 : network.markBroken(new BrokenCircuitElement(element.getId(), actualBlockId, level.getGameTime()));
-        if (!changed) return;
+        if (!changed) {
+            if(!repaired && network.updateBrokenActual(element.getId(),actualBlockId))data.setDirty();
+            return true;
+        }
 
         data.setDirty();
-        com.example.compiledcircuits.networking.NetworkGuiSync.broadcastBrokenList(level.getServer());
-        com.example.compiledcircuits.networking.BrokenElementSync.broadcastDimension(level);
+        DamageNotifications.changed(level, network.getId(), repaired);
         if (!wasDamaged && network.isDamaged()) {
             NetworkRuntime.networkBecameDamaged(level, network);
         } else if (wasDamaged && !network.isDamaged()) {
             NetworkRuntime.networkBecameHealthy(level, network);
         }
-        level.getServer().getPlayerList().broadcastSystemMessage(
-                Component.literal(formatMessage(network, element, repaired)), false);
-    }
-
-    private static String formatMessage(CompiledNetwork network, CompiledCircuitElement element, boolean repaired) {
-        return "[CompiledCircuits] Circuit " + (repaired ? "repaired: " : "damaged: ")
-                + network.getName() + " (#" + network.getId() + ") | "
-                + getElementDisplayName(element) + " @ " + formatPos(element.getPos());
-    }
-
-    private static String getElementDisplayName(CompiledCircuitElement element) {
-        String blockId = element.getBlockId();
-        String path = blockId.substring(blockId.indexOf(':') + 1);
-        StringBuilder result = new StringBuilder();
-        for (String part : path.split("_")) {
-            if (part.isEmpty()) continue;
-            if (result.length() > 0) result.append(' ');
-            result.append(Character.toUpperCase(part.charAt(0))).append(part.substring(1));
-        }
-        return result.toString();
-    }
-
-    private static String formatPos(BlockPos pos) {
-        return pos.getX() + ", " + pos.getY() + ", " + pos.getZ();
+        return true;
     }
 }

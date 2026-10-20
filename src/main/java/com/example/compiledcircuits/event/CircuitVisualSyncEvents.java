@@ -25,9 +25,5 @@ public final class CircuitVisualSyncEvents {
         if (event.getEntity() instanceof ServerPlayer player) CompiledElementSync.sendSnapshot(player);
     }
     @SubscribeEvent
-    public static void tick(TickEvent.ServerTickEvent event) {
-        if (event.phase == TickEvent.Phase.END) CompiledElementSync.flushDirty(event.getServer());
-    }
-    @SubscribeEvent
-    public static void stop(ServerStoppedEvent event) { CompiledElementSync.clear(); }
+    public static void stop(ServerStoppedEvent event) { CompiledElementSync.stop(event.getServer()); }
 }

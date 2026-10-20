@@ -22,12 +22,12 @@ public class ClientSelectionEvents {
     @SubscribeEvent
     public static void onLogout(net.minecraftforge.client.event.ClientPlayerNetworkEvent.LoggingOut event) {
         ClientBrokenElementList.clear();
-        ClientNetworkSelection.clear();
+        ClientHighlightSync.reset();
     }
 
     @SubscribeEvent
     public static void onLevelUnload(net.minecraftforge.event.level.LevelEvent.Unload event) {
-        if (event.getLevel() == Minecraft.getInstance().level) ClientNetworkSelection.clear();
+        if (event.getLevel() == Minecraft.getInstance().level) ClientHighlightSync.reset();
     }
 
     @SubscribeEvent
@@ -45,7 +45,7 @@ public class ClientSelectionEvents {
 
         if (event.getEntity().isShiftKeyDown()) {
 
-            ClientNetworkSelection.clear();
+            ClientHighlightSync.cancel();
 
             Minecraft minecraft = Minecraft.getInstance();
 
@@ -75,6 +75,7 @@ public class ClientSelectionEvents {
             return;
         }
 
+        ClientHighlightSync.cancel();
         boolean success =
                 ClientNetworkSelection.selectNetwork(
                         clientLevel,

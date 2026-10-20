@@ -34,6 +34,20 @@ public abstract class EndpointBlock extends Block implements IWireConnectable {
     }
 
     @Override
+    public void onRemove(BlockState state, net.minecraft.world.level.Level level, BlockPos pos, BlockState replacement, boolean moving) {
+        if (level instanceof net.minecraft.server.level.ServerLevel serverLevel)
+            com.example.compiledcircuits.network.NetworkIntegrityManager.scheduleCheck(serverLevel, pos);
+        super.onRemove(state, level, pos, replacement, moving);
+    }
+
+    @Override
+    public void onPlace(BlockState state, net.minecraft.world.level.Level level, BlockPos pos, BlockState old, boolean moving) {
+        super.onPlace(state, level, pos, old, moving);
+        if (level instanceof net.minecraft.server.level.ServerLevel serverLevel)
+            com.example.compiledcircuits.network.NetworkIntegrityManager.scheduleCheck(serverLevel, pos);
+    }
+
+    @Override
     protected void createBlockStateDefinition(
             StateDefinition.Builder<Block, BlockState> builder
     ) {

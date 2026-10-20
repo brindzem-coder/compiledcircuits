@@ -54,6 +54,11 @@ public final class ClientHoveredCircuit {
         String dimension = level.dimension().location().toString();
         BlockPos target = hit.getBlockPos().immutable();
         var state = loadedState(level, target);
+        if (ClientCompiledElements.isReadyFor(dimension) && ClientCompiledElements.isBlocked(target)
+                && state != null && CircuitElementPredicates.isCircuit(state)) {
+            player.displayClientMessage(net.minecraft.network.chat.Component.literal("Blocked saved membership. An administrator can inspect /circuit conflicts list."), true);
+            clear(); return;
+        }
         if (state == null || !CircuitElementPredicates.isCircuit(state) || !ClientCompiledElements.isReadyFor(dimension)) {
             clear(); return;
         }
@@ -101,6 +106,7 @@ public final class ClientHoveredCircuit {
     }
     private static boolean connects(ClientLevel level, BlockPos from, Direction direction) {
         BlockPos to = from.relative(direction);
+        if (ClientCompiledElements.isBlocked(from) || ClientCompiledElements.isBlocked(to)) return false;
         if (ClientCompiledElements.networkIdAt(from) != null || ClientCompiledElements.networkIdAt(to) != null) return false;
         var current = loadedState(level, from);
         var neighbor = loadedState(level, to);

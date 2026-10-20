@@ -14,7 +14,7 @@ public final class VisualScaleTest {
             for (int i=0;i<size;i++) elements.add(new CompiledCircuitElement(i+1,
                     new BlockPos(i%1000-500,-64+i/1000,-17), CircuitElementType.WIRE,"compiledcircuits:basic_wire"));
             var data = new NetworkSavedData();
-            data.addNetwork(new CompiledNetwork(1,"scale",0,"minecraft:overworld",Set.of(),Set.of(),Set.of(),elements));
+            data.addNetwork(new CompiledNetwork(1,"scale",0,"minecraft:overworld",elements));
             var parts = CompiledElementSync.buildSnapshot(data,"minecraft:overworld",size);
             long buildNanos = CompiledElementSync.getSnapshotBuildNanos();
             ClientCompiledElements.clear();
@@ -37,6 +37,10 @@ public final class VisualScaleTest {
                     commitNanos+=System.nanoTime()-start;
                 } finally { buffer.release(); }
             }
+            long applyStart=System.nanoTime();
+            for(int tick=0;tick<1000&&!ClientCompiledElements.isReadyFor("minecraft:overworld");tick++)ClientCompiledElements.tick(System.nanoTime());
+            commitNanos+=System.nanoTime()-applyStart;
+            if(!ClientCompiledElements.isReadyFor("minecraft:overworld"))throw new AssertionError("Client snapshot did not finish");
             if(bytes!=CompiledElementSync.getSnapshotBytes()) throw new AssertionError("Byte counter");
             var positions=ClientCompiledElements.positionsForNetwork(1);
             if(positions.size()!=size) throw new AssertionError("Membership lost");

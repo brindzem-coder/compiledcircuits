@@ -35,7 +35,8 @@ minecraft {
     // When true, this property will have all Eclipse/IntelliJ IDEA run configurations run the "prepareX" task for the given run configuration before launching the game.
     // In most cases, it is not necessary to enable.
     // enableEclipsePrepareRuns = true
-    // enableIdeaPrepareRuns = true
+    // Recreate launch classpaths/mappings after clean before an IntelliJ run.
+    enableIdeaPrepareRuns = true
 
     // This property allows configuring Gradle's ProcessResources task(s) to run on IDE output locations before launching the game.
     // It is REQUIRED to be set to true for this template to function.
@@ -86,9 +87,24 @@ minecraft {
             property 'forge.enabledGameTestNamespaces', mod_id
         }
 
+        client2 {
+            parent runs.client
+            workingDirectory project.file('run_client2')
+            args '--username', 'Dev2'
+        }
+
+        client3 {
+            parent runs.client
+            workingDirectory project.file('run_client3')
+            args '--username', 'Dev3'
+        }
+
         server {
             property 'forge.enabledGameTestNamespaces', mod_id
             args '--nogui'
+            workingDirectory project.file('run')
+            // Автоматично робить усіх гравців операторами серверами при вході (для тестів):
+            property 'forge.force_op', 'true'
         }
 
         // This run config launches GameTestServer and runs all registered gametests, then exits.
@@ -215,6 +231,7 @@ sourceSets {
 }
 configurations.gametestImplementation.extendsFrom(configurations.testImplementation)
 minecraft.runs.gameTestServer {
+    if (project.hasProperty('stage09LegacyInputs')) property 'compiledcircuits.legacyInputs', project.file(project.property('stage09LegacyInputs')).absolutePath
     workingDirectory project.file('run-stage7-tests')
     mods {
         "${mod_id}" {
@@ -260,10 +277,10 @@ tasks.named('compileJava', JavaCompile).configure {
     ]
 }
 tasks.named('jar', Jar).configure {
-    manifest.attributes('MixinConfigs': 'compiledcircuits.visual.mixins.json')
+    manifest.attributes('MixinConfigs': 'compiledcircuits.visual.mixins.json,compiledcircuits.runtime.mixins.json')
 }
 minecraft.runs.configureEach {
-    args '-mixin.config', 'compiledcircuits.visual.mixins.json'
+    args '-mixin.config', 'compiledcircuits.visual.mixins.json', '-mixin.config', 'compiledcircuits.runtime.mixins.json'
     property 'mixin.env.remapRefMap', 'true'
     property 'mixin.env.refMapRemappingFile', layout.buildDirectory.file('createSrgToMcp/output.srg').get().asFile.absolutePath
 }
@@ -312,3 +329,25 @@ tasks.register('visualScaleCheck', JavaExec) {
 tasks.register('visualChecks') {
     dependsOn 'membershipCheck', 'hoverCheck', 'visualPriorityCheck', 'membershipMutationCheck', 'visualScaleCheck'
 }
+
+// Explicit full-limit stage 09 benchmark, separate from routine visual regression checks.
+tasks.register('membershipCapacityScaleCheck', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.example.compiledcircuits.client.MembershipCapacityScaleTest'
+    maxHeapSize = '2g'
+    workingDir = layout.buildDirectory.dir('membership-capacity-scale').get().asFile
+    doFirst { workingDir.mkdirs() }
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
+}
+
+// Stage 10 pure manager model, selection, action and geometry checks.
+tasks.register('managerCheck', JavaExec) {
+    dependsOn tasks.named('testClasses')
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'com.example.compiledcircuits.client.ManagerComponentsTest'
+    workingDir = layout.buildDirectory.dir('manager-check').get().asFile
+    doFirst { workingDir.mkdirs() }
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
+}
+tasks.named('visualChecks').configure { dependsOn 'managerCheck' }

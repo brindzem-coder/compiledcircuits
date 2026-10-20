@@ -24,21 +24,49 @@ public class ClientCompiledElementsTest {
   long revision=ClientCompiledElements.getRevision();ClientCompiledElements.accept(part("minecraft:overworld",1,0,2,a),3);
   check(revision==ClientCompiledElements.getRevision());
   ClientCompiledElements.accept(part("minecraft:overworld",2,0,2,a),4);check(ClientCompiledElements.positionsForNetwork(7).size()==2);
-  ClientCompiledElements.accept(part("minecraft:overworld",2,1,2,a),5);check(ClientCompiledElements.positionsForNetwork(7).size()==2);
+  ClientCompiledElements.accept(part("minecraft:overworld",2,1,2,a),5);check(!ClientCompiledElements.isReadyFor("minecraft:overworld"));
   ClientCompiledElements.accept(part("minecraft:overworld",3,0,2,a),6);
   ClientCompiledElements.tick(CompiledElementPositionsS2CPacket.STAGING_TIMEOUT_NANOS+7);
   ClientCompiledElements.accept(part("minecraft:overworld",3,1,2,b),CompiledElementPositionsS2CPacket.STAGING_TIMEOUT_NANOS+8);
-  check(ClientCompiledElements.positionsForNetwork(7).size()==2);
+  check(!ClientCompiledElements.isReadyFor("minecraft:overworld"));
   ClientCompiledElements.accept(part("minecraft:the_nether",4,0,1,b),10);
-  check(ClientCompiledElements.isReadyFor("minecraft:overworld"));
+  check(!ClientCompiledElements.isReadyFor("minecraft:overworld"));
   ClientCompiledElements.onLevelChanged(new Object(),"minecraft:the_nether");
-  check(ClientCompiledElements.isReadyFor("minecraft:the_nether"));check(ClientCompiledElements.networkIdAt(a)==null);
+  check(!ClientCompiledElements.isReadyFor("minecraft:the_nether"));check(ClientCompiledElements.networkIdAt(a)==null);
   ClientCompiledElements.onLevelChanged(null,"");check(ClientCompiledElements.networkIdAt(b)==null);
-  ClientCompiledElements.onLevelChanged(new Object(),"minecraft:the_nether");check(ClientCompiledElements.networkIdAt(b)==7);
+  ClientCompiledElements.onLevelChanged(new Object(),"minecraft:the_nether");check(ClientCompiledElements.networkIdAt(b)==null);
   ClientCompiledElements.accept(part("minecraft:the_nether",5,0,1),11);check(ClientCompiledElements.isReadyFor("minecraft:the_nether"));
   check(ClientCompiledElements.positionsForNetwork(7).isEmpty());
   ClientCompiledElements.clear();ClientCompiledElements.onLevelChanged(new Object(),"minecraft:the_nether");
   check(!ClientCompiledElements.isReadyFor("minecraft:the_nether"));
+  var dim = new ResourceLocation("minecraft:the_nether");
+  ClientCompiledElements.accept(new CompiledElementPositionsS2CPacket(dim,1,0,1,
+      List.of(new CompiledElementPositionsS2CPacket.Entry(7,a))),12);
+  ClientCompiledElements.accept(new CompiledElementPositionsS2CPacket(dim,2,0,2,
+      List.of(new CompiledElementPositionsS2CPacket.Entry(8,b)),List.of(),false),13);
+  check(ClientCompiledElements.networkIdAt(a)==7);
+  ClientCompiledElements.accept(new CompiledElementPositionsS2CPacket(dim,2,1,2,List.of(),List.of(a),false),14);
+  check(ClientCompiledElements.networkIdAt(a)==null && ClientCompiledElements.isBlocked(a));
+  check(ClientCompiledElements.networkIdAt(b)==8 && !ClientCompiledElements.isBlocked(b));
+  ClientCompiledElements.accept(new CompiledElementPositionsS2CPacket(dim,3,0,1,
+      List.of(new CompiledElementPositionsS2CPacket.Entry(8,b)),List.of(),true),15);
+  check(ClientCompiledElements.isBlocked(a) && !ClientCompiledElements.isBlocked(b));
+  ClientCompiledElements.accept(new CompiledElementPositionsS2CPacket(dim,4,0,1,List.of()),16);
+  check(!ClientCompiledElements.isBlocked(a) && !ClientCompiledElements.hasBlockedMembership());
+  ClientCompiledElements.clear();check(!ClientCompiledElements.hasBlockedMembership());
+  ClientCompiledElements.onLevelChanged(new Object(),"minecraft:overworld");
+  var token=UUID.randomUUID();ClientCompiledElements.context(token);
+  ClientCompiledElements.accept(part("minecraft:overworld",10,0,1,a),20);check(!ClientCompiledElements.isReadyFor("minecraft:overworld"));
+  ClientCompiledElements.accept(part("minecraft:overworld",10,0,1,a).withContext(token),21);check(ClientCompiledElements.isReadyFor("minecraft:overworld"));
+  var over=new CompiledElementPositionsS2CPacket(new ResourceLocation("minecraft:overworld"),11,0,1,List.of(),List.of(),true,token,CompiledElementPositionsS2CPacket.State.OVER_CAPACITY);
+  ClientCompiledElements.accept(over,22);check(ClientCompiledElements.status().equals("OVER_CAPACITY")&&ClientCompiledElements.isBlocked(a));
+  ClientCompiledElements.accept(part("minecraft:overworld",12,0,1,a).withContext(token),23);check(ClientCompiledElements.isReadyFor("minecraft:overworld"));
+  ClientCompiledElements.accept(over,24);check(ClientCompiledElements.isReadyFor("minecraft:overworld"));
+  ClientCompiledElements.accept(part("minecraft:overworld",13,0,2,a).withContext(token),25);
+  ClientCompiledElements.accept(part("minecraft:overworld",13,0,2,b).withContext(token),26);check(ClientCompiledElements.status().equals("STALE"));
+  ClientCompiledElements.accept(part("minecraft:overworld",14,0,2,a).withContext(token),27);
+  ClientCompiledElements.accept(new CompiledElementPositionsS2CPacket(new ResourceLocation("minecraft:overworld"),14,0,1,List.of(),List.of(),true,token,CompiledElementPositionsS2CPacket.State.OVER_CAPACITY),28);
+  check(ClientCompiledElements.status().equals("STALE"));
   CompiledElementPositionsPacketTest.run();
   System.out.println("Compiled membership cache checks passed: " + checks);
  }

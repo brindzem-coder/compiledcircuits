@@ -24,6 +24,7 @@ public final class NetworkGuiSync {
                         player.getServer()
                 );
 
+        if((long)savedData.getNetworks().size()+savedData.getFolders().size()>NetworkListS2CPacket.MAX_RECORDS)return NetworkListS2CPacket.unavailable();
         List<NetworkListS2CPacket.Entry> entries =
                 new ArrayList<>();
 
@@ -36,7 +37,7 @@ public final class NetworkGuiSync {
                             network.getName(),
                             network.getFolderId(),
                             network.getDimension(),
-                            network.isPowered(),
+                            network.getEffectiveSignal() > 0,
                             network.getWires().size(),
                             network.getInputs().size(),
                             network.getOutputs().size()
@@ -65,7 +66,7 @@ public final class NetworkGuiSync {
                 )
         );
 
-        return new NetworkListS2CPacket(entries, folders);
+        return NetworkListS2CPacket.fits(entries,folders)?new NetworkListS2CPacket(entries, folders):NetworkListS2CPacket.unavailable();
     }
 
     public static List<BrokenElementListS2CPacket.Entry> buildBrokenEntries(ServerPlayer player) {
@@ -89,15 +90,10 @@ public final class NetworkGuiSync {
         return result;
     }
 
-    public static void sendBrokenList(ServerPlayer player) {
-        ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                new BrokenElementListS2CPacket(buildBrokenEntries(player)));
-    }
+    public static void sendBrokenList(ServerPlayer player) { DamageSync.ensure(player); }
 
-    public static void broadcastBrokenList(net.minecraft.server.MinecraftServer server) {
-        var packet = new BrokenElementListS2CPacket(buildBrokenEntries(NetworkSavedData.get(server)));
-        ModNetworking.CHANNEL.send(PacketDistributor.ALL.noArg(), packet);
-    }
+    /** Compatibility entry point: the ledger already observes every supported mutation. */
+    public static void broadcastBrokenList(net.minecraft.server.MinecraftServer server) { }
 
     public static void sendList(ServerPlayer player) {
         sendBrokenList(player);

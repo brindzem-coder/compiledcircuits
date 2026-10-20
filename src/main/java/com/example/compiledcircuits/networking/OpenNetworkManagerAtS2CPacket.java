@@ -39,7 +39,7 @@ public class OpenNetworkManagerAtS2CPacket {
                               Supplier<NetworkEvent.Context> supplier) {
         NetworkEvent.Context context = supplier.get();
         context.enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
-                () -> () -> ClientPacketHandlers.openNetworkManagerAt(packet)));
+                () -> () -> ClientPacketHandlers.openNetworkManagerAt(packet, context.getNetworkManager())));
         context.setPacketHandled(true);
     }
 }

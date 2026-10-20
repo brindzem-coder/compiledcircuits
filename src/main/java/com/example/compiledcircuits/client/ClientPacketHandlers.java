@@ -15,12 +15,10 @@ public final class ClientPacketHandlers {
 
     public static void handleCompiledElements(com.example.compiledcircuits.networking.CompiledElementPositionsS2CPacket packet,
                                               net.minecraft.network.Connection connection) {
-        var minecraft = Minecraft.getInstance();
-        if (minecraft.getConnection() == null || minecraft.getConnection().getConnection() != connection) return;
-        var level = minecraft.level;
-        ClientCompiledElements.onLevelChanged(level, level == null ? "" : level.dimension().location().toString());
-        ClientCompiledElements.accept(packet, System.nanoTime());
+        ClientMembershipSync.accept(packet,connection);
     }
+
+    public static void handleDamage(com.example.compiledcircuits.networking.DamagePartS2CPacket packet,net.minecraft.network.Connection connection){ClientDamageSync.accept(packet,connection);}
 
     public static void handleBrokenElementList(com.example.compiledcircuits.networking.BrokenElementListS2CPacket packet) {
         ClientBrokenElementList.setEntries(packet.getEntries());
@@ -29,7 +27,7 @@ public final class ClientPacketHandlers {
             valid.add(new ClientBrokenElements.FocusedBrokenPos(entry.dimension(), entry.pos()));
         }
         ClientBrokenElements.retainFocused(valid);
-        if (Minecraft.getInstance().screen instanceof NetworkManagerScreen screen) screen.onBrokenListUpdated();
+        managerDamageUpdated();
     }
 
     public static void handleBrokenElements(com.example.compiledcircuits.networking.BrokenElementsS2CPacket packet) {
@@ -42,34 +40,45 @@ public final class ClientPacketHandlers {
                 name -> ModNetworking.CHANNEL.sendToServer(new CompileNamedC2SPacket(name)), 64));
     }
 
+    private static boolean currentConnection(net.minecraft.network.Connection sender) {
+        var connection = Minecraft.getInstance().getConnection();
+        return connection != null && connection.getConnection() == sender;
+    }
+    public static void openNetworkManagerAt(OpenNetworkManagerAtS2CPacket packet, net.minecraft.network.Connection sender) {
+        if (currentConnection(sender)) openNetworkManagerAt(packet);
+    }
+    public static void openNetworkManager(NetworkListS2CPacket packet, net.minecraft.network.Connection sender) {
+        if (currentConnection(sender)) openNetworkManager(packet);
+    }
+
     public static void openNetworkManagerAt(OpenNetworkManagerAtS2CPacket packet) {
+        if(!listAvailable(packet.getListPacket()))return;
         Minecraft.getInstance().setScreen(new NetworkManagerScreen(packet.getListPacket().entries,
                 packet.getListPacket().folders, packet.getNetworkId()));
     }
 
-    public static void openNetworkManager(NetworkListS2CPacket packet) {
-        if (Minecraft.getInstance().screen instanceof NetworkManagerScreen screen) {
-            screen.updateData(packet.entries, packet.folders);
-            return;
-        }
-        Minecraft.getInstance().setScreen(
-                new NetworkManagerScreen(
-                        packet.entries,
-                        packet.folders
-                )
-        );
+    private static boolean listAvailable(NetworkListS2CPacket packet){
+        if(packet.available)return true;var mc=Minecraft.getInstance();
+        var manager=currentManager();if(manager!=null){manager.closeSession();mc.setScreen(null);}
+        if(mc.player!=null)mc.player.displayClientMessage(net.minecraft.network.chat.Component.literal("Network list exceeds the GUI budget. Use /circuit list, /circuit capacity, /circuit rename <id> <name>, or /circuit decompile <id>."),false);
+        return false;
     }
+    /** Updates never open a screen. Explicit navigation uses OpenNetworkManagerAtS2CPacket. */
+    public static void openNetworkManager(NetworkListS2CPacket packet) {
+        if (!listAvailable(packet)) return;
+        var manager = currentManager();
+        if (manager != null) manager.updateData(packet.entries, packet.folders);
+    }
+    static NetworkManagerScreen currentManager() {
+        var screen = Minecraft.getInstance().screen;
+        NetworkManagerScreen manager = screen instanceof NetworkManagerScreen m ? m
+                : screen instanceof NetworkTextEditScreen edit ? edit.parentManager() : null;
+        return manager != null && manager.contextValid() ? manager : null;
+    }
+    static void managerDamageUpdated() { var manager = currentManager(); if (manager != null) manager.onBrokenListUpdated(); }
+    static void managerDamageUnconfirmed() { var manager = currentManager(); if (manager != null) manager.onDamageUnconfirmed(); }
 
-    public static void handleHighlight(
-            NetworkHighlightS2CPacket packet
-    ) {
-
-        ClientNetworkSelection.setSelection(
-                packet.getWires(),
-                packet.getInputs(),
-                packet.getOutputs()
-        );
-
-        Minecraft.getInstance().setScreen(null);
+    public static void handleHighlight(NetworkHighlightS2CPacket packet,net.minecraft.network.Connection connection) {
+        ClientHighlightSync.accept(packet,connection);
     }
 }

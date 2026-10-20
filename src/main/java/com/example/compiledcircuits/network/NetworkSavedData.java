@@ -1,6 +1,6 @@
 package com.example.compiledcircuits.network;
 
-import com.example.compiledcircuits.networking.CompiledElementSync;
+import com.example.compiledcircuits.diagnostics.PerformanceDiagnostics;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
@@ -21,6 +21,27 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 
 public class NetworkSavedData extends SavedData {
+    private final MembershipCapacity capacity=new MembershipCapacity(this);
+    public MembershipCapacity capacity(){return capacity;}
+    long reservedCapacity(String dimension){return reservations.capacity.getOrDefault(dimension,0L);}
+    public Set<BlockPos> reservedPositionsView(String dimension){return java.util.Collections.unmodifiableSet(reservations.byDimension.getOrDefault(dimension,Set.of()));}
+    private long highlightMembershipRevision;
+    private java.util.function.Consumer<CompiledNetwork> highlightInvalidator = n -> {};
+    public long highlightMembershipRevision() { return highlightMembershipRevision; }
+    public void highlightInvalidator(java.util.function.Consumer<CompiledNetwork> observer) { highlightInvalidator = observer; }
+    void highlightMembershipChanged(CompiledNetwork removed) {
+        highlightMembershipRevision++;
+        if (removed != null) highlightInvalidator.accept(removed);
+    }
+
+    private final DamageLedger damage=new DamageLedger(this);
+    public DamageLedger damage(){return damage;}
+    final ServerWorkBudget workBudget = new ServerWorkBudget();
+    private final IntegrityScheduler integrity = new IntegrityScheduler(this);
+    IntegrityScheduler integrity() { return integrity; }
+    private final NetworkRuntime runtime = new NetworkRuntime(this);
+    NetworkRuntime runtime() { return runtime; }
+
 
     private static final String DATA_NAME =
             "compiledcircuits_networks";
@@ -28,10 +49,180 @@ public class NetworkSavedData extends SavedData {
     private final Map<Integer, CompiledNetwork> networks =
             new HashMap<>();
 
-    private int nextNetworkId = 1;
+    private final NetworkMembershipIndex membership = new NetworkMembershipIndex();
+    // Preserved verbatim when strict membership validation fails. Never silently retry on load.
+    private List<CompoundTag> invalidMembershipRecords = new ArrayList<>();
 
-    public NetworkSavedData() {
+    private MembershipReservations reservations = new MembershipReservations();
+    public boolean hasUnknownMembershipReservations() { return reservations.unknown; }
+    public Set<BlockPos> getBlockedPositions(String dimension) { return reservations.positions(dimension); }
+    public Set<BlockPos> getBlockedPositions(String dimension, long chunk) {
+        return java.util.Collections.unmodifiableSet(reservations.chunks.getOrDefault(dimension, Map.of()).getOrDefault(chunk, Set.of()));
     }
+    public Set<String> getBlockingRecords(String dimension, BlockPos pos) { return reservations.at(dimension, pos); }
+
+    private void rebuildReservations() {
+        reservations = new MembershipReservations();
+        for (var record : invalidMembershipRecords) reservations.add(record);
+    }
+
+    /** Explicit administrative deletion of one raw record, never automatic reactivation. */
+    public boolean removeInvalidMembershipRecord(String recordId) {
+        requireMutationThread();
+        if (!invalidMembershipRecords.removeIf(record -> record.getString("recordId").equals(recordId))) return false;
+        reservationRemoval=null;
+        rebuildReservations();
+        setDirty();
+        // Unknown reservations affect every dimension, including ones without known positions.
+        reservationsChanged = true;
+        capacity.invalidateAll();
+        return true;
+    }
+    private ReservationRemoval reservationRemoval;
+    public boolean queueInvalidRecordRemoval(String id,net.minecraft.commands.CommandSourceStack source){
+        requireMutationThread();if(reservationRemoval!=null)return false;reservationRemoval=new ReservationRemoval(id,source);return true;
+    }
+    private final class ReservationRemoval {
+        final String id;final net.minecraft.commands.CommandSourceStack source;
+        final java.util.Iterator<CompoundTag> records=invalidMembershipRecords.iterator();
+        final List<CompoundTag> remaining=new ArrayList<>();final MembershipReservations replacement=new MembershipReservations();
+        MembershipReservations.RecordBuilder builder;boolean found;
+        ReservationRemoval(String id,net.minecraft.commands.CommandSourceStack source){this.id=id;this.source=source;}
+    }
+    /** One raw position/record transition per shared server work unit; publication is atomic. */
+    public boolean reservationRemovalStep(){
+        requireMutationThread();var job=reservationRemoval;if(job==null)return false;
+        boolean actorUnavailable=job.source!=null&&job.source.getEntity() instanceof net.minecraft.server.level.ServerPlayer player
+                &&(player.isRemoved()||player.isSpectator()||!player.createCommandSourceStack().hasPermission(2));
+        if(job.source!=null&&(!job.source.hasPermission(2)||actorUnavailable)){
+            reservationRemoval=null;job.source.sendFailure(net.minecraft.network.chat.Component.literal("Isolated-record removal cancelled: permission changed."));return true;
+        }
+        if(job.builder!=null){if(!job.builder.step())job.builder=null;return true;}
+        if(job.records.hasNext()){
+            var record=job.records.next();if(record.getString("recordId").equals(job.id)){job.found=true;return true;}
+            job.remaining.add(record);job.builder=job.replacement.prepare(record);return true;
+        }
+        reservationRemoval=null;
+        if(job.found){invalidMembershipRecords=job.remaining;reservations=job.replacement;capacity.invalidateAll();reservationsChanged=true;setDirty();}
+        if(job.source!=null){if(job.found)job.source.sendSuccess(()->net.minecraft.network.chat.Component.literal("Removed isolated record "+job.id+". Other records remain blocked."),false);
+            else job.source.sendFailure(net.minecraft.network.chat.Component.literal("Isolated record does not exist."));}
+        return true;
+    }
+    private boolean reservationsChanged = true;
+    public boolean consumeReservationsChanged() {
+        boolean changed = reservationsChanged; reservationsChanged = false; return changed;
+    }
+
+    public long getIsolationWorkSize() {
+        long size = invalidMembershipRecords.size();
+        if (size > OperationLimits.IDS) return Long.MAX_VALUE;
+        for (var record : invalidMembershipRecords) {
+            var raw = record.getCompound("raw");
+            for (String field : List.of("elements", "wires", "inputs", "outputs")) {
+                size += raw.getList(field, Tag.TAG_COMPOUND).size();
+                if (size > OperationLimits.ELEMENTS) return size;
+            }
+        }
+        return size;
+    }
+    public int getInvalidMembershipRecordCount() { return invalidMembershipRecords.size(); }
+    public List<String> getInvalidMembershipSummaries(){return getInvalidMembershipSummaries(0,invalidMembershipRecords.size());}
+    public List<String> getInvalidMembershipSummaries(int offset,int limit){
+        int start=Math.min(Math.max(0,offset),invalidMembershipRecords.size()),end=start+Math.min(Math.max(0,limit),invalidMembershipRecords.size()-start);
+        return invalidMembershipRecords.subList(start,end).stream().map(record -> {
+            var raw = record.getCompound("raw");
+            String name = raw.getString("name"), reason = record.getString("reason");
+            return record.getString("recordId") + " | " + name.substring(0, Math.min(name.length(), 64))
+                    + " (#" + raw.getInt("id") + ") | " + reason.substring(0, Math.min(reason.length(), 512));
+        }).toList();
+    }
+
+    public boolean hasInvalidMembershipRecords() { return !invalidMembershipRecords.isEmpty(); }
+
+    /** Defensive copies: callers cannot edit the stored evidence/reservations. */
+    public List<CompoundTag> getInvalidMembershipRecords() {
+        return invalidMembershipRecords.stream().map(CompoundTag::copy).toList();
+    }
+
+    private void preserveInvalidMembership(CompoundTag raw, String reason) {
+        CompoundTag record = new CompoundTag();
+        record.putString("recordId", java.util.UUID.randomUUID().toString());
+        record.putString("reason", reason);
+        record.put("raw", raw.copy());
+        invalidMembershipRecords.add(record);
+        reservations.add(record);
+        org.slf4j.LoggerFactory.getLogger(NetworkSavedData.class).error(
+                "Preserved invalid membership record {} (network {}): {}. Known positions remain reserved; incomplete records block new compilation until administrative resolution.",
+                record.getString("recordId"), raw.getInt("id"), reason);
+    }
+
+    private void requireResolvedMembership() {
+        if (hasUnknownMembershipReservations())
+            throw new IllegalStateException("Unresolved saved membership records; new compilation is blocked.");
+    }
+
+
+    // Zero means the positive int ID space has been exhausted; persisted across reloads.
+    private int nextNetworkId = 1;
+    private final Thread mutationThread = Thread.currentThread();
+
+    private void requireMutationThread() {
+        if (Thread.currentThread() != mutationThread)
+            throw new IllegalStateException("Network membership must be changed on its owning server thread.");
+    }
+
+    public static final class AdmissionException extends IllegalArgumentException {
+        public final NetworkOperations.Code code;
+        public AdmissionException(String message) { this(message,NetworkOperations.Code.CONFLICT); }
+        public AdmissionException(String message,NetworkOperations.Code code){super(message);this.code=code;}
+    }
+
+    /** Hidden membership and runtime entries are prepared one bounded unit at a time. */
+    final class PreparedAdmission {
+        final CompiledNetwork candidate;
+        final MembershipReservations originalReservations = reservations;
+        final NetworkRuntime.Prepared preparedRuntime;
+        private int staged;
+        private java.util.Iterator<CompiledCircuitElement> rollback;
+        PreparedAdmission(CompiledNetwork candidate) {
+            this.candidate = candidate; preparedRuntime = runtime.prepare(candidate);
+        }
+        void stage(CompiledCircuitElement element) {
+            requireMutationThread();
+            if (reservations != originalReservations || reservations.unknown
+                    || !reservations.at(candidate.getDimension(), element.getPos()).isEmpty())
+                throw new AdmissionException("Saved membership reservations changed or block this position.");
+            membership.stage(candidate, element); staged++;
+            preparedRuntime.add(element);
+        }
+        void publish() {
+            requireMutationThread();
+            if (reservations != originalReservations || reservations.unknown || staged != candidate.getElements().size())
+                throw new AdmissionException("Admission changed during compilation.");
+            capacity.check(List.of(candidate),null);
+            int id = getNextNetworkId();
+            if (networks.containsKey(id) || reservations.networkIds.contains(id)) throw new AdmissionException("Network ID is reserved.");
+            networks.put(id, candidate);
+            candidate.publish(id);
+            preparedRuntime.publish();
+            nextNetworkId = id == Integer.MAX_VALUE ? 0 : id + 1;
+            setDirty();
+        }
+        void beginRollback() { rollback = candidate.getElements().iterator(); preparedRuntime.beginRollback(); }
+        boolean rollbackNext() {
+            if (staged > 0) { membership.unstage(candidate, rollback.next()); staged--; return true; }
+            return preparedRuntime.rollbackNext();
+        }
+    }
+    PreparedAdmission prepareCompilation(CompiledNetwork candidate) {
+        requireMutationThread(); capacity.check(List.of(candidate),null); requireResolvedMembership(); return new PreparedAdmission(candidate);
+    }
+
+    private static final java.util.Set<NetworkSavedData> integrityOwners = java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());
+    public NetworkSavedData() { integrityOwners.add(this); }
+    NetworkSavedData(int networkLimit,int dimensionLimit){this();capacity.configure(networkLimit,dimensionLimit);}
+    static void clearIntegritySchedulers() { for(var data:integrityOwners) data.integrity.clear(); }
+
 
     private final Map<Integer, CircuitFolder> folders =
             new HashMap<>();
@@ -168,7 +359,7 @@ public class NetworkSavedData extends SavedData {
 
         folder.setName(newName);
 
-        setDirty();
+        setDirty(); damage.foldersChanged();
 
         return true;
     }
@@ -296,7 +487,7 @@ public class NetworkSavedData extends SavedData {
                 targetParentId
         );
 
-        setDirty();
+        setDirty(); damage.foldersChanged();
 
         return true;
     }
@@ -312,10 +503,15 @@ public class NetworkSavedData extends SavedData {
 
     /** An empty result signals a rejected operation; no networks are removed. */
     public List<CompiledNetwork> removeNetworks(Collection<Integer> ids) {
+        requireMutationThread();
         if (ids.isEmpty() || !networks.keySet().containsAll(ids)) return List.of();
         List<CompiledNetwork> removed = new ArrayList<>();
-        for (int id : new LinkedHashSet<>(ids)) removed.add(networks.remove(id));
-        for (CompiledNetwork network : removed) CompiledElementSync.markDimensionDirty(network.getDimension());
+        for (int id : new LinkedHashSet<>(ids)) removed.add(networks.get(id));
+        if(!runtime.canRetire(removed))return List.of();
+        long commitStart = com.example.compiledcircuits.diagnostics.PerformanceDiagnostics.begin();
+        for (CompiledNetwork network : removed) { networks.remove(network.getId()); runtime.remove(network); }
+        com.example.compiledcircuits.diagnostics.PerformanceDiagnostics.elapsed("decompile.atomicCommit",commitStart);
+        com.example.compiledcircuits.diagnostics.PerformanceDiagnostics.add("decompile.networks",removed.size());
         setDirty();
         return removed;
     }
@@ -360,7 +556,7 @@ public class NetworkSavedData extends SavedData {
                     || !targetNames.add(folders.get(id).getName())) return false;
         }
         for (int id : topLevel) folders.get(id).setParentId(targetParentId);
-        setDirty();
+        setDirty(); damage.foldersChanged();
         return true;
     }
 
@@ -413,7 +609,7 @@ public class NetworkSavedData extends SavedData {
             MinecraftServer server
     ) {
 
-        return server
+        NetworkSavedData data = server
                 .overworld()
                 .getDataStorage()
                 .computeIfAbsent(
@@ -421,112 +617,138 @@ public class NetworkSavedData extends SavedData {
                         NetworkSavedData::new,
                         DATA_NAME
                 );
+        data.capacity.networkLimit();
+        data.runtime.bind(server);
+        return data;
     }
 
+    /** Preview only. A successful admission commits the ID; rejection never consumes it. */
     public int getNextNetworkId() {
-        return nextNetworkId++;
+        requireMutationThread();
+        requireResolvedMembership();
+        if (nextNetworkId == 0) throw new AdmissionException("Network ID space exhausted.");
+        return nextNetworkId;
     }
 
     public record ElementLocation(CompiledNetwork network, CompiledCircuitElement element) { }
 
-    public ElementLocation findElementLocation(String dimension, BlockPos pos) {
-        for (CompiledNetwork network : networks.values()) {
-            if (!network.getDimension().equals(dimension)) continue;
-            CompiledCircuitElement element = network.getElementAt(pos);
-            if (element != null) return new ElementLocation(network, element);
-        }
-        return null;
+    /** Immutable, deterministic claims; multiple entries explicitly mean ambiguity.
+     * No fallback scan, and no claim is discarded because a block is damaged/unloaded.
+     */
+    public List<ElementLocation> getMembershipOwners(String dimension, BlockPos pos) {
+        return membership.owners(dimension, pos);
     }
 
-    public CompiledNetwork findNetworkContaining(
-            ServerLevel level,
-            BlockPos pos
-    ) {
+    /** Only returns an owner when the membership is unambiguous. */
+    public ElementLocation findIndexedElementLocation(String dimension, BlockPos pos) {
+        List<ElementLocation> owners = membership.owners(dimension, pos);
+        return owners.size() == 1 ? owners.get(0) : null;
+    }
 
-        String dimension =
-                level.dimension()
-                        .location()
-                        .toString();
 
-        for (CompiledNetwork network : networks.values()) {
+    private ElementLocation lookup(String metric, String dimension, BlockPos pos, CircuitElementType role) {
+        long started = PerformanceDiagnostics.begin();
+        PerformanceDiagnostics.add(metric + ".calls", 1);
+        try {
+            PerformanceDiagnostics.add(metric + ".indexProbes", 1);
+            ElementLocation location = findIndexedElementLocation(dimension, pos);
+            if (location != null && role != null && location.element().getType() != role) location = null;
+            PerformanceDiagnostics.add(metric + (location == null ? ".misses" : ".hits"), 1);
+            return location;
+        } finally { PerformanceDiagnostics.elapsed(metric, started); }
+    }
 
-            if (!network.getDimension().equals(dimension)) {
-                continue;
-            }
+    public ElementLocation findElementLocation(String dimension, BlockPos pos) {
+        return lookup("lookup.findElementLocation", dimension, pos, null);
+    }
 
-            if (network.getWires().contains(pos)
-                    || network.getInputs().contains(pos)
-                    || network.getOutputs().contains(pos)) {
-
-                return network;
-            }
-        }
-
-        return null;
+    public CompiledNetwork findNetworkContaining(ServerLevel level, BlockPos pos) {
+        var location = lookup("lookup.findNetworkContaining", level.dimension().location().toString(), pos, null);
+        return location == null ? null : location.network();
     }
 
     public CompiledNetwork findConflict(
             ServerLevel level,
             NetworkScanner.ScanResult result
     ) {
+        long diagnosticStart = PerformanceDiagnostics.begin();
+        PerformanceDiagnostics.add("lookup.findConflict.calls", 1);
+        try {
 
         String dimension =
                 level.dimension()
                         .location()
                         .toString();
 
-        for (CompiledNetwork network : networks.values()) {
-
-            if (!network.getDimension().equals(dimension)) {
-                continue;
-            }
-
-            if (containsAny(
-                    network.getWires(),
-                    result.wires()
-            )) {
-                return network;
-            }
-
-            if (containsAny(
-                    network.getInputs(),
-                    result.inputs()
-            )) {
-                return network;
-            }
-
-            if (containsAny(
-                    network.getOutputs(),
-                    result.outputs()
-            )) {
-                return network;
+        Set<BlockPos> positions = new TreeSet<>();
+        positions.addAll(result.wires());
+        positions.addAll(result.inputs());
+        positions.addAll(result.outputs());
+        for (BlockPos pos : positions) {
+            PerformanceDiagnostics.add("lookup.conflictPositionsVisited", 1);
+            var owners = membership.owners(dimension, pos);
+            if (!owners.isEmpty()) {
+                PerformanceDiagnostics.add("lookup.findConflict.hits", 1);
+                return owners.get(0).network();
             }
         }
 
+        PerformanceDiagnostics.add("lookup.findConflict.misses", 1);
         return null;
+
+        } finally { PerformanceDiagnostics.elapsed("lookup.findConflict", diagnosticStart); }
     }
 
-    private static boolean containsAny(
-            java.util.Set<BlockPos> first,
-            java.util.Set<BlockPos> second
-    ) {
+    public void addNetwork(CompiledNetwork network) {
+        addNetworks(List.of(network));
+    }
 
-        for (BlockPos pos : second) {
-            if (first.contains(pos)) {
-                return true;
+    /** All candidates are admitted together, or none are changed. */
+    public void addNetworks(Collection<CompiledNetwork> candidates) {
+        admit(candidates, false);
+    }
+
+    /** Explicit replacement; only the old network with this ID may relinquish its claims. */
+    public void replaceNetwork(CompiledNetwork replacement) {
+        admit(List.of(replacement), true);
+    }
+
+    private void admit(Collection<CompiledNetwork> candidates, boolean replacing) {
+        requireMutationThread();
+        var ordered = candidates.stream().sorted(java.util.Comparator.comparingInt(CompiledNetwork::getId)).toList();
+        if (ordered.isEmpty()) throw new AdmissionException("No candidate networks.");
+        Set<Integer> ids = new HashSet<>();
+        CompiledNetwork previous = replacing ? networks.get(ordered.get(0).getId()) : null;
+        capacity.check(ordered,previous);
+        boolean shrinkingKnownMembership=previous!=null&&ordered.size()==1&&previous.getDimension().equals(ordered.get(0).getDimension())
+                &&ordered.get(0).getElements().size()<previous.getElements().size()
+                &&ordered.get(0).getElements().stream().allMatch(e->previous.getElementAt(e.getPos())!=null);
+        if(!shrinkingKnownMembership)requireResolvedMembership();
+        if (replacing && previous == null) throw new AdmissionException("Replacement network does not exist.");
+        if(previous!=null && !runtime.canRetire(List.of(previous)))throw new AdmissionException("Retirement queue is full; retry later.");
+        int committedNextId = nextNetworkId;
+        for (var network : ordered) {
+            if (reservations.networkIds.contains(network.getId()))
+                throw new AdmissionException("Network ID " + network.getId() + " is reserved by isolated records.");
+            for (var element : network.getElements().stream().sorted(java.util.Comparator.comparing(CompiledCircuitElement::getPos)).toList()) {
+                var blocked = getBlockingRecords(network.getDimension(), element.getPos());
+                if (!blocked.isEmpty()) throw new AdmissionException("Position " + element.getPos().toShortString()
+                        + " in " + network.getDimension() + " is reserved by blocked record " + blocked.iterator().next()
+                        + ". See /circuit conflicts list.");
             }
+            if (!ids.add(network.getId())) throw new AdmissionException("Duplicate candidate network ID " + network.getId());
+            if (!replacing && networks.containsKey(network.getId()))
+                throw new AdmissionException("Network ID " + network.getId() + " already exists; use explicit replacement.");
+            if (committedNextId != 0 && network.getId() >= committedNextId)
+                committedNextId = network.getId() == Integer.MAX_VALUE ? 0 : network.getId() + 1;
         }
-
-        return false;
-    }
-
-    public void addNetwork(
-            CompiledNetwork network
-    ) {
-
-        CompiledNetwork previous = networks.put(network.getId(), network);
-        if (previous != null) CompiledElementSync.markDimensionDirty(previous.getDimension());
-        CompiledElementSync.markDimensionDirty(network.getDimension());
+        Runnable commitMembership = membership.prepareAddition(ordered, previous);
+        // Validation and preparation completed. No callbacks until data and index agree.
+        for (var network : ordered) networks.put(network.getId(), network);
+        commitMembership.run();
+        if (previous != null) runtime.remove(previous);
+        for (var network : ordered) runtime.add(network);
+        nextNetworkId = committedNextId;
         setDirty();
     }
 
@@ -535,7 +757,7 @@ public class NetworkSavedData extends SavedData {
     }
 
     public Collection<CompiledNetwork> getNetworks() {
-        return networks.values();
+        return java.util.Collections.unmodifiableCollection(networks.values());
     }
 
     @Override
@@ -555,6 +777,9 @@ public class NetworkSavedData extends SavedData {
         }
 
         tag.put("networks", list);
+        ListTag invalid = new ListTag();
+        for (CompoundTag record : invalidMembershipRecords) invalid.add(record.copy());
+        tag.put("invalidMembershipRecords", invalid);
 
         tag.putInt(
                 "nextFolderId",
@@ -580,17 +805,14 @@ public class NetworkSavedData extends SavedData {
         return tag;
     }
 
-    public static NetworkSavedData load(
-            CompoundTag tag
-    ) {
-
-        NetworkSavedData data =
-                new NetworkSavedData();
+    public static NetworkSavedData load(CompoundTag tag){return load(tag,new NetworkSavedData());}
+    static NetworkSavedData load(CompoundTag tag,NetworkSavedData data){
+        if(!data.networks.isEmpty()||!data.invalidMembershipRecords.isEmpty())throw new IllegalArgumentException("Load requires empty data");
 
         data.nextNetworkId =
                 tag.getInt("nextNetworkId");
 
-        if (data.nextNetworkId <= 0) {
+        if (data.nextNetworkId < 0 || !tag.contains("nextNetworkId")) {
             data.nextNetworkId = 1;
         }
 
@@ -600,20 +822,86 @@ public class NetworkSavedData extends SavedData {
                         Tag.TAG_COMPOUND
                 );
 
-        boolean migratedLegacyData = false;
+        ListTag preserved = tag.getList("invalidMembershipRecords", Tag.TAG_COMPOUND);
+        Set<String> recordIds = new HashSet<>();
+        boolean normalizedRecords = false;
+        for (int i = 0; i < preserved.size(); i++) {
+            var record = preserved.getCompound(i).copy();
+            String id = record.getString("recordId");
+            boolean validId;
+            try { validId = java.util.UUID.fromString(id).toString().equals(id); }
+            catch (IllegalArgumentException invalid) { validId = false; }
+            if (!validId || !recordIds.add(id)) {
+                record.putString("recordId", java.util.UUID.randomUUID().toString());
+                recordIds.add(record.getString("recordId"));
+                normalizedRecords = true;
+            }
+            data.invalidMembershipRecords.add(record);
+        }
+        if (tag.contains("networks") && (!(tag.get("networks") instanceof ListTag rawList)
+                || (!rawList.isEmpty() && rawList.getElementType() != Tag.TAG_COMPOUND))) {
+            var evidence = new CompoundTag(); evidence.put("unreadableNetworks", tag.get("networks").copy());
+            data.preserveInvalidMembership(evidence, "Unreadable network list; reservation scope unknown.");
+            normalizedRecords = true;
+        }
+        if (tag.contains("invalidMembershipRecords") && (!(tag.get("invalidMembershipRecords") instanceof ListTag rawPreserved)
+                || (!rawPreserved.isEmpty() && rawPreserved.getElementType() != Tag.TAG_COMPOUND))) {
+            var evidence = new CompoundTag(); evidence.put("unreadableIsolatedRecords", tag.get("invalidMembershipRecords").copy());
+            data.preserveInvalidMembership(evidence, "Unreadable isolation list; reservation scope unknown.");
+            normalizedRecords = true;
+        }
+        data.rebuildReservations();
+        Map<Integer, CompoundTag> originalRecords = new HashMap<>();
+        Map<Integer, Integer> idCounts = new HashMap<>();
+        for (int i = 0; i < list.size(); i++) idCounts.merge(list.getCompound(i).getInt("id"), 1, Integer::sum);
+        boolean migratedLegacyData = normalizedRecords;
         for (int i = 0; i < list.size(); i++) {
-            if (!list.getCompound(i).contains("elements", Tag.TAG_LIST)) migratedLegacyData = true;
+            CompoundTag raw = list.getCompound(i);
+            if (idCounts.get(raw.getInt("id")) > 1) {
+                data.preserveInvalidMembership(raw, "Duplicate network ID " + raw.getInt("id"));
+                migratedLegacyData = true;
+                continue;
+            }
+            try {
+                CompiledNetwork network = CompiledNetwork.load(raw);
+                if (network.needsPersistenceUpgrade()) migratedLegacyData = true;
+                data.networks.put(network.getId(), network);
+                originalRecords.put(network.getId(), raw.copy());
+            } catch (IllegalArgumentException invalid) {
+                data.preserveInvalidMembership(raw, invalid.getMessage());
+                migratedLegacyData = true;
+            }
+        }
 
-            CompiledNetwork network =
-                    CompiledNetwork.load(
-                            list.getCompound(i)
-                    );
-
-            if (network.needsPersistenceUpgrade()) migratedLegacyData = true;
-            data.networks.put(
-                    network.getId(),
-                    network
-            );
+        // Inspect all candidate claims before excluding any record: every participant is blocked.
+        var owners = new HashMap<MembershipReservations.Key, List<CompiledNetwork>>();
+        for (var network : data.networks.values()) for (var element : network.getElements()) {
+            var key = new MembershipReservations.Key(network.getDimension(), element.getPos());
+            owners.computeIfAbsent(key, ignored -> new ArrayList<>()).add(network);
+        }
+        var reasons = new java.util.TreeMap<Integer, String>();
+        for (var network : data.networks.values()) if (data.reservations.networkIds.contains(network.getId()))
+            reasons.put(network.getId(), "Network ID " + network.getId() + " is also claimed by an isolated record.");
+        owners.entrySet().stream().sorted(java.util.Comparator
+                .comparing((Map.Entry<MembershipReservations.Key, List<CompiledNetwork>> e) -> e.getKey().dimension())
+                .thenComparing(e -> e.getKey().pos())).forEach(entry -> {
+            var key = entry.getKey();
+            var networksAtPosition = entry.getValue();
+            if (networksAtPosition.size() > 1 || !data.reservations.at(key.dimension(), key.pos()).isEmpty()) {
+                String reason = "Conflicting membership at " + key.pos().toShortString() + " in " + key.dimension()
+                        + "; network IDs " + networksAtPosition.stream().map(CompiledNetwork::getId).sorted().toList();
+                for (var network : networksAtPosition) reasons.putIfAbsent(network.getId(), reason);
+            }
+        });
+        for (var entry : reasons.entrySet()) {
+            data.preserveInvalidMembership(originalRecords.get(entry.getKey()), entry.getValue());
+            data.networks.remove(entry.getKey());
+            migratedLegacyData = true;
+        }
+        // Include isolated IDs in allocation so they cannot be reused after load.
+        for (int id : data.reservations.networkIds) if (data.nextNetworkId != 0 && id >= data.nextNetworkId) {
+            data.nextNetworkId = id == Integer.MAX_VALUE ? 0 : id + 1;
+            migratedLegacyData = true;
         }
 
         data.nextFolderId =
@@ -646,72 +934,42 @@ public class NetworkSavedData extends SavedData {
             );
         }
 
+        for (CompiledNetwork network : data.networks.values()) {
+            data.membership.add(network);
+            data.runtime.add(network);
+            if (data.nextNetworkId != 0 && network.getId() >= data.nextNetworkId) {
+                data.nextNetworkId = network.getId() == Integer.MAX_VALUE ? 0 : network.getId() + 1;
+                migratedLegacyData = true;
+            }
+        }
         if (migratedLegacyData) data.setDirty();
         return data;
     }
 
-    public CompiledNetwork findNetworkByInput(
-            ServerLevel level,
-            BlockPos pos
-    ) {
-
-        String dimension =
-                level.dimension()
-                        .location()
-                        .toString();
-
-        for (CompiledNetwork network
-                : networks.values()) {
-
-            if (!network.getDimension()
-                    .equals(dimension)) {
-                continue;
-            }
-
-            if (network.getInputs().contains(pos)) {
-                return network;
-            }
-        }
-
-        return null;
+    public CompiledNetwork findNetworkByInput(ServerLevel level, BlockPos pos) {
+        var location = lookup("lookup.findNetworkByInput", level.dimension().location().toString(), pos, CircuitElementType.INPUT);
+        return location == null ? null : location.network();
     }
 
-    public CompiledNetwork findNetworkByOutput(
-            ServerLevel level,
-            BlockPos pos
-    ) {
-
-        String dimension =
-                level.dimension()
-                        .location()
-                        .toString();
-
-        for (CompiledNetwork network
-                : networks.values()) {
-
-            if (!network.getDimension()
-                    .equals(dimension)) {
-                continue;
-            }
-
-            if (network.getOutputs().contains(pos)) {
-                return network;
-            }
-        }
-
-        return null;
+    public CompiledNetwork findNetworkByOutput(ServerLevel level, BlockPos pos) {
+        var location = lookup("lookup.findNetworkByOutput", level.dimension().location().toString(), pos, CircuitElementType.OUTPUT);
+        return location == null ? null : location.network();
     }
 
+    void retireClaim(CompiledNetwork network, CompiledCircuitElement element) { membership.unstage(network,element); }
+    public boolean canRetireNetworks(Collection<CompiledNetwork> networks) { return runtime.canRetire(networks); }
     public boolean removeNetwork(int id) {
+        requireMutationThread();
 
-        CompiledNetwork removed =
-                networks.remove(id);
+        CompiledNetwork candidate=networks.get(id);
+        if(candidate!=null && !runtime.canRetire(List.of(candidate)))return false;
+        CompiledNetwork removed = networks.remove(id);
 
         if (removed == null) {
             return false;
         }
 
-        CompiledElementSync.markDimensionDirty(removed.getDimension());
+        runtime.remove(removed);
         setDirty();
         return true;
     }

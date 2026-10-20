@@ -11,7 +11,7 @@ import static com.example.compiledcircuits.network.CompiledBlockStateCodecTest.c
 @GameTestHolder("compiledcircuits")
 @PrefixGameTestTemplate(false)
 public class Stage7GameTests {
- @GameTest(template="empty",timeoutTicks=100)
+ @GameTest(template="empty",batch="persistence_repair",timeoutTicks=100)
  public static void persistenceAndRepair(GameTestHelper helper) {
   CompiledBlockStateCodecTest.run();CompiledBlockStateMigrationTest.run();CompiledBlockStateMatcherTest.run();
   var level=helper.getLevel(); var pos=helper.absolutePos(new BlockPos(1,2,1));
@@ -26,15 +26,19 @@ public class Stage7GameTests {
   level.setBlock(pos,Blocks.AIR.defaultBlockState(),Block.UPDATE_ALL);
   NetworkIntegrityManager.checkPosition(level,pos);check(network.isDamaged());
   var player=net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(level);
-  var result=NetworkRepairManager.repairNetwork(level,network,player);
-  check(result.repaired()==1);check(level.getBlockState(pos).equals(east));
-  NetworkIntegrityManager.processPending(level.getServer());check(!network.isDamaged());
-  level.setBlock(pos,Blocks.STONE.defaultBlockState(),Block.UPDATE_ALL);NetworkIntegrityManager.checkPosition(level,pos);
-  check(NetworkRepairManager.repairNetwork(level,network,player).skippedOccupied()==1);
-  check(level.getBlockState(pos).is(Blocks.STONE));
-  data.removeNetwork(id);
-  System.out.println("Stage7 checks passed: " + CompiledBlockStateCodecTest.checks);
-  helper.succeed();
+  var result=NetworkRepairManager.repairNetwork(level,network,player);check(result.code()==NetworkOperations.Code.QUEUED);
+  final var repairedNetwork=network;
+  new Runnable(){int phase;public void run(){
+   if(RepairJobs.isBusy(player)||(phase==0&&repairedNetwork.isDamaged())){helper.runAfterDelay(1,()->this.run());return;}
+   if(phase==0){
+    check(level.getBlockState(pos).equals(east));check(!repairedNetwork.isDamaged());
+    level.setBlock(pos,Blocks.STONE.defaultBlockState(),Block.UPDATE_ALL);NetworkIntegrityManager.checkPosition(level,pos);
+    check(NetworkRepairManager.repairNetwork(level,repairedNetwork,player).code()==NetworkOperations.Code.QUEUED);
+    phase=1;helper.runAfterDelay(1,()->this.run());return;
+   }
+   check(level.getBlockState(pos).is(Blocks.STONE));data.removeNetwork(id);
+   System.out.println("Stage7 checks passed: " + CompiledBlockStateCodecTest.checks);helper.succeed();
+  }}.run();
  }
 }
 

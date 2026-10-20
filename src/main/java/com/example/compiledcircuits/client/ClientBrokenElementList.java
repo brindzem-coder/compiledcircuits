@@ -6,6 +6,7 @@ import java.util.List;
 public final class ClientBrokenElementList {
     private static List<BrokenElementListS2CPacket.Entry> entries = List.of();
     private ClientBrokenElementList() {}
+    static void publish(List<BrokenElementListS2CPacket.Entry> prepared){entries=java.util.Collections.unmodifiableList(prepared);}
     public static void setEntries(List<BrokenElementListS2CPacket.Entry> value) { entries = List.copyOf(value); }
     public static List<BrokenElementListS2CPacket.Entry> getEntries() { return entries; }
     public static void clear() { entries = List.of(); }

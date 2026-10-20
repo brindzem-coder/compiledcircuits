@@ -15,6 +15,7 @@ public class CompileNamedC2SPacket {
             String name
     ) {
 
+        if (name == null || name.length() > com.example.compiledcircuits.network.OperationLimits.NAME) throw new IllegalArgumentException("Invalid name length");
         this.name = name;
     }
 
@@ -45,6 +46,9 @@ public class CompileNamedC2SPacket {
 
         NetworkEvent.Context context =
                 contextSupplier.get();
+        if (context.getDirection() != net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER) {
+            context.setPacketHandled(true); return;
+        }
 
         ServerPlayer player =
                 context.getSender();
