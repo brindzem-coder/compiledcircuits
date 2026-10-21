@@ -16,5 +16,8 @@
   "item.compiledcircuits.wde_port": "Порт WDE",
   "item.compiledcircuits.gate_input": "Вхідний порт вентиля",
   "item.compiledcircuits.gate_output": "Вихідний порт вентиля",
-  "item.compiledcircuits.gate_separator": "Розділювач корпусів"
+  "item.compiledcircuits.gate_separator": "Розділювач корпусів",
+  "item.compiledcircuits.network_input": "Міжмережевий вхід",
+  "item.compiledcircuits.network_output": "Міжмережевий вихід",
+  "block.compiledcircuits.network_wire": "Дріт із міжмережевими портами"
 }

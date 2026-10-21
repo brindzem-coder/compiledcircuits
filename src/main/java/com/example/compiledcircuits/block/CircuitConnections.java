@@ -7,6 +7,8 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class CircuitConnections {
     private CircuitConnections() {}
     public static boolean connects(BlockState a, BlockState b, Direction side) {
+        if(a.getBlock() instanceof NetworkWireBlock && NetworkWireBlock.face(a,side)>=2
+                || b.getBlock() instanceof NetworkWireBlock && NetworkWireBlock.face(b,side.getOpposite())>=2)return false;
         if (a.getBlock() instanceof GateBodyBlock body) {
             return b.getBlock() instanceof GateBodyBlock other && body.kind() == other.kind() && GateBodyBlock.port(a, side) != 3 && GateBodyBlock.port(b, side.getOpposite()) != 3
                     || b.getBlock() instanceof GatePortBlock

@@ -39,8 +39,8 @@ public final class NetworkGuiSync {
                             network.getDimension(),
                             network.getEffectiveSignal() > 0,
                             network.getWires().size(),
-                            network.getInputs().size(),
-                            network.getOutputs().size()
+                            network.getInputs().size()+(int)network.directPorts().stream().filter(com.example.compiledcircuits.network.CompiledNetwork.Port::input).count(),
+                            network.getOutputs().size()+(int)network.directPorts().stream().filter(p->!p.input()).count()
                     )
             );
         }

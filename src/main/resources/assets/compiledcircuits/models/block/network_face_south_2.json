@@ -1,0 +1,40 @@
+{
+  "textures": {
+    "port": "minecraft:block/lime_concrete"
+  },
+  "elements": [
+    {
+      "from": [
+        4.5,
+        4.5,
+        9
+      ],
+      "to": [
+        11.5,
+        11.5,
+        16
+      ],
+      "faces": {
+        "down": {
+          "texture": "#port"
+        },
+        "up": {
+          "texture": "#port"
+        },
+        "north": {
+          "texture": "#port"
+        },
+        "south": {
+          "texture": "#port",
+          "cullface": "south"
+        },
+        "west": {
+          "texture": "#port"
+        },
+        "east": {
+          "texture": "#port"
+        }
+      }
+    }
+  ]
+}

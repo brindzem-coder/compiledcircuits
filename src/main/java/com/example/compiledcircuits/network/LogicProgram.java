@@ -31,6 +31,7 @@ public final class LogicProgram {
     private final BlockPos[] positions;
     private boolean[] stable;
     private boolean memoryChanged;
+    private boolean externalMemory;
     private final boolean feedback;
     private final boolean hasMemory;
     private final String signature;
@@ -64,11 +65,22 @@ public final class LogicProgram {
             this.position = position;
         }
     }
+    java.util.Map<String,Boolean> nodeMemory() {
+        var result=new java.util.HashMap<String,Boolean>();var ordinal=new java.util.HashMap<BlockPos,Integer>();
+        for(int i=0;i<stable.length;i++)result.put(positions[i].asLong()+":"+operations[i]+":"+ordinal.merge(positions[i],1,Integer::sum),stable[i]);
+        return result;
+    }
+    void importNodeMemory(java.util.Map<String,Boolean> memory) {
+        externalMemory=true;
+        var ordinal=new java.util.HashMap<BlockPos,Integer>();
+        for(int i=0;i<stable.length;i++)stable[i]=memory.getOrDefault(positions[i].asLong()+":"+operations[i]+":"+ordinal.merge(positions[i],1,Integer::sum),false);
+    }
     public boolean memoryChanged() { return memoryChanged; }
     public boolean hasFeedback() { return feedback; }
+    boolean hasStatefulMemory(){return hasMemory;}
     public net.minecraft.nbt.CompoundTag saveMemory() {
         var tag = new net.minecraft.nbt.CompoundTag();
-        if (!hasMemory) return tag;
+        if (!hasMemory && !externalMemory) return tag;
         tag.putInt("version", 1); tag.putString("graph", signature);
         BitSet bits = new BitSet(stable.length);
         for (int i = 0; i < stable.length; i++) if (stable[i]) bits.set(i);
@@ -167,9 +179,10 @@ public final class LogicProgram {
         return bits;
     }
     public static boolean hasLogic(Collection<BlockState> states) {
-        return states.stream().anyMatch(s -> s.getBlock() instanceof GateBodyBlock || CircuitConnections.isTerminal(s));
+        return states.stream().anyMatch(s -> s.getBlock() instanceof GateBodyBlock || s.getBlock() instanceof NetworkWireBlock || CircuitConnections.isTerminal(s));
     }
-    public static LogicProgram compile(Map<BlockPos, BlockState> states) {
+    public static LogicProgram compile(Map<BlockPos, BlockState> states) {return compile(states,java.util.Map.of(),java.util.Map.of());}
+    static LogicProgram compile(Map<BlockPos,BlockState> states,Map<BlockPos,Set<BlockPos>> links,Map<BlockPos,Integer> ownership) {
         if (states.size() > MAX_ELEMENTS)
             throw new IllegalArgumentException("Logic circuits support at most " + MAX_ELEMENTS + " elements.");
         // Stable node IDs are required for repeatable startup and saved feedback state.
@@ -206,7 +219,7 @@ public final class LogicProgram {
                     BlockPos next = current.relative(direction); BlockState other = states.get(next);
                     if (other == null || component.containsKey(next) || CircuitConnections.isTerminal(other)) continue;
                     boolean otherBody = other.getBlock() instanceof GateBodyBlock;
-                    if (body != otherBody || !CircuitConnections.connects(currentState, other, direction)) continue;
+                    if (body != otherBody || !java.util.Objects.equals(ownership.get(current),ownership.get(next)) || !CircuitConnections.connects(currentState, other, direction)) continue;
                     component.put(next, id); queue.add(next);
                 }
             }
@@ -217,7 +230,7 @@ public final class LogicProgram {
                 Set<Integer> owners = new HashSet<>();
                 for (Direction direction : Direction.values()) {
                     Integer id = component.get(pos.relative(direction));
-                    if (id != null && bodies.contains(id)) owners.add(id);
+                    if (id != null && bodies.contains(id) && java.util.Objects.equals(ownership.get(pos),ownership.get(pos.relative(direction)))) owners.add(id);
                 }
                 if (owners.size() != 1)
                     throw error(owners.isEmpty() ? "Port must touch a gate body" : "Port touches more than one gate", pos);
@@ -237,6 +250,10 @@ public final class LogicProgram {
                 source.put(pos, id); sink.put(pos, id);
                 if (state.getBlock() instanceof InputEndpointBlock) inputs.put(pos, id);
                 if (state.getBlock() instanceof OutputEndpointBlock) outputs.put(pos, id);
+                if(state.getBlock() instanceof NetworkWireBlock) {
+                    if(NetworkWireBlock.hasPort(state,2))inputs.put(pos,id);
+                    if(NetworkWireBlock.hasPort(state,3))outputs.put(pos,id);
+                }
             }
         }
         // Each surface input is independent, even when several faces share one body block.
@@ -252,11 +269,11 @@ public final class LogicProgram {
                 int node = add(nodes, Op.OR, pos);
                 if (port == 1) {
                     edge(nodes, node, owner);
-                    if (neighbor != null && neighbor.getBlock() instanceof BasicWireBlock)
+                    if (neighbor != null && neighbor.getBlock() instanceof BasicWireBlock && java.util.Objects.equals(ownership.get(pos),ownership.get(next)) && CircuitConnections.connects(state,neighbor,side))
                         edge(nodes, component.get(next), node);
                 } else {
                     edge(nodes, owner, node); bodiesWithOutputs.add(owner);
-                    if (neighbor != null && neighbor.getBlock() instanceof BasicWireBlock)
+                    if (neighbor != null && neighbor.getBlock() instanceof BasicWireBlock && java.util.Objects.equals(ownership.get(pos),ownership.get(next)) && CircuitConnections.connects(state,neighbor,side))
                         edge(nodes, node, component.get(next));
                 }
             }
@@ -275,12 +292,17 @@ public final class LogicProgram {
                 if (other != null && other.getBlock() instanceof DLatchBlock
                         && DLatchBlock.enableSide(other) == direction.getOpposite()) to = enableSink.get(next);
                 if (other == null || to == null || from.equals(to)
+                        || !java.util.Objects.equals(ownership.get(pos),ownership.get(next))
                         || !CircuitConnections.connects(state, other, direction)) continue;
                 if (CircuitConnections.isTerminal(state) && !CircuitConnections.sends(state, direction)) continue;
                 if (CircuitConnections.isTerminal(other) && !CircuitConnections.receives(other, direction.getOpposite())) continue;
                 edge(nodes, from, to);
             }
         }
+        links.forEach((from,targets)->targets.forEach(to->{
+            Integer a=source.get(from),b=sink.get(to);if(a==null||b==null)throw error("Invalid direct link",from);
+            if(!a.equals(b))edge(nodes,a,b);
+        }));
         int[][] groups = components(nodes);
         Set<Integer> seededNodes = new HashSet<>(inputs.values());
         for (int[] group : groups) {

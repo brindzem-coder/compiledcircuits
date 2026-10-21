@@ -18,6 +18,28 @@ import java.util.Comparator;
 
 public class CompiledNetwork {
 
+    public record Port(BlockPos pos, net.minecraft.core.Direction side, boolean input) {}
+    private final java.util.List<Port> directPorts;
+    public java.util.List<Port> directPorts(){return directPorts;}
+    private static void collectPorts(CompiledCircuitElement element, java.util.List<Port> result) {
+        if (!element.getBlockId().equals("compiledcircuits:network_wire")) return;
+        var state=element.resolveState().state().orElse(null); if(state==null)return;
+        for(var side:net.minecraft.core.Direction.values()) {
+            int face=com.example.compiledcircuits.block.NetworkWireBlock.face(state,side);
+            if(face>=2)result.add(new Port(element.getPos(),side,face==2));
+        }
+    }
+    boolean directReady(){return runtimeReady&&inputsAvailable&&!isDamaged()&&!isIntegrityPending()&&!logicInvalid;}
+    java.util.Map<String,Boolean> nodeMemory(){return logic==null?java.util.Map.of():logic.nodeMemory();}
+    boolean applyDirect(java.util.Map<BlockPos,Boolean> values, java.util.Map<String,Boolean> memory, String error) {
+        boolean changed=!outputSignals.equals(values)||!directError.equals(error);
+        outputSignals=java.util.Map.copyOf(values);directError=error;powered=values.containsValue(true);
+        if(logic!=null && memory!=null)logic.importNodeMemory(memory);
+        return changed;
+    }
+    private String directError="";
+    private boolean directGroupAvailable=true;
+    void directAvailability(boolean ready){directGroupAvailable=ready;}
     private boolean needsPersistenceUpgrade;
     public boolean needsPersistenceUpgrade() { return needsPersistenceUpgrade; }
     private int id;
@@ -62,7 +84,7 @@ public class CompiledNetwork {
     private boolean logicPrepared, logicInvalid, hasGateElements;
     private CompoundTag savedLogicMemory = new CompoundTag();
     private LogicProgram.UnstableFeedback feedbackError;
-    public String getLogicError() { return feedbackError == null ? "" : feedbackError.getMessage(); }
+    public String getLogicError() { return !directError.isEmpty()?directError:feedbackError == null ? "" : feedbackError.getMessage(); }
     public BlockPos getLogicErrorPosition() { return feedbackError == null ? null : feedbackError.position; }
     boolean logicMemoryChanged() { return logic != null && logic.memoryChanged(); }
     private Map<BlockPos, Boolean> outputSignals = Map.of();
@@ -103,17 +125,17 @@ public class CompiledNetwork {
     }
     public int getEffectiveSignal(BlockPos output) {
         if (!hasLogic()) return getEffectiveSignal();
-        return runtimeReady && inputsAvailable && !logicInvalid && feedbackError == null && !isIntegrityPending() && !isDamaged()
+        return runtimeReady && inputsAvailable && directGroupAvailable && directError.isEmpty() && !logicInvalid && feedbackError == null && !isIntegrityPending() && !isDamaged()
                 && outputSignals.getOrDefault(output, false) ? 15 : 0;
     }
-    public int getEffectiveSignal() { return runtimeReady && inputsAvailable && !logicInvalid && feedbackError == null && !isIntegrityPending() && !isDamaged() && powered ? 15 : 0; }
+    public int getEffectiveSignal() { return runtimeReady && inputsAvailable && directGroupAvailable && directError.isEmpty() && !logicInvalid && feedbackError == null && !isIntegrityPending() && !isDamaged() && powered ? 15 : 0; }
     public String getRuntimeStatus() {
         if (isDamaged()) return "DAMAGED";
         if (isIntegrityPending()) return "INTEGRITY_PENDING";
         if (!runtimeReady) return "INITIALIZING";
         if (logicInvalid) return "INVALID_LOGIC";
-        if (feedbackError != null) return "UNSTABLE_FEEDBACK";
-        return inputsAvailable ? "READY" : "UNAVAILABLE";
+        if (!directError.isEmpty() || feedbackError != null) return "UNSTABLE_FEEDBACK";
+        return inputsAvailable && directGroupAvailable ? "READY" : "UNAVAILABLE";
     }
     void runtimeState(boolean ready, boolean available) { runtimeReady = ready; inputsAvailable = available; }
 
@@ -153,6 +175,7 @@ public class CompiledNetwork {
         this.dimension = net.minecraft.resources.ResourceLocation.tryParse(dimension).toString();
         this.elements = new LinkedHashMap<>();
         this.elementsByPosition = new java.util.HashMap<>();
+        var collectedPorts=new java.util.ArrayList<Port>();
         Set<BlockPos> wirePositions = new HashSet<>(), inputPositions = new HashSet<>(), outputPositions = new HashSet<>();
         for (CompiledCircuitElement element : elements) {
             if (element == null || element.getId() <= 0 || element.getType() == null)
@@ -160,7 +183,7 @@ public class CompiledNetwork {
             if (this.elements.putIfAbsent(element.getId(), element) != null)
                 throw new IllegalArgumentException("Duplicate compiled element ID: " + element.getId());
             CircuitElementType requiredRole = switch (element.getBlockId()) {
-                case "compiledcircuits:basic_wire" -> CircuitElementType.WIRE;
+                case "compiledcircuits:basic_wire", "compiledcircuits:network_wire" -> CircuitElementType.WIRE;
                 case "compiledcircuits:input_endpoint" -> CircuitElementType.INPUT;
                 case "compiledcircuits:output_endpoint" -> CircuitElementType.OUTPUT;
                 case "compiledcircuits:and_gate", "compiledcircuits:or_gate", "compiledcircuits:not_gate", "compiledcircuits:d_latch",
@@ -171,7 +194,8 @@ public class CompiledNetwork {
             };
             if (element.getType() != requiredRole)
                 throw new IllegalArgumentException("Block/role mismatch for element " + element.getId());
-            hasGateElements |= isLogicRole(element.getType());
+            hasGateElements |= isLogicRole(element.getType()) || element.getBlockId().equals("compiledcircuits:network_wire");
+            collectPorts(element,collectedPorts);
             BlockPos pos = element.getPos().immutable();
             if (elementsByPosition.putIfAbsent(pos, element) != null) throw new IllegalArgumentException("Duplicate compiled position: " + pos);
             switch (element.getType()) {
@@ -180,6 +204,7 @@ public class CompiledNetwork {
                 default -> wirePositions.add(pos);
             }
         }
+        this.directPorts=java.util.List.copyOf(collectedPorts);
         this.wires = immutablePositions(wirePositions);
         this.inputs = immutablePositions(inputPositions);
         this.outputs = immutablePositions(outputPositions);
@@ -191,23 +216,25 @@ public class CompiledNetwork {
         private final Map<Integer, CompiledCircuitElement> elements = new LinkedHashMap<>();
         private final Map<BlockPos, CompiledCircuitElement> positions = new java.util.HashMap<>();
         private final Set<BlockPos> wires = new HashSet<>(), inputs = new HashSet<>(), outputs = new HashSet<>();
+        private final java.util.List<Port> ports=new java.util.ArrayList<>();
         private boolean sealed;
         private boolean hasGates;
         void add(CompiledCircuitElement element) {
             if (sealed || element.getId() != elements.size() + 1 || positions.containsKey(element.getPos()))
                 throw new IllegalArgumentException("Invalid staged element");
             elements.put(element.getId(), element); positions.put(element.getPos(), element);
-            hasGates |= isLogicRole(element.getType());
+            hasGates |= isLogicRole(element.getType()) || element.getBlockId().equals("compiledcircuits:network_wire");
+            collectPorts(element,ports);
             switch (element.getType()) {
                 case INPUT -> inputs.add(element.getPos());
                 case OUTPUT -> outputs.add(element.getPos());
                 default -> wires.add(element.getPos());
             }
         }
-        boolean inputsEmpty() { return inputs.isEmpty(); }
-        boolean outputsEmpty() { return outputs.isEmpty(); }
+        boolean inputsEmpty() { return inputs.isEmpty() && ports.stream().noneMatch(Port::input); }
+        boolean outputsEmpty() { return outputs.isEmpty() && ports.stream().allMatch(Port::input); }
         CompiledNetwork seal(String name, String dimension) {
-            if (sealed || inputs.isEmpty() || outputs.isEmpty()) throw new IllegalArgumentException("Missing endpoints");
+            if (sealed || inputsEmpty() || outputsEmpty()) throw new IllegalArgumentException("Missing endpoints");
             sealed = true; return new CompiledNetwork(this, name, dimension);
         }
     }
@@ -216,6 +243,7 @@ public class CompiledNetwork {
         this.dimension = new net.minecraft.resources.ResourceLocation(dimension).toString();
         this.elements = builder.elements; this.elementsByPosition = builder.positions;
         this.hasGateElements = builder.hasGates;
+        this.directPorts=java.util.Collections.unmodifiableList(builder.ports);
         this.wires = Collections.unmodifiableSet(builder.wires);
         this.inputs = Collections.unmodifiableSet(builder.inputs);
         this.outputs = Collections.unmodifiableSet(builder.outputs);

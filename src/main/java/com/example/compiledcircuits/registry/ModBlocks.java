@@ -53,6 +53,9 @@ public class ModBlocks {
                                     .noOcclusion()
                     ));
 
+    public static final RegistryObject<Block> NETWORK_WIRE = BLOCKS.register("network_wire",
+            () -> new com.example.compiledcircuits.block.NetworkWireBlock(BlockBehaviour.Properties.of().strength(1).noOcclusion()));
+
     public static final RegistryObject<Block> INPUT_ENDPOINT =
             BLOCKS.register(
                     "input_endpoint",

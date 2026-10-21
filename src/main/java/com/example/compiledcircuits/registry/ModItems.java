@@ -39,6 +39,11 @@ public class ModItems {
     public static final RegistryObject<Item> GATE_SEPARATOR = ITEMS.register("gate_separator",
             () -> new com.example.compiledcircuits.item.GateSeparatorItem(new Item.Properties().stacksTo(1)));
 
+    public static final RegistryObject<Item> NETWORK_INPUT = ITEMS.register("network_input",
+            () -> new com.example.compiledcircuits.item.NetworkPortItem(new Item.Properties(),true));
+    public static final RegistryObject<Item> NETWORK_OUTPUT = ITEMS.register("network_output",
+            () -> new com.example.compiledcircuits.item.NetworkPortItem(new Item.Properties(),false));
+
     public static final RegistryObject<Item> BASIC_WIRE =
             ITEMS.register("basic_wire",
                     () -> new BlockItem(

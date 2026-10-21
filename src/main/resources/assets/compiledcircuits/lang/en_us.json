@@ -16,5 +16,8 @@
   "item.compiledcircuits.wde_port": "WDE Port",
   "item.compiledcircuits.gate_input": "Gate Input Port",
   "item.compiledcircuits.gate_output": "Gate Output Port",
-  "item.compiledcircuits.gate_separator": "Gate Body Separator"
+  "item.compiledcircuits.gate_separator": "Gate Body Separator",
+  "item.compiledcircuits.network_input": "Direct Network Input",
+  "item.compiledcircuits.network_output": "Direct Network Output",
+  "block.compiledcircuits.network_wire": "Network Port Wire"
 }

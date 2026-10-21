@@ -242,7 +242,7 @@ public final class CompilationJobs {
         }
         void enqueue(BlockPos pos, BlockState state) {
             if (snapshots.containsKey(pos)) return;
-            hasLogic |= state.getBlock() instanceof GateBodyBlock || CircuitConnections.isTerminal(state);
+            hasLogic |= state.getBlock() instanceof com.example.compiledcircuits.block.NetworkWireBlock || state.getBlock() instanceof GateBodyBlock || CircuitConnections.isTerminal(state);
             if (hasLogic && snapshots.size() >= LogicProgram.MAX_ELEMENTS) {
                 fail(Code.TOO_LARGE, "Logic circuits support at most " + LogicProgram.MAX_ELEMENTS + " elements."); return;
             }

@@ -19,6 +19,7 @@ public final class NetworkRuntime {
     public static final int LOAD_RETRIES_PER_TICK = 128;
     private final NetworkSavedData data;
     private MinecraftServer server;
+    private final DirectLinks direct;
     private final Map<CompiledNetwork, Entry> entries = new IdentityHashMap<>();
     private final Map<ChunkKey, Map<Entry, Part>> chunks = new HashMap<>();
     private final LinkedHashSet<ChunkKey> unloading = new LinkedHashSet<>();
@@ -93,12 +94,15 @@ public final class NetworkRuntime {
             initial = network.getElements().iterator();
         }
     }
-    NetworkRuntime(NetworkSavedData data) { this.data = data; }
+    NetworkRuntime(NetworkSavedData data) { this.data = data; this.direct=new DirectLinks(data,n->{
+        var entry=entries.get(n);if(entry!=null){entry.outputs=n.getOutputs().iterator();queue.add(entry);}
+    }); }
+    public int directLinkCount(){return direct.linkCount();}
     void bind(MinecraftServer server) { this.server = server; }
     void add(CompiledNetwork network) {
         network.reactivate();
         Entry entry = new Entry(network);
-        entries.put(network, entry);
+        entries.put(network, entry); direct.add(network);
         data.integrity().add(network);data.damage().add(network);data.capacity().add(network);data.highlightMembershipChanged(null);
         network.runtimeState(false, false);
         for (var element : network.getElements()) prepareElement(entry, element);
@@ -110,6 +114,7 @@ public final class NetworkRuntime {
         var network = entry.network;
         var key = new ChunkKey(network.getDimension(), RuntimeSignalReader.chunk(element.getPos()));
         entry.parts.computeIfAbsent(key, k -> new Part()).elements.add(element);
+        if(element.getBlockId().equals("compiledcircuits:network_wire")) entry.parts.get(key).input=true;
         if (element.getType() == CircuitElementType.INPUT) {
             var dependencies = RuntimeSignalReader.dependencyChunks(element.getPos());
             for (long chunk : dependencies)
@@ -131,7 +136,7 @@ public final class NetworkRuntime {
             return true;
         }
         void publish() {
-            entries.put(entry.network, entry); data.integrity().add(entry.network);data.damage().add(entry.network);data.capacity().add(entry.network);data.highlightMembershipChanged(null); entry.outputs = entry.network.getOutputs().iterator(); queue.add(entry);
+            entries.put(entry.network, entry); direct.add(entry.network); data.integrity().add(entry.network);data.damage().add(entry.network);data.capacity().add(entry.network);data.highlightMembershipChanged(null); entry.outputs = entry.network.getOutputs().iterator(); queue.add(entry);
         }
         void beginRollback() { parts = entry.parts.entrySet().iterator(); }
         boolean rollbackNext() {
@@ -143,6 +148,7 @@ public final class NetworkRuntime {
     }
     Prepared prepare(CompiledNetwork network) { return new Prepared(network); }
     void remove(CompiledNetwork network) {
+        direct.remove(network);
         Entry entry=entries.remove(network);data.integrity().remove(network);data.damage().remove(network);data.capacity().remove(network);data.highlightMembershipChanged(network);
         if(server!=null)RepairJobs.removed(server,network);
         network.retire();network.runtimeState(false,false);
@@ -190,14 +196,14 @@ public final class NetworkRuntime {
         }
         // No world access here: especially not getBlockState or neighborChanged.
     }
-    private void resetInputs(Entry entry) { entry.dirtyInputs = true; entry.inputs = null; }
+    private void resetInputs(Entry entry) { entry.dirtyInputs = true; entry.inputs = null; direct.invalidate(entry.network); }
     public static void inputChanged(ServerLevel level, BlockPos inputPos) {
         var data = NetworkSavedData.get(level.getServer());
         var network = data.findNetworkByInput(level, inputPos);
         if (network == null) return;
         var runtime = data.runtime(); var entry = runtime.entries.get(network);
         if (entry == null) return;
-        runtime.resetInputs(entry); runtime.queue.add(entry); runtime.drain();
+        entry.dirtyInputs=true;entry.inputs=null; runtime.queue.add(entry); runtime.drain();
     }
     public static void elementChanged(ServerLevel level, CompiledNetwork network, CompiledCircuitElement element) {
         NetworkIntegrityManager.scheduleCheck(level,element.getPos());
@@ -236,10 +242,11 @@ public final class NetworkRuntime {
         draining = true;
         long start = PerformanceDiagnostics.begin();
         try {
-            while (remaining > 0 && (!queue.isEmpty() || !retired.isEmpty())) {
+            while (remaining > 0 && (!queue.isEmpty() || !retired.isEmpty() || direct.hasWork())) {
                 long unit=ServerWorkBudget.begin(server,ServerWorkBudget.Lane.RUNTIME);if(unit==0)break;
                 remaining--;PerformanceDiagnostics.add("runtime.workUnits",1);
                 try {
+                    if(queue.isEmpty() && direct.hasWork()){direct.step();continue;}
                     retireTurn=!retireTurn;
                     if(!retired.isEmpty() && (retireTurn || queue.isEmpty())) {
                         var old=retired.removeFirst();
@@ -308,7 +315,7 @@ public final class NetworkRuntime {
         entry.dirtyInputs = false;
         int before = entry.network.getEffectiveSignal();
         boolean logicChanged = false;
-        if (entry.network.hasLogic()) {
+        if (entry.network.hasLogic() && !direct.contains(entry.network)) {
             // Unavailable inputs and integrity checks must never overwrite stored latch state.
             if (entry.available && entry.waiting.isEmpty() && !entry.network.isDamaged() && !entry.network.isIntegrityPending()) {
                 String previousError = entry.network.getLogicError();
@@ -326,8 +333,9 @@ public final class NetworkRuntime {
                         player.sendSystemMessage(message);
                 }
             }
-        } else if (entry.network.isPowered() != entry.inputOr) { entry.network.setPowered(entry.inputOr); data.setDirty(); }
+        } else if (!direct.contains(entry.network) && entry.network.isPowered() != entry.inputOr) { entry.network.setPowered(entry.inputOr); data.setDirty(); }
         entry.network.runtimeState(entry.waiting.isEmpty(), entry.available);
+        if(direct.contains(entry.network))direct.update(entry.network,entry.inputValues);
         if (logicChanged || before != entry.network.getEffectiveSignal()) entry.outputs = entry.network.getOutputs().iterator();
         if (!entry.firstReady && entry.waiting.isEmpty() && entry.available) {
             entry.firstReady = true;
@@ -354,6 +362,6 @@ public final class NetworkRuntime {
         var runtime = NetworkSavedData.get(server).runtime();
         for (var network : runtime.entries.keySet()) network.runtimeState(false, false);
         runtime.queue.clear(); runtime.retired.clear(); runtime.retiredWork=0; runtime.loading.clear(); runtime.unloading.clear();
-        runtime.entries.clear(); runtime.chunks.clear(); runtime.data.integrity().dispose(); runtime.server = null;
+        runtime.entries.clear(); runtime.direct.clear(); runtime.chunks.clear(); runtime.data.integrity().dispose(); runtime.server = null;
     }
 }

@@ -18,7 +18,7 @@ public class CompiledCircuitElement {
                 String required = switch (blockId) {
                     case "compiledcircuits:input_endpoint" -> "INPUT";
                     case "compiledcircuits:output_endpoint" -> "OUTPUT";
-                    case "compiledcircuits:basic_wire" -> "WIRE";
+                    case "compiledcircuits:basic_wire", "compiledcircuits:network_wire" -> "WIRE";
                     case "compiledcircuits:and_gate", "compiledcircuits:or_gate", "compiledcircuits:not_gate", "compiledcircuits:d_latch",
                         "compiledcircuits:nand_gate", "compiledcircuits:nor_gate", "compiledcircuits:xor_gate", "compiledcircuits:xnor_gate" -> "GATE";
                     case "compiledcircuits:gate_input" -> "GATE_INPUT";

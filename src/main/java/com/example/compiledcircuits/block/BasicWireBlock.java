@@ -104,8 +104,10 @@ public class BasicWireBlock extends Block implements IWireConnectable {
         return shapes;
     }
 
-    public BasicWireBlock(Properties properties) {
+    public BasicWireBlock(Properties properties) { this(properties, false); }
+    protected BasicWireBlock(Properties properties, boolean networkWire) {
         super(properties);
+        if (networkWire) return;
 
         registerDefaultState(
                 stateDefinition.any()
@@ -183,7 +185,7 @@ public class BasicWireBlock extends Block implements IWireConnectable {
         };
     }
 
-    private boolean canConnectTo(
+    protected boolean canConnectTo(
             LevelAccessor level,
             BlockPos currentPos,
             Direction direction
