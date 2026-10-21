@@ -33,13 +33,59 @@ public final class LogicProgram {
     private boolean memoryChanged;
     private int lastWork;
     private int[] aliases;
+    public static final int MAX_TABLE_INPUTS = 8, MAX_TABLE_NODES = 64,
+            MAX_TABLE_BYTES = 65536, MAX_TABLE_BUILD_WORK = 262144;
+    private record TruthTable(int[] inputs, int[] nodes, long[] rows, int work) {}
+    private TruthTable[] tableStarts;
+    private boolean[] tableMembers;
+    private int tableCount, tableBytes, tableNodes;
+    // Boundaries belong to execution units: a node, a complete table, or a complete SCC.
+    private int[][] incrementalBoundary;
+    private boolean[] incrementalUnits, previousSeeds;
+    private boolean incrementalValid;
+    private int lastSkipped;
+    int lastSkipped() { return lastSkipped; }
+    private void buildIncrementalPlan(Set<BlockPos> allowed) {
+        incrementalBoundary = new int[groups.length][];
+        incrementalUnits = new boolean[groups.length];
+        for (int g = 0; g < groups.length; g++) {
+            int[] group = groups[g]; int first = group[0];
+            var table = tableStarts[first];
+            if (group.length == 1 && (aliases[first] != first || (tableMembers[first] && table == null))) continue;
+            int[] nodes = table == null ? group : table.nodes;
+            boolean eligible = true;
+            Set<Integer> members = new HashSet<>(), boundary = new TreeSet<>();
+            for (int node : nodes) { members.add(node); eligible &= allowed.contains(positions[node]); }
+            for (int node : nodes) for (int parent : parents[node])
+                if (!members.contains(aliases[parent])) boundary.add(aliases[parent]);
+            incrementalUnits[g] = eligible;
+            incrementalBoundary[g] = boundary.stream().mapToInt(Integer::intValue).toArray();
+        }
+        incrementalValid = false;
+    }
+    private boolean canSkip(int g, boolean[] values, boolean[] seeds) {
+        if (!incrementalValid || incrementalUnits == null || !incrementalUnits[g]) return false;
+        for (int node : groups[g]) if (seeds[node] != previousSeeds[node]) return false;
+        for (int parent : incrementalBoundary[g]) if (values[parent] != stable[parent]) return false;
+        return true;
+    }
+    public int truthTableCount() { return tableCount; }
+    public int truthTableBytes() { return tableBytes; }
+    public int truthTableNodes() { return tableNodes; }
     public int nodeCount() { return operations.length; }
     public int evaluationNodeCount() {
-        int count = 0; for (int i = 0; i < aliases.length; i++) if (aliases[i] == i) count++; return count;
+        int count = 0; for (int i = 0; i < aliases.length; i++)
+            if (aliases[i] == i && (!tableMembers[i] || tableStarts[i] != null)) count++;
+        return count;
     }
     private record Expression(Op op, List<Integer> parents) {}
     /** Keep original IDs/topology for saved memory and feedback; simplify only the execution plan. */
     void optimize(Set<BlockPos> allowed) {
+        optimize(allowed, true);
+    }
+    void optimize(Set<BlockPos> allowed, boolean useTables) {
+        Arrays.fill(tableStarts, null); Arrays.fill(tableMembers, false);
+        tableCount = tableBytes = tableNodes = 0;
         for (int i = 0; i < aliases.length; i++) aliases[i] = i;
         Set<Integer> seeded = new HashSet<>(inputs.values());
         Map<Expression, Integer> common = new HashMap<>();
@@ -60,10 +106,62 @@ public final class LogicProgram {
             Integer earlier = common.putIfAbsent(key, id);
             if (earlier != null) aliases[id] = earlier;
         }
+        if (useTables) buildTruthTables(allowed, seeded);
+        buildIncrementalPlan(allowed);
+    }
+    /** Contiguous topological runs cannot move an evaluation across a latch or feedback component. */
+    private void buildTruthTables(Set<BlockPos> allowed, Set<Integer> seeded) {
+        var run = new ArrayList<Integer>(); var members = new HashSet<Integer>();
+        var boundary = new TreeSet<Integer>(); int[] budget = {MAX_TABLE_BUILD_WORK};
+        boolean[] values = new boolean[operations.length], seeds = new boolean[operations.length];
+        for (int[] group : groups) {
+            int id = group[0];
+            boolean barrier = group.length != 1 || operations[id] == Op.LATCH
+                    || seeded.contains(id) || !allowed.contains(positions[id]);
+            if (barrier) {
+                buildTruthTable(run, boundary, budget, values, seeds);
+                run.clear(); members.clear(); boundary.clear(); continue;
+            }
+            if (aliases[id] != id) continue;
+            var nextBoundary = new TreeSet<>(boundary);
+            for (int parent : parents[id]) if (!members.contains(aliases[parent])) nextBoundary.add(aliases[parent]);
+            if (run.size() == MAX_TABLE_NODES || nextBoundary.size() > MAX_TABLE_INPUTS) {
+                buildTruthTable(run, boundary, budget, values, seeds);
+                run.clear(); members.clear(); boundary.clear(); nextBoundary.clear();
+                for (int parent : parents[id]) nextBoundary.add(aliases[parent]);
+            }
+            if (nextBoundary.size() > MAX_TABLE_INPUTS) continue;
+            run.add(id); members.add(id); boundary = nextBoundary;
+        }
+        buildTruthTable(run, boundary, budget, values, seeds);
+    }
+    private void buildTruthTable(List<Integer> run, Set<Integer> boundary, int[] budget, boolean[] values, boolean[] seeds) {
+        if (run.isEmpty()) return;
+        int normalWork = 0; for (int id : run) normalWork += 1 + parents[id].length;
+        int lookupWork = 1 + boundary.size() + run.size(); // Include reading the key and restoring every original node.
+        int rowCount = 1 << boundary.size(), bytes = rowCount * Long.BYTES;
+        long buildWork = (long) rowCount * (normalWork + boundary.size());
+        // Tiny gates are cheaper to calculate. Keep only a substantial reduction in modeled work.
+        if (normalWork < 2 * lookupWork || buildWork > budget[0] || tableBytes + bytes > MAX_TABLE_BYTES) return;
+        int[] inputs = boundary.stream().mapToInt(Integer::intValue).toArray();
+        int[] nodes = run.stream().mapToInt(Integer::intValue).toArray(); long[] rows = new long[rowCount];
+        for (int row = 0; row < rowCount; row++) {
+            for (int i = 0; i < inputs.length; i++) values[inputs[i]] = (row & (1 << i)) != 0;
+            long bits = 0;
+            for (int i = 0; i < nodes.length; i++) {
+                int id = nodes[i]; values[id] = value(id, values, seeds);
+                if (values[id]) bits |= 1L << i;
+            }
+            rows[row] = bits;
+        }
+        budget[0] -= (int) buildWork;
+        var table = new TruthTable(inputs, nodes, rows, lookupWork); tableStarts[nodes[0]] = table;
+        for (int id : nodes) tableMembers[id] = true;
+        tableCount++; tableBytes += bytes; tableNodes += nodes.length;
     }
     int lastWork() { return lastWork; }
     boolean[] benchmarkState() { return stable.clone(); }
-    void benchmarkReset(boolean[] state) { stable = state.clone(); }
+    void benchmarkReset(boolean[] state) { stable = state.clone(); incrementalValid = false; }
     List<BlockPos> benchmarkInputs() {
         var byNode = new java.util.TreeMap<Integer, BlockPos>();
         inputs.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(e -> byNode.putIfAbsent(e.getValue(), e.getKey()));
@@ -96,6 +194,7 @@ public final class LogicProgram {
         feedback = Arrays.stream(groups).anyMatch(g -> g.length > 1);
         hasMemory = feedback || Arrays.asList(operations).contains(Op.LATCH);
         aliases = new int[nodes.size()]; for (int i = 0; i < aliases.length; i++) aliases[i] = i;
+        tableStarts = new TruthTable[nodes.size()]; tableMembers = new boolean[nodes.size()];
     }
     public static final class UnstableFeedback extends IllegalStateException {
         public final BlockPos position;
@@ -110,7 +209,7 @@ public final class LogicProgram {
         return result;
     }
     void importNodeMemory(java.util.Map<String,Boolean> memory) {
-        externalMemory=true;
+        externalMemory=true; incrementalValid=false;
         var ordinal=new java.util.HashMap<BlockPos,Integer>();
         for(int i=0;i<stable.length;i++)stable[i]=memory.getOrDefault(positions[i].asLong()+":"+operations[i]+":"+ordinal.merge(positions[i],1,Integer::sum),false);
     }
@@ -136,6 +235,7 @@ public final class LogicProgram {
         BitSet bits = BitSet.valueOf(words);
         if (bits.length() > stable.length) throw new IllegalArgumentException("Invalid feedback memory size");
         for (int i = 0; i < stable.length; i++) stable[i] = bits.get(i);
+        incrementalValid = false;
     }
     private boolean value(int node, boolean[] values, boolean[] seeds) {
         Op op = operations[node];
@@ -149,15 +249,27 @@ public final class LogicProgram {
         return switch (op) { case NOT, NAND, NOR, XNOR -> !value; default -> value; };
     }
     public Map<BlockPos, Boolean> evaluate(Map<BlockPos, Boolean> externalInputs) {
-        lastWork = 0;
+        lastWork = 0; lastSkipped = 0;
         memoryChanged = false;
         boolean[] values = stable.clone(), seeds = new boolean[operations.length];
         inputs.forEach((pos, node) -> seeds[node] |= externalInputs.getOrDefault(pos, false));
         int[] work = {0};
         boolean[] queued = new boolean[operations.length];
-        for (int[] group : groups) {
+        for (int g = 0; g < groups.length; g++) {
+            int[] group = groups[g];
+            if (canSkip(g, values, seeds)) { lastSkipped++; continue; }
             if (group.length == 1) {
-                int node = group[0]; if (aliases[node] != node) continue; charge(node, work);
+                int node = group[0]; if (aliases[node] != node) continue;
+                var table = tableStarts[node];
+                if (table != null) {
+                    chargeWork(table.work, node, work); int key = 0;
+                    for (int i = 0; i < table.inputs.length; i++) if (values[table.inputs[i]]) key |= 1 << i;
+                    long bits = table.rows[key];
+                    for (int i = 0; i < table.nodes.length; i++) values[table.nodes[i]] = (bits & (1L << i)) != 0;
+                    continue;
+                }
+                if (tableMembers[node]) continue;
+                charge(node, work);
                 values[node] = value(node, values, seeds);
                 continue;
             }
@@ -187,12 +299,16 @@ public final class LogicProgram {
         for (int i = 0; i < aliases.length; i++) if (aliases[i] != i) values[i] = values[aliases[i]];
         memoryChanged = hasMemory && !Arrays.equals(stable, values);
         stable = values;
+        previousSeeds = seeds; incrementalValid = true;
         Map<BlockPos, Boolean> result = new HashMap<>();
         outputs.forEach((pos, node) -> result.put(pos, values[node]));
         return Map.copyOf(result);
     }
     private void charge(int node, int[] work) {
-        work[0] += 1 + parents[node].length;
+        chargeWork(1 + parents[node].length, node, work);
+    }
+    private void chargeWork(int amount, int node, int[] work) {
+        work[0] += amount;
         lastWork = work[0];
         if (work[0] > MAX_EVALUATION_WORK)
             throw new UnstableFeedback("Feedback settling work limit exceeded", positions[node]);

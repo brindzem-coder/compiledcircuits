@@ -96,7 +96,8 @@ public class CompiledNetwork {
         optimized = true;
         if (logic == null) return "Passive network already uses its direct OR path.";
         logic.optimize(elementsByPosition.keySet());
-        return "Local evaluation nodes: " + logic.nodeCount() + " -> " + logic.evaluationNodeCount();
+        return "Local evaluation steps: " + logic.nodeCount() + " -> " + logic.evaluationNodeCount()
+                + "; truth tables: " + logic.truthTableCount() + " (" + logic.truthTableBytes() + " bytes).";
     }
     void prepareLogic(Map<BlockPos, net.minecraft.world.level.block.state.BlockState> states) {
         logic = LogicProgram.hasLogic(states.values()) ? LogicProgram.compile(states) : null;
