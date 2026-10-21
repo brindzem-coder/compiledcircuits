@@ -27,15 +27,17 @@ public class ModItems {
     public static final RegistryObject<Item> XNOR_GATE = ITEMS.register("xnor_gate",
             () -> new BlockItem(ModBlocks.XNOR_GATE.get(), new Item.Properties()));
     public static final RegistryObject<Item> GATE_INPUT = ITEMS.register("gate_input",
-            () -> new BlockItem(ModBlocks.GATE_INPUT.get(), new Item.Properties()));
+            () -> new com.example.compiledcircuits.item.GateFacePortItem(new Item.Properties(), true));
     public static final RegistryObject<Item> GATE_OUTPUT = ITEMS.register("gate_output",
-            () -> new BlockItem(ModBlocks.GATE_OUTPUT.get(), new Item.Properties()));
+            () -> new com.example.compiledcircuits.item.GateFacePortItem(new Item.Properties(), false));
     public static final RegistryObject<Item> NOT_GATE = ITEMS.register("not_gate",
             () -> new BlockItem(ModBlocks.NOT_GATE.get(), new Item.Properties()));
     public static final RegistryObject<Item> D_LATCH = ITEMS.register("d_latch",
             () -> new BlockItem(ModBlocks.D_LATCH.get(), new Item.Properties()));
     public static final RegistryObject<Item> WDE_PORT = ITEMS.register("wde_port",
             () -> new com.example.compiledcircuits.item.WdePortItem(new Item.Properties().stacksTo(1)));
+    public static final RegistryObject<Item> GATE_SEPARATOR = ITEMS.register("gate_separator",
+            () -> new com.example.compiledcircuits.item.GateSeparatorItem(new Item.Properties().stacksTo(1)));
 
     public static final RegistryObject<Item> BASIC_WIRE =
             ITEMS.register("basic_wire",

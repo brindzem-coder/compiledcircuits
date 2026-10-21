@@ -1,0 +1,102 @@
+{
+  "textures": {
+    "dark": "minecraft:block/gray_concrete",
+    "edge": "minecraft:block/white_concrete"
+  },
+  "elements": [
+    {
+      "from": [
+        0,
+        0,
+        -0.02
+      ],
+      "to": [
+        16,
+        16,
+        -0.02
+      ],
+      "faces": {
+        "north": {
+          "texture": "#dark",
+          "cullface": "north"
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        -0.025,
+        0
+      ],
+      "to": [
+        16,
+        -0.025,
+        1.5
+      ],
+      "shade": false,
+      "faces": {
+        "down": {
+          "texture": "#edge",
+          "cullface": "down"
+        }
+      }
+    },
+    {
+      "from": [
+        0,
+        16.025,
+        0
+      ],
+      "to": [
+        16,
+        16.025,
+        1.5
+      ],
+      "shade": false,
+      "faces": {
+        "up": {
+          "texture": "#edge",
+          "cullface": "up"
+        }
+      }
+    },
+    {
+      "from": [
+        -0.025,
+        0,
+        0
+      ],
+      "to": [
+        -0.025,
+        16,
+        1.5
+      ],
+      "shade": false,
+      "faces": {
+        "west": {
+          "texture": "#edge",
+          "cullface": "west"
+        }
+      }
+    },
+    {
+      "from": [
+        16.025,
+        0,
+        0
+      ],
+      "to": [
+        16.025,
+        16,
+        1.5
+      ],
+      "shade": false,
+      "faces": {
+        "east": {
+          "texture": "#edge",
+          "cullface": "east"
+        }
+      }
+    }
+  ]
+}

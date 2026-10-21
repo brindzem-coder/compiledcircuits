@@ -44,6 +44,15 @@ public final class ClientNetworkSelection {
 
         clear();
         selectionLevel=level;
+        if (!ClientCompiledElements.isReadyFor(level.dimension().location().toString()) || ClientCompiledElements.isBlocked(startPos)) return false;
+        Integer owner=ClientCompiledElements.networkIdAt(startPos);
+        if (owner!=null) {
+            for (BlockPos pos:ClientCompiledElements.positionsForNetwork(owner)) {
+                if (level.hasChunkAt(pos)) classify(pos,level.getBlockState(pos));
+                else WIRES.add(pos);
+            }
+            return getTotalSize()>0;
+        }
 
         Queue<BlockPos> queue = new ArrayDeque<>();
         Set<BlockPos> visited = new HashSet<>();
@@ -83,6 +92,7 @@ public final class ClientNetworkSelection {
                 if (!level.hasChunkAt(neighborPos)) {
                     continue;
                 }
+                if (ClientCompiledElements.isBlocked(neighborPos) || ClientCompiledElements.networkIdAt(neighborPos)!=null) continue;
 
                 BlockState neighborState =
                         level.getBlockState(neighborPos);

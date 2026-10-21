@@ -8,8 +8,9 @@ public final class CircuitConnections {
     private CircuitConnections() {}
     public static boolean connects(BlockState a, BlockState b, Direction side) {
         if (a.getBlock() instanceof GateBodyBlock body) {
-            return b.getBlock() instanceof GateBodyBlock other && body.kind() == other.kind()
-                    || b.getBlock() instanceof GatePortBlock;
+            return b.getBlock() instanceof GateBodyBlock other && body.kind() == other.kind() && GateBodyBlock.port(a, side) != 3 && GateBodyBlock.port(b, side.getOpposite()) != 3
+                    || b.getBlock() instanceof GatePortBlock
+                    || b.getBlock() instanceof BasicWireBlock && body.canWireConnect(a, side);
         }
         if (b.getBlock() instanceof GateBodyBlock) return connects(b, a, side.getOpposite());
         if (!(a.getBlock() instanceof IWireConnectable left) || !(b.getBlock() instanceof IWireConnectable right)

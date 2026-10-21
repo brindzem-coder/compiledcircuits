@@ -89,6 +89,36 @@ public class CompilationGameTests {
         try {f.level.getServer().getCommands().getDispatcher().execute(command,f.level.getServer().createCommandSourceStack());}
         catch(Exception e) {throw new IllegalStateException(e);}
     }
+    @GameTest(template="empty",batch="compilation_boundary",timeoutTicks=300)
+    public static void ignoresAdjacentCompiledCircuit(GameTestHelper h) {
+        var f=new Fixture(h);var pos=new BlockPos(72,170,72);f.pair(pos);f.pair(pos.south());
+        var existing=new CompiledNetwork(1,"existing",0,f.level.dimension().location().toString(),List.of(
+            new CompiledCircuitElement(1,pos,CircuitElementType.INPUT,CompiledBlockStateCodec.capture(f.level.getBlockState(pos))),
+            new CompiledCircuitElement(2,pos.east(),CircuitElementType.OUTPUT,CompiledBlockStateCodec.capture(f.level.getBlockState(pos.east())))));
+        f.data.addNetwork(existing);
+        var p=f.player(pos.south());
+        try {
+            h.assertTrue(CircuitBoundary.allows(f.level,pos,pos.east()),"same compilation connects");
+            h.assertTrue(!CircuitBoundary.allows(f.level,pos,pos.south())&&!CircuitBoundary.allows(f.level,pos.south(),pos),"compiled/uncompiled boundary is symmetric");
+            var wire=net.minecraft.world.level.block.Block.updateFromNeighbourShapes(ModBlocks.BASIC_WIRE.get().defaultBlockState(),f.level,pos.south());
+            h.assertTrue(!wire.getValue(com.example.compiledcircuits.block.BasicWireBlock.NORTH),"wire does not extend into compiled neighbor");
+            h.assertTrue(f.submit(p).code()==NetworkOperations.Code.QUEUED,"adjacent new circuit queued");
+            new Runnable(){int tries;public void run(){try{
+                if(CompilationJobs.isBusy(p)){if(++tries>220){f.close();h.fail("compilation timeout");return;}f.later(this);return;}
+                h.assertTrue(f.data.getNetworks().size()==2,"adjacent circuit compiles independently");
+                var owner=f.data.findElementLocation(f.level.dimension().location().toString(),pos.south());
+                h.assertTrue(owner!=null&&owner.network()!=existing&&owner.network().getElements().size()==2,"only uncompiled positions admitted");
+                h.assertTrue(!CircuitBoundary.allows(f.level,pos,pos.south()),"two compilations do not connect");
+                f.data.removeNetwork(existing.getId());
+                h.assertTrue(!CircuitBoundary.allows(f.level,pos,pos.south()),"remaining compiled circuit still isolated");
+                f.data.removeNetwork(owner.network().getId());
+                h.assertTrue(CircuitBoundary.allows(f.level,pos,pos.south()),"decompilation immediately releases logical boundary");
+                var joined=net.minecraft.world.level.block.Block.updateFromNeighbourShapes(ModBlocks.BASIC_WIRE.get().defaultBlockState(),f.level,pos.south());
+                h.assertTrue(joined.getValue(com.example.compiledcircuits.block.BasicWireBlock.NORTH),"uncompiled neighbors can connect again");
+                f.close();h.succeed();
+            }catch(Throwable failure){f.close();throw failure;}}}.run();
+        }catch(Throwable failure){f.close();throw failure;}
+    }
     @GameTest(template="empty",batch="compilation_admission",timeoutTicks=100)
     public static void queueAndStartLimits(GameTestHelper h) {
         try(var f=new Fixture(h)) {

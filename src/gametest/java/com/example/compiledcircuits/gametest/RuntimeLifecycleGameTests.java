@@ -366,7 +366,15 @@ public class RuntimeLifecycleGameTests {
             n.markBroken(new BrokenCircuitElement(50,"minecraft:air",1));n.setPowered(true);
             var loaded=CompiledNetwork.load(n.save());f.data.addNetwork(loaded);f.tick();
             helper.assertTrue(loaded.isDamaged()&&f.signal()==0&&!f.level.hasChunkAt(far),"saved unloaded broken element cannot be repaired by load");
-            f.data.removeNetwork(1);var stable=f.create(false);f.tick();helper.assertTrue(f.signal()==15,"healthy fixture ready");
+            f.data.removeNetwork(1);var stable=f.create(false);
+            // Retirement and replacement initialization share the bounded runtime budget.
+            new Runnable(){int attempts;public void run(){try {
+                f.tick();
+                if(stable.getRuntimeStatus().equals("INITIALIZING")) {
+                    if(++attempts>20) {f.close();helper.fail("replacement initialization timed out");return;}
+                    helper.runAfterDelay(1,()->run());return;
+                }
+                helper.assertTrue(f.signal()==15,"healthy fixture ready");
             var commands=f.level.getServer().getCommands().getDispatcher();var source=f.level.getServer().createCommandSourceStack();
             commands.execute("ccperf reset",source);commands.execute("ccperf start",source);
             for(int i=0;i<20;i++)NetworkRuntime.inputChanged(f.level,f.input);
@@ -382,6 +390,7 @@ public class RuntimeLifecycleGameTests {
             f.tick();helper.assertTrue(f.signal()==0,"replace cannot erase pending unload state");
             f.chunk(f.input,true);
             helper.succeedWhen(()->{f.tick();helper.assertTrue(f.signal()==15,"replacement resumes on load");f.close();});
+            }catch(Exception e){f.close();throw new IllegalStateException(e);}}}.run();
         } catch(Exception e){f.close();throw e;}
     }
 

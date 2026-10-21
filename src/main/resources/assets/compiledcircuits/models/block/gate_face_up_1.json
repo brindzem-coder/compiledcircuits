@@ -1,0 +1,26 @@
+{
+  "textures": {
+    "port": "minecraft:block/green_concrete"
+  },
+  "elements": [
+    {
+      "shade": false,
+      "faces": {
+        "up": {
+          "texture": "#port",
+          "cullface": "up"
+        }
+      },
+      "to": [
+        13,
+        16.01,
+        13
+      ],
+      "from": [
+        3,
+        16.01,
+        3
+      ]
+    }
+  ]
+}

@@ -39,7 +39,11 @@ public final class NetworkRuntime {
                 if(level!=null)notifyOutput(level,pos);
             } else if(elements.hasNext()) {
                 var element=elements.next();
-                if(data.getNetwork(entry.network.getId())!=entry.network)data.retireClaim(entry.network,element);
+                if(data.getNetwork(entry.network.getId())!=entry.network) {
+                    data.retireClaim(entry.network,element);
+                    var level=server.getLevel(ResourceKey.create(Registries.DIMENSION,new ResourceLocation(entry.dimension)));
+                    if(level!=null)CircuitBoundary.refreshWires(level,element.getPos(),entry.network);
+                }
             } else if(parts.hasNext()) {
                 var key=parts.next();var bucket=chunks.get(key);
                 if(bucket!=null){bucket.remove(entry);if(bucket.isEmpty()){chunks.remove(key);loading.remove(key);}}

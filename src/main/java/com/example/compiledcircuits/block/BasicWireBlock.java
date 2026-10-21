@@ -189,6 +189,8 @@ public class BasicWireBlock extends Block implements IWireConnectable {
             Direction direction
     ) {
         BlockPos neighborPos = currentPos.relative(direction);
+        if (level instanceof net.minecraft.server.level.ServerLevel server
+                && !com.example.compiledcircuits.network.CircuitBoundary.allows(server,currentPos,neighborPos)) return false;
         BlockState neighborState = level.getBlockState(neighborPos);
 
         if (neighborState.getBlock() instanceof IWireConnectable connectable) {
@@ -231,5 +233,8 @@ public class BasicWireBlock extends Block implements IWireConnectable {
     @Override
     public boolean canWireConnect(BlockState state, Direction side) {
         return true;
+    }
+    @Override public void tick(BlockState state, net.minecraft.server.level.ServerLevel level, BlockPos pos, net.minecraft.util.RandomSource random) {
+        com.example.compiledcircuits.network.CircuitBoundary.refreshWire(level,pos);
     }
 }

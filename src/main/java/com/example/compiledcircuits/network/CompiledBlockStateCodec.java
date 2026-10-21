@@ -63,6 +63,9 @@ public final class CompiledBlockStateCodec {
         BlockState state = BuiltInRegistries.BLOCK.get(id).defaultBlockState();
         if (state.isAir()) return invalid("Air cannot be a compiled element");
         CompoundTag properties = snapshot.getCompound("Properties");
+        // Before surface ports, gate bodies had an explicitly empty property schema.
+        if (properties.isEmpty() && state.getBlock() instanceof com.example.compiledcircuits.block.GateBodyBlock)
+            return new DecodeResult(Status.EXACT, Optional.of(state), "Migrated portless gate body");
         if (properties.size() > 64 || properties.size() != state.getProperties().size()) return invalid("Incomplete property schema");
         for (String key : properties.getAllKeys()) {
             if (key.length() > 128 || !properties.contains(key, Tag.TAG_STRING) || properties.getString(key).length() > 128) {

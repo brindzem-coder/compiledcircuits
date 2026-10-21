@@ -239,6 +239,28 @@ public final class LogicProgram {
                 if (state.getBlock() instanceof OutputEndpointBlock) outputs.put(pos, id);
             }
         }
+        // Each surface input is independent, even when several faces share one body block.
+        for (var item : states.entrySet()) {
+            BlockPos pos = item.getKey(); BlockState state = item.getValue();
+            if (!(state.getBlock() instanceof GateBodyBlock)) continue;
+            int owner = component.get(pos);
+            for (Direction side : Direction.values()) {
+                int port = GateBodyBlock.port(state, side);
+                if (port == 0 || port == 3) continue;
+                BlockPos next = pos.relative(side); BlockState neighbor = states.get(next);
+                if (neighbor != null && neighbor.getBlock() instanceof GateBodyBlock) continue;
+                int node = add(nodes, Op.OR, pos);
+                if (port == 1) {
+                    edge(nodes, node, owner);
+                    if (neighbor != null && neighbor.getBlock() instanceof BasicWireBlock)
+                        edge(nodes, component.get(next), node);
+                } else {
+                    edge(nodes, owner, node); bodiesWithOutputs.add(owner);
+                    if (neighbor != null && neighbor.getBlock() instanceof BasicWireBlock)
+                        edge(nodes, node, component.get(next));
+                }
+            }
+        }
         for (int body : bodies) {
             if (nodes.get(body).parents.isEmpty() || !bodiesWithOutputs.contains(body))
                 throw error("Gate needs at least one input port and one output port", nodes.get(body).position);

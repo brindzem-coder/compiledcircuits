@@ -13,5 +13,8 @@
   "block.compiledcircuits.xor_gate": "Корпус вентиля XOR",
   "block.compiledcircuits.xnor_gate": "Корпус вентиля XNOR",
   "block.compiledcircuits.d_latch": "D-тригер (WDE)",
-  "item.compiledcircuits.wde_port": "Порт WDE"
+  "item.compiledcircuits.wde_port": "Порт WDE",
+  "item.compiledcircuits.gate_input": "Вхідний порт вентиля",
+  "item.compiledcircuits.gate_output": "Вихідний порт вентиля",
+  "item.compiledcircuits.gate_separator": "Розділювач корпусів"
 }

@@ -1,0 +1,26 @@
+{
+  "textures": {
+    "port": "minecraft:block/blue_concrete"
+  },
+  "elements": [
+    {
+      "shade": false,
+      "faces": {
+        "north": {
+          "texture": "#port",
+          "cullface": "north"
+        }
+      },
+      "to": [
+        13,
+        13,
+        -0.01
+      ],
+      "from": [
+        3,
+        3,
+        -0.01
+      ]
+    }
+  ]
+}

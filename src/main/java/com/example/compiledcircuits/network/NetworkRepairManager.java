@@ -47,7 +47,11 @@ public final class NetworkRepairManager {
         var match=CompiledBlockStateMatcher.match(element,actual,NetworkIntegrityManager.exactIntegrityEnabled());
         if(match==CompiledBlockStateMatcher.Match.MATCH){NetworkIntegrityManager.scheduleCheck(level,pos);return Outcome.CORRECT;}
         if(current==null)return Outcome.CHANGED;
-        if(match==CompiledBlockStateMatcher.Match.STATE_MISMATCH || !(actual.isAir()||actual.canBeReplaced()) || actual.hasBlockEntity())return Outcome.OCCUPIED;
+        // Only the same gate body may have its saved face configuration restored in place.
+        boolean repairFaces = match == CompiledBlockStateMatcher.Match.STATE_MISMATCH
+                && expected instanceof com.example.compiledcircuits.block.GateBodyBlock && actual.is(expected);
+        if(!repairFaces && (match==CompiledBlockStateMatcher.Match.STATE_MISMATCH || !(actual.isAir()||actual.canBeReplaced()))
+                || actual.hasBlockEntity())return Outcome.OCCUPIED;
         var restored=decoded.state().orElseGet(expected::defaultBlockState);
         if(expected==ModBlocks.BASIC_WIRE.get())restored=Block.updateFromNeighbourShapes(restored,level,pos);
         if(!restored.is(expected) || !restored.canSurvive(level,pos)

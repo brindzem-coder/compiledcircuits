@@ -72,6 +72,10 @@ public final class CompilationJobs {
     public static void blockChanged(ServerLevel level, BlockPos pos) {
         chunkChanged(level, ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4));
     }
+    static boolean isWatching(ServerLevel level, BlockPos pos) {
+        var manager=MANAGERS.get(level.getServer());
+        return manager!=null && manager.watchers.containsKey(new Chunk(level.dimension().location().toString(),ChunkPos.asLong(pos.getX()>>4,pos.getZ()>>4)));
+    }
     public static void chunkChanged(ServerLevel level, long pos) {
         var manager = MANAGERS.get(level.getServer()); if (manager == null) return;
         var jobs = manager.watchers.get(new Chunk(level.dimension().location().toString(), pos));
@@ -268,7 +272,8 @@ public final class CompilationJobs {
             if (current.state.getBlock() instanceof GateBodyBlock
                     || ((IWireConnectable) current.state.getBlock()).canWireConnect(current.state, dir)) {
                 BlockPos next = current.pos.relative(dir);
-                if (!level.isOutsideBuildHeight(next) && !snapshots.containsKey(next)) {
+                if (!level.isOutsideBuildHeight(next) && !snapshots.containsKey(next)
+                        && CircuitBoundary.uncompiled(data,dimension,next)) {
                     BlockState state = read(next); if (state == null) return;
                     if (CircuitConnections.connects(current.state, state, dir)) enqueue(next, state);
                 }
