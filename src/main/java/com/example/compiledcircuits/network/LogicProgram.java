@@ -31,6 +31,44 @@ public final class LogicProgram {
     private final BlockPos[] positions;
     private boolean[] stable;
     private boolean memoryChanged;
+    private int lastWork;
+    private int[] aliases;
+    public int nodeCount() { return operations.length; }
+    public int evaluationNodeCount() {
+        int count = 0; for (int i = 0; i < aliases.length; i++) if (aliases[i] == i) count++; return count;
+    }
+    private record Expression(Op op, List<Integer> parents) {}
+    /** Keep original IDs/topology for saved memory and feedback; simplify only the execution plan. */
+    void optimize(Set<BlockPos> allowed) {
+        for (int i = 0; i < aliases.length; i++) aliases[i] = i;
+        Set<Integer> seeded = new HashSet<>(inputs.values());
+        Map<Expression, Integer> common = new HashMap<>();
+        for (int[] group : groups) {
+            if (group.length != 1) continue;
+            int id = group[0]; Op op = operations[id];
+            if (!allowed.contains(positions[id]) || seeded.contains(id) || op == Op.LATCH) continue;
+            int[] sources = Arrays.stream(parents[id]).map(p -> aliases[p]).sorted().toArray();
+            if (op == Op.OR && sources.length == 1) { aliases[id] = sources[0]; continue; }
+            if (op == Op.NOT && sources.length == 1) {
+                int parent = sources[0];
+                if (operations[parent] == Op.NOT && groups[component[parent]].length == 1 && parents[parent].length == 1) {
+                    aliases[id] = aliases[parents[parent][0]]; continue;
+                }
+            }
+            // Preserve duplicate inputs: XOR(A,A) must stay false, not become A.
+            var key = new Expression(op, Arrays.stream(sources).boxed().toList());
+            Integer earlier = common.putIfAbsent(key, id);
+            if (earlier != null) aliases[id] = earlier;
+        }
+    }
+    int lastWork() { return lastWork; }
+    boolean[] benchmarkState() { return stable.clone(); }
+    void benchmarkReset(boolean[] state) { stable = state.clone(); }
+    List<BlockPos> benchmarkInputs() {
+        var byNode = new java.util.TreeMap<Integer, BlockPos>();
+        inputs.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(e -> byNode.putIfAbsent(e.getValue(), e.getKey()));
+        return List.copyOf(byNode.values());
+    }
     private boolean externalMemory;
     private final boolean feedback;
     private final boolean hasMemory;
@@ -57,6 +95,7 @@ public final class LogicProgram {
         signature = UUID.nameUUIDFromBytes(topology.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
         feedback = Arrays.stream(groups).anyMatch(g -> g.length > 1);
         hasMemory = feedback || Arrays.asList(operations).contains(Op.LATCH);
+        aliases = new int[nodes.size()]; for (int i = 0; i < aliases.length; i++) aliases[i] = i;
     }
     public static final class UnstableFeedback extends IllegalStateException {
         public final BlockPos position;
@@ -100,16 +139,17 @@ public final class LogicProgram {
     }
     private boolean value(int node, boolean[] values, boolean[] seeds) {
         Op op = operations[node];
-        if (op == Op.LATCH) return values[enableSources[node]] ? values[dataSources[node]] : values[node];
+        if (op == Op.LATCH) return values[aliases[enableSources[node]]] ? values[aliases[dataSources[node]]] : values[node];
         boolean value = op == Op.AND || op == Op.NAND || seeds[node];
         for (int parent : parents[node]) {
-            if (op == Op.AND || op == Op.NAND) value &= values[parent];
-            else if (op == Op.XOR || op == Op.XNOR) value ^= values[parent];
-            else value |= values[parent];
+            if (op == Op.AND || op == Op.NAND) value &= values[aliases[parent]];
+            else if (op == Op.XOR || op == Op.XNOR) value ^= values[aliases[parent]];
+            else value |= values[aliases[parent]];
         }
         return switch (op) { case NOT, NAND, NOR, XNOR -> !value; default -> value; };
     }
     public Map<BlockPos, Boolean> evaluate(Map<BlockPos, Boolean> externalInputs) {
+        lastWork = 0;
         memoryChanged = false;
         boolean[] values = stable.clone(), seeds = new boolean[operations.length];
         inputs.forEach((pos, node) -> seeds[node] |= externalInputs.getOrDefault(pos, false));
@@ -117,7 +157,7 @@ public final class LogicProgram {
         boolean[] queued = new boolean[operations.length];
         for (int[] group : groups) {
             if (group.length == 1) {
-                int node = group[0]; charge(node, work);
+                int node = group[0]; if (aliases[node] != node) continue; charge(node, work);
                 values[node] = value(node, values, seeds);
                 continue;
             }
@@ -144,6 +184,7 @@ public final class LogicProgram {
             if (!settled) throw new UnstableFeedback("Feedback did not settle within the sweep limit", positions[group[0]]);
         }
         // Never commit partial updates from a failed cycle or downstream component.
+        for (int i = 0; i < aliases.length; i++) if (aliases[i] != i) values[i] = values[aliases[i]];
         memoryChanged = hasMemory && !Arrays.equals(stable, values);
         stable = values;
         Map<BlockPos, Boolean> result = new HashMap<>();
@@ -152,6 +193,7 @@ public final class LogicProgram {
     }
     private void charge(int node, int[] work) {
         work[0] += 1 + parents[node].length;
+        lastWork = work[0];
         if (work[0] > MAX_EVALUATION_WORK)
             throw new UnstableFeedback("Feedback settling work limit exceeded", positions[node]);
     }

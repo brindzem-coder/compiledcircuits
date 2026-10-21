@@ -72,7 +72,8 @@ public final class ClientPacketHandlers {
     static NetworkManagerScreen currentManager() {
         var screen = Minecraft.getInstance().screen;
         NetworkManagerScreen manager = screen instanceof NetworkManagerScreen m ? m
-                : screen instanceof NetworkTextEditScreen edit ? edit.parentManager() : null;
+                : screen instanceof NetworkTextEditScreen edit ? edit.parentManager()
+                : screen instanceof BenchmarkScreen benchmark ? benchmark.parentManager() : null;
         return manager != null && manager.contextValid() ? manager : null;
     }
     static void managerDamageUpdated() { var manager = currentManager(); if (manager != null) manager.onBrokenListUpdated(); }

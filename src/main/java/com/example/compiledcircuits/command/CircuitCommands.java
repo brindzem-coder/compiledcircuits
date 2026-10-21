@@ -39,6 +39,11 @@ public final class CircuitCommands {
 
         dispatcher.register(
                 Commands.literal("circuit")
+                        .then(Commands.literal("optimize").executes(c -> com.example.compiledcircuits.network.CircuitOptimization.optimize(c.getSource())))
+                        .then(Commands.literal("benchmark")
+                                .executes(c -> com.example.compiledcircuits.network.CircuitBenchmark.start(c.getSource()))
+                                .then(Commands.literal("baseline").executes(c -> com.example.compiledcircuits.network.CircuitBenchmark.start(c.getSource(), true)))
+                                .then(Commands.literal("cancel").executes(c -> com.example.compiledcircuits.network.CircuitBenchmark.cancel(c.getSource()))))
                         .then(Commands.literal("conflicts").requires(source -> source.hasPermission(2))
                                 .then(Commands.literal("list").executes(context -> listConflicts(context.getSource(),0)).then(Commands.argument("offset",IntegerArgumentType.integer(0)).executes(c->listConflicts(c.getSource(),IntegerArgumentType.getInteger(c,"offset")))))
                                 .then(Commands.literal("remove")

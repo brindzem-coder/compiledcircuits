@@ -88,8 +88,19 @@ public class CompiledNetwork {
     public BlockPos getLogicErrorPosition() { return feedbackError == null ? null : feedbackError.position; }
     boolean logicMemoryChanged() { return logic != null && logic.memoryChanged(); }
     private Map<BlockPos, Boolean> outputSignals = Map.of();
+    private boolean optimized;
+    public boolean isOptimized() { return optimized; }
+    public String enableOptimization() {
+        restoreLogic();
+        if (logicInvalid) throw new IllegalStateException("Invalid logic");
+        optimized = true;
+        if (logic == null) return "Passive network already uses its direct OR path.";
+        logic.optimize(elementsByPosition.keySet());
+        return "Local evaluation nodes: " + logic.nodeCount() + " -> " + logic.evaluationNodeCount();
+    }
     void prepareLogic(Map<BlockPos, net.minecraft.world.level.block.state.BlockState> states) {
         logic = LogicProgram.hasLogic(states.values()) ? LogicProgram.compile(states) : null;
+        if (logic != null && optimized) logic.optimize(states.keySet());
         logicPrepared = true;
     }
     void restoreLogic() {
@@ -365,6 +376,7 @@ public class CompiledNetwork {
         tag.putString("dimension", dimension);
 
         tag.putBoolean("powered", powered);
+        tag.putBoolean("optimized", optimized);
         CompoundTag memory = logic != null && !logicInvalid ? logic.saveMemory() : savedLogicMemory;
         if (!memory.isEmpty()) tag.put("logicMemory", memory.copy());
 
@@ -458,6 +470,7 @@ public class CompiledNetwork {
         network.powered =
                 tag.getBoolean("powered");
         network.savedLogicMemory = tag.getCompound("logicMemory").copy();
+        network.optimized = tag.getBoolean("optimized");
 
         network.savedIntegrityPending = tag.getBoolean("integrityUnverified");
         ListTag brokenList = tag.getList("brokenElements", Tag.TAG_COMPOUND);

@@ -35,6 +35,7 @@ public class NetworkManagerScreen
     private EditBox searchBox;
     private Integer initialNavigateNetworkId;
     private boolean openingChild;
+    private Button benchmarkButton;
 
     public NetworkManagerScreen(List<NetworkListS2CPacket.Entry> nextEntries,
                                 List<NetworkListS2CPacket.FolderEntry> nextFolders) {
@@ -86,6 +87,12 @@ public class NetworkManagerScreen
 
         layout.resize(width, height);
         renderer = new ManagerRenderer(model, state, layout, font);
+        benchmarkButton = addRenderableWidget(Button.builder(Component.literal("Stats"), b -> {
+            if (state.selectedNetworkIds.size() != 1) return;
+            openingChild = true;
+            Minecraft.getInstance().setScreen(new BenchmarkScreen(this, state.selectedNetworkIds.iterator().next()));
+        }).bounds(8, 6, 52, 20).build());
+        benchmarkButton.active = state.selectedNetworkIds.size() == 1;
 
         String searchText = state.searchText;
         boolean restoreSearchFocus = state.searchFocused;
@@ -689,6 +696,7 @@ public class NetworkManagerScreen
 
     private void updateButtons() {
         boolean networks = state.selectionType == SelectionType.NETWORKS && !state.selectedNetworkIds.isEmpty();
+        benchmarkButton.active = networks && state.selectedNetworkIds.size() == 1;
         boolean foldersSelected = state.selectionType == SelectionType.FOLDERS && !state.selectedFolderIds.isEmpty();
         newFolderButton.active = !isSearchMode();
         highlightButton.active = networks;

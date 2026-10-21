@@ -27,6 +27,7 @@ final class DirectLinks {
     DirectLinks(NetworkSavedData data,Consumer<CompiledNetwork> changed){this.data=data;this.changed=changed;}
     void clear(){ports.clear();samples.clear();groups.clear();dirty.clear();}
     boolean contains(CompiledNetwork n){return samples.containsKey(n);}
+    void optimizationChanged(CompiledNetwork n) { if (contains(n)) topologyChanged(Set.of(n)); }
     private Key key(CompiledNetwork n,CompiledNetwork.Port p){return new Key(n.getDimension(),p.pos(),p.side());}
     private Endpoint peer(CompiledNetwork n,CompiledNetwork.Port p){
         var other=ports.get(key(n,p).opposite());
@@ -55,6 +56,7 @@ final class DirectLinks {
         dirty.remove(n);groups.remove(n);topologyChanged(affected);
     }
     private void topologyChanged(Set<CompiledNetwork> affected){
+        affected = new HashSet<>(affected);
         for(var n:new ArrayList<>(affected)){var old=groups.get(n);if(old!=null)affected.addAll(old.members);}
         for(var n:affected){groups.remove(n);if(samples.containsKey(n))dirty.add(n);}
     }
@@ -94,6 +96,9 @@ final class DirectLinks {
                 }
             }
             result.program=LogicProgram.compile(states,links,owners);result.program.importNodeMemory(memory);
+            Set<BlockPos> optimized = new HashSet<>();
+            for (var n : members) if (n.isOptimized()) for (var e : n.getElements()) optimized.add(e.getPos());
+            if (!optimized.isEmpty()) result.program.optimize(optimized);
         }catch(RuntimeException failure){result.error="Direct links: "+failure.getMessage();}
         for(var n:members)groups.put(n,result);
         return result;

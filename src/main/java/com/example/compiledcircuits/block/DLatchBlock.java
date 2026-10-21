@@ -12,6 +12,26 @@ import net.minecraft.world.level.block.state.properties.IntegerProperty;
 /** Q faces FACING, D is opposite, WDE occupies exactly one perpendicular face. */
 public class DLatchBlock extends EndpointBlock {
     public static final IntegerProperty WDE_SIDE = IntegerProperty.create("wde_side", 0, 3);
+    private static final net.minecraft.world.phys.shapes.VoxelShape[] SHAPES = new net.minecraft.world.phys.shapes.VoxelShape[24];
+
+    @Override public net.minecraft.world.phys.shapes.VoxelShape getShape(BlockState state,
+            net.minecraft.world.level.BlockGetter level, net.minecraft.core.BlockPos pos,
+            net.minecraft.world.phys.shapes.CollisionContext context) {
+        Direction output = state.getValue(FACING);
+        int index = output.ordinal() * 4 + state.getValue(WDE_SIDE);
+        if (SHAPES[index] != null) return SHAPES[index];
+        var shape = Block.box(4, 4, 4, 12, 12, 12);
+        for (var side : new Direction[]{output, output.getOpposite(), enableSide(state)}) {
+            double[] low = {5, 5, 5}, high = {11, 11, 11};
+            int axis = side.getAxis() == Direction.Axis.X ? 0 : side.getAxis() == Direction.Axis.Y ? 1 : 2;
+            boolean positive = side.getAxisDirection() == Direction.AxisDirection.POSITIVE;
+            low[axis] = positive ? 12 : 0;
+            high[axis] = positive ? 16 : 4;
+            shape = net.minecraft.world.phys.shapes.Shapes.or(shape,
+                    Block.box(low[0], low[1], low[2], high[0], high[1], high[2]));
+        }
+        return SHAPES[index] = shape;
+    }
 
     public DLatchBlock(Properties properties) {
         super(properties);

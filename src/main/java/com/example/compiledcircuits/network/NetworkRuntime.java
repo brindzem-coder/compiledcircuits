@@ -98,6 +98,11 @@ public final class NetworkRuntime {
         var entry=entries.get(n);if(entry!=null){entry.outputs=n.getOutputs().iterator();queue.add(entry);}
     }); }
     public int directLinkCount(){return direct.linkCount();}
+    void optimizationChanged(CompiledNetwork network) {
+        direct.optimizationChanged(network);
+        var entry = entries.get(network);
+        if (entry != null) { entry.dirtyInputs = true; entry.inputs = null; queue.add(entry); }
+    }
     void bind(MinecraftServer server) { this.server = server; }
     void add(CompiledNetwork network) {
         network.reactivate();

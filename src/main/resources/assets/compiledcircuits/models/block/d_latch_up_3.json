@@ -1,36 +1,135 @@
 {
   "elements": [
     {
+      "from": [
+        4,
+        4,
+        4
+      ],
+      "to": [
+        12,
+        12,
+        12
+      ],
       "faces": {
-        "south": {
-          "texture": "#wde"
-        },
-        "east": {
+        "down": {
           "texture": "#body"
         },
         "up": {
-          "texture": "#q"
+          "texture": "#body"
+        },
+        "north": {
+          "texture": "#body"
+        },
+        "south": {
+          "texture": "#body"
         },
         "west": {
           "texture": "#body"
         },
-        "down": {
-          "texture": "#d"
-        },
-        "north": {
+        "east": {
           "texture": "#body"
         }
-      },
-      "to": [
-        11,
-        11,
-        11
-      ],
+      }
+    },
+    {
       "from": [
         5,
         5,
+        12
+      ],
+      "to": [
+        11,
+        11,
+        16
+      ],
+      "faces": {
+        "down": {
+          "texture": "#wde"
+        },
+        "up": {
+          "texture": "#wde"
+        },
+        "north": {
+          "texture": "#wde"
+        },
+        "south": {
+          "texture": "#wde",
+          "cullface": "south"
+        },
+        "west": {
+          "texture": "#wde"
+        },
+        "east": {
+          "texture": "#wde"
+        }
+      }
+    },
+    {
+      "from": [
+        5,
+        12,
         5
-      ]
+      ],
+      "to": [
+        11,
+        16,
+        11
+      ],
+      "faces": {
+        "down": {
+          "texture": "#q"
+        },
+        "up": {
+          "texture": "#q",
+          "cullface": "up"
+        },
+        "north": {
+          "texture": "#q"
+        },
+        "south": {
+          "texture": "#q"
+        },
+        "west": {
+          "texture": "#q"
+        },
+        "east": {
+          "texture": "#q"
+        }
+      }
+    },
+    {
+      "from": [
+        5,
+        0,
+        5
+      ],
+      "to": [
+        11,
+        4,
+        11
+      ],
+      "faces": {
+        "down": {
+          "texture": "#d",
+          "cullface": "down"
+        },
+        "up": {
+          "texture": "#d"
+        },
+        "north": {
+          "texture": "#d"
+        },
+        "south": {
+          "texture": "#d"
+        },
+        "west": {
+          "texture": "#d"
+        },
+        "east": {
+          "texture": "#d"
+        }
+      }
     }
   ],
   "textures": {
