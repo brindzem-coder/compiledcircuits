@@ -40,6 +40,9 @@ public final class CircuitBenchmark {
         final CompiledNetwork network;
         final UUID player;
         final boolean optimized, sequence;
+        NetworkTruthTable tableSnapshot;
+        final boolean tableMode;
+        List<String> previousReport = List.of();
         long[] sequenceTimes, sequenceWork;
         boolean[] sequenceFailed;
         int sequenceStep;
@@ -64,7 +67,10 @@ public final class CircuitBenchmark {
             this(n, player, optimized, false);
         }
         Job(CompiledNetwork n, UUID player, boolean optimized, boolean sequence) {
-            this.optimized = optimized; this.sequence = sequence;
+            this(n, player, optimized, sequence, true);
+        }
+        Job(CompiledNetwork n, UUID player, boolean optimized, boolean sequence, boolean useTable) {
+            this.optimized = optimized; this.sequence = sequence; this.tableSnapshot = useTable ? n.networkTable() : null; this.tableMode = tableSnapshot != null;
             network = n; this.player = player; elements = n.getElements().iterator(); memory = new HashMap<>(n.nodeMemory());
         }
         void step() {
@@ -74,6 +80,7 @@ public final class CircuitBenchmark {
                 }
                 if (elements.hasNext()) return;
                 program = LogicProgram.compile(states); program.importNodeMemory(memory);
+                if (tableSnapshot != null) program.installTable(tableSnapshot, states.keySet());
                 if (optimized) program.optimize(states.keySet());
                 originalNodes = program.nodeCount(); evaluationNodes = program.evaluationNodeCount();
                 tables = program.truthTableCount(); tableBytes = program.truthTableBytes(); tableNodes = program.truthTableNodes();
@@ -128,10 +135,10 @@ public final class CircuitBenchmark {
             long start = System.nanoTime();
             try { program.evaluate(values); }
             catch (LogicProgram.UnstableFeedback failure) { if (measured) combinationFailed = true; }
-            finally { if (measured) { time += System.nanoTime() - start; work += program.lastWork(); } }
+            finally { if (measured) { time += System.nanoTime() - start; work += program.lastWork() + program.lastChecks(); } }
         }
         void finish(String message) {
-            done = true; status = message; program = null; baseline = null;
+            done = true; status = message; program = null; baseline = null; tableSnapshot = null;
             states.clear(); memory.clear(); sequenceTimes = sequenceWork = null; sequenceFailed = null;
         }
         String bits(int mask) {
@@ -147,9 +154,9 @@ public final class CircuitBenchmark {
             lines.add("Network #" + network.getId() + " | " + status);
             lines.add("Inputs: " + inputs.size() + (sequence ? " | sequence steps: " : " | combinations: ") + next + "/" + total
                     + " | repeats: " + REPEATS + (sequence && !done ? " | pass: " + (repeat + 1) + " step: " + sequenceStep : ""));
-            lines.add((optimized ? "Optimized" : "Baseline") + " | evaluation steps: " + originalNodes + " -> " + evaluationNodes);
+            lines.add((tableMode ? "Whole-network table" : optimized ? "Optimized graph" : "Original graph") + " | evaluation steps: " + originalNodes + " -> " + evaluationNodes);
             lines.add("Truth tables: " + tables + " | replaced nodes: " + tableNodes + " | data: " + tableBytes + " bytes");
-            lines.add("Isolated network; direct inputs treated as independent signals.");
+            lines.add("Isolated benchmark. Live: " + network.tableStatus());
             lines.add(sequence ? "Sequence: Gray code + unchanged samples; memory carries between steps." : stateful
                     ? "Memory/feedback: same captured state for EVERY sample."
                     : "Combinational circuit: all input combinations.");
@@ -159,8 +166,9 @@ public final class CircuitBenchmark {
                 lines.add(String.format(Locale.ROOT, "Work avg/min/max: %.1f / %d / %d", stats.work / (double) stats.count, stats.minWork, stats.maxWork));
                 lines.add("Least work: " + bits(stats.easiest) + " | most work: " + bits(stats.hardest));
             }
+            lines.addAll(previousReport);
             lines.add("Successful: " + stats.count + " | unstable/limited: " + failed + (firstFailure < 0 ? "" : " | first: " + bits(firstFailure)));
-            lines.add("Work = evaluated nodes/inputs or table work; skips/checks excluded.");
+            lines.add("Work = evaluated nodes/inputs + table reads/outputs + skip bit checks.");
             lines.add("Time includes skip checks; not CPU %. Min/max average 3 matching samples.");
             lines.add("No world I/O or input preparation timed. Failed combinations excluded from averages.");
             for (int first = 0; first < Math.min(MAX_INPUTS, inputs.size()); first += 4) {
@@ -188,7 +196,18 @@ public final class CircuitBenchmark {
         if (n.getElements().size() > LogicProgram.MAX_ELEMENTS) { source.sendFailure(Component.literal("Benchmark limit: 8192 elements.")); return 0; }
         var session = sessions.computeIfAbsent(server, k -> new Session());
         if (session.job != null) { source.sendFailure(Component.literal("A benchmark is already running on this server.")); return 0; }
-        var job = new Job(n, player.getUUID(), !baseline && n.isOptimized(), sequence); session.job = job; session.results.put(n.getId(), job);
+        var job = new Job(n, player.getUUID(), !baseline && n.isOptimized(), sequence, !baseline);
+        var previous = session.results.get(n.getId());
+        if (previous != null && previous.network == n && previous.done && previous.status.equals("Complete")
+                && previous.stats.count > 0 && previous.sequence == sequence && previous.optimized == job.optimized
+                && previous.tableMode != job.tableMode) {
+            job.previousReport = List.of(
+                    String.format(Locale.ROOT, "Previous %s time avg/min/max: %.3f / %.3f / %.3f us", !previous.tableMode ? "graph" : "table",
+                            previous.stats.nanos / (double) previous.stats.count / 1000, previous.stats.minTime / 1000.0, previous.stats.maxTime / 1000.0),
+                    String.format(Locale.ROOT, "Previous work avg/min/max: %.1f / %d / %d | table bytes: %d", previous.stats.work / (double) previous.stats.count,
+                            previous.stats.minWork, previous.stats.maxWork, previous.tableBytes));
+        }
+        session.job = job; session.results.put(n.getId(), job);
         while (session.results.size() > 16) session.results.remove(session.results.keySet().iterator().next());
         source.sendSuccess(() -> Component.literal("Benchmark started. Hold the selector to see progress; /circuit benchmark cancel stops it."), false);
         return 1;

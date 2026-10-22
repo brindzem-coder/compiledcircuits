@@ -37,7 +37,7 @@ public class TruthTableGameTests {
     public static void tablesMatchAllInputsAndReduceWork(GameTestHelper h) {
         for(int count:new int[]{12,64,140}) {
             var s=chain(count);var raw=LogicProgram.compile(s);var simple=LogicProgram.compile(s);var table=LogicProgram.compile(s);
-            simple.optimize(s.keySet(),false);var initial=table.benchmarkState();table.optimize(s.keySet());
+            simple.optimize(s.keySet(),false);var initial=table.benchmarkState();table.optimize(s.keySet(),true);
             h.assertTrue(Arrays.equals(initial,table.benchmarkState()),"table construction never evaluates live state");
             h.assertTrue(table.truthTableCount()>0&&table.truthTableNodes()>=count,"profitable logic uses tables");
             h.assertTrue(table.truthTableBytes()<=LogicProgram.MAX_TABLE_BYTES,"table memory bounded");
@@ -47,13 +47,13 @@ public class TruthTableGameTests {
                 h.assertTrue(simple.evaluate(inputs).equals(table.evaluate(inputs)),"same result as graph simplification alone");
                 h.assertTrue(table.lastWork()<simple.lastWork(),"table work counts key reads and node restoration but still saves work");
             }
-            int tables=table.truthTableCount(),bytes=table.truthTableBytes();var memory=table.nodeMemory();table.optimize(s.keySet());
+            int tables=table.truthTableCount(),bytes=table.truthTableBytes();var memory=table.nodeMemory();table.optimize(s.keySet(),true);
             h.assertTrue(tables==table.truthTableCount()&&bytes==table.truthTableBytes()&&memory.equals(table.nodeMemory()),"repeated optimization deterministic and preserves state");
         }h.succeed();
     }
     @GameTest(template="empty",batch="truth_tables",timeoutTicks=100)
     public static void tinyAndExcludedRegionsStayOrdinary(GameTestHelper h) {
-        var s=chain(2);var program=LogicProgram.compile(s);program.optimize(s.keySet());h.assertTrue(program.truthTableCount()==0,"tiny gates do not pay table overhead");
+        var s=chain(2);var program=LogicProgram.compile(s);program.optimize(s.keySet(),true);h.assertTrue(program.truthTableCount()==0,"tiny gates do not pay table overhead");
         s=chain(20);program=LogicProgram.compile(s);program.optimize(Set.of());h.assertTrue(program.truthTableCount()==0&&program.nodeCount()==program.evaluationNodeCount(),"unoptimized owner never receives tables");
         h.succeed();
     }
@@ -63,9 +63,9 @@ public class TruthTableGameTests {
         var latch=end.east();var state=ModBlocks.D_LATCH.get().defaultBlockState().setValue(EndpointBlock.FACING,Direction.EAST);
         var enable=latch.relative(DLatchBlock.enableSide(state));var q=latch.east();s.put(latch,state);
         s.put(enable,ModBlocks.INPUT_ENDPOINT.get().defaultBlockState());s.put(q,ModBlocks.OUTPUT_ENDPOINT.get().defaultBlockState());
-        var raw=LogicProgram.compile(s);var opt=LogicProgram.compile(s);opt.optimize(s.keySet());h.assertTrue(opt.truthTableCount()>0,"combinational region before latch still optimized");
+        var raw=LogicProgram.compile(s);var opt=LogicProgram.compile(s);opt.optimize(s.keySet(),true);h.assertTrue(opt.truthTableCount()>0,"combinational region before latch still optimized");
         for(int mask:new int[]{7,0,1,2,4,5,3,0,6})equal(h,raw,opt,Map.of(A,(mask&1)!=0,B,(mask&2)!=0,enable,(mask&4)!=0));
-        var restored=LogicProgram.compile(s);restored.optimize(s.keySet());restored.restoreMemory(raw.saveMemory());
+        var restored=LogicProgram.compile(s);restored.optimize(s.keySet(),true);restored.restoreMemory(raw.saveMemory());
         equal(h,raw,restored,Map.of(A,true,B,false,enable,false));h.succeed();
     }
     @GameTest(template="empty",batch="truth_tables",timeoutTicks=100)
@@ -74,7 +74,7 @@ public class TruthTableGameTests {
         int x=end.getX()+2;s.put(new BlockPos(x,0,0),ModBlocks.NOT_GATE.get().defaultBlockState().setValue(EndpointBlock.FACING,Direction.EAST));
         for(var p:List.of(new BlockPos(x-1,0,0),new BlockPos(x-1,0,1),new BlockPos(x,0,1),new BlockPos(x+1,0,1),new BlockPos(x+1,0,0)))s.put(p,ModBlocks.BASIC_WIRE.get().defaultBlockState());
         s.put(new BlockPos(x+2,0,0),ModBlocks.OUTPUT_ENDPOINT.get().defaultBlockState());
-        var raw=LogicProgram.compile(s);var opt=LogicProgram.compile(s);opt.optimize(s.keySet());h.assertTrue(raw.hasFeedback()&&opt.truthTableCount()>0,"table and protected cycle coexist");
+        var raw=LogicProgram.compile(s);var opt=LogicProgram.compile(s);opt.optimize(s.keySet(),true);h.assertTrue(raw.hasFeedback()&&opt.truthTableCount()>0,"table and protected cycle coexist");
         for(int mask:new int[]{3,1,0,2,3,0,1})equal(h,raw,opt,Map.of(A,(mask&1)!=0,B,(mask&2)!=0));h.succeed();
     }
     static CompiledNetwork network(int id,Map<BlockPos,BlockState> states) {

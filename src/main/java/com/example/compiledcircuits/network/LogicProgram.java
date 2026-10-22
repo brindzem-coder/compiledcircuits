@@ -28,6 +28,58 @@ public final class LogicProgram {
     private final int[] component;
     private final int[] dataSources, enableSources;
     private final int[][] groups;
+    private int[][] executionGroups;
+    private record WholeTable(NetworkTruthTable table, int[] nodes, int[] inputNodes, int[][] incoming, int[] outputNodes) {}
+    private final Map<Integer, WholeTable> wholeTables = new HashMap<>();
+    private final List<WholeTable> installedTables = new ArrayList<>();
+    private Set<BlockPos> optimizationPositions = Set.of();
+    String graphSignature() { return signature; }
+    List<BlockPos> tableOutputs() { return outputs.keySet().stream().sorted().toList(); }
+    long fullWork() { long work = 0; for (int[] p : parents) work += 1 + p.length; return work; }
+    /** Contract complete network regions, then sort execution units without changing original IDs. */
+    void installTable(NetworkTruthTable table, Set<BlockPos> region) {
+        var members = new HashSet<Integer>();
+        for (int i = 0; i < positions.length; i++) if (region.contains(positions[i])) members.add(i);
+        if (members.isEmpty()) throw new IllegalArgumentException("Empty table region");
+        for (int id : members) if (operations[id] == Op.LATCH || groups[component[id]].length > 1)
+            throw new IllegalArgumentException("Table suspended: feedback crosses this network");
+        int[] ins = table.inputs.stream().mapToInt(p -> Objects.requireNonNull(inputs.get(p), "Missing table input")).toArray();
+        int[] outs = table.outputs.stream().mapToInt(p -> Objects.requireNonNull(outputs.get(p), "Missing table output")).toArray();
+        int[][] incoming = new int[ins.length][];
+        for (int i = 0; i < ins.length; i++) incoming[i] = Arrays.stream(parents[ins[i]]).filter(p -> !members.contains(p)).toArray();
+        var unit = new WholeTable(table, members.stream().mapToInt(Integer::intValue).sorted().toArray(), ins, incoming, outs);
+        var proposed = new ArrayList<>(installedTables); proposed.add(unit);
+        var units = new ArrayList<int[]>(); var macros = new HashMap<Integer, WholeTable>();
+        int[] owner = new int[operations.length]; Arrays.fill(owner, -1);
+        for (var t : proposed) {
+            int index = units.size(); units.add(t.nodes); macros.put(t.nodes[0], t);
+            for (int id : t.nodes) { if (owner[id] != -1) throw new IllegalArgumentException("Overlapping tables"); owner[id] = index; }
+        }
+        for (int[] group : groups) if (owner[group[0]] == -1) {
+            int index = units.size(); units.add(group); for (int id : group) owner[id] = index;
+        }
+        List<Set<Integer>> edges = new ArrayList<>(); for (int i = 0; i < units.size(); i++) edges.add(new TreeSet<>());
+        int[] degree = new int[units.size()];
+        for (int i = 0; i < parents.length; i++) for (int p : parents[i])
+            if (owner[p] != owner[i] && edges.get(owner[p]).add(owner[i])) degree[owner[i]]++;
+        var ready = new PriorityQueue<Integer>(); for (int i = 0; i < degree.length; i++) if (degree[i] == 0) ready.add(i);
+        var ordered = new ArrayList<int[]>();
+        while (!ready.isEmpty()) { int id = ready.remove(); ordered.add(units.get(id)); for (int child : edges.get(id)) if (--degree[child] == 0) ready.add(child); }
+        if (ordered.size() != units.size()) throw new IllegalArgumentException("Table suspended: inter-network dependency cycle");
+        executionGroups = ordered.toArray(int[][]::new); installedTables.add(unit); wholeTables.clear(); wholeTables.putAll(macros);
+        buildIncrementalPlan(optimizationPositions);
+    }
+    private void evaluateTable(WholeTable unit, boolean[] values, boolean[] seeds, int[] work) {
+        int key = 0;
+        for (int i = 0; i < unit.inputNodes.length; i++) {
+            boolean signal = seeds[unit.inputNodes[i]];
+            for (int parent : unit.incoming[i]) signal |= values[aliases[parent]];
+            chargeWork(1 + unit.incoming[i].length, unit.nodes[0], work);
+            if (signal) key |= 1 << i;
+        }
+        chargeWork(unit.table.words + unit.outputNodes.length, unit.nodes[0], work);
+        for (int i = 0; i < unit.outputNodes.length; i++) values[unit.outputNodes[i]] = unit.table.output(key, i);
+    }
     private final BlockPos[] positions;
     private boolean[] stable;
     private boolean memoryChanged;
@@ -40,16 +92,19 @@ public final class LogicProgram {
     private boolean[] tableMembers;
     private int tableCount, tableBytes, tableNodes;
     // Boundaries belong to execution units: a node, a complete table, or a complete SCC.
-    private int[][] incrementalBoundary;
+    private int[][] incrementalBoundary, incrementalSeeds;
     private boolean[] incrementalUnits, previousSeeds;
     private boolean incrementalValid;
-    private int lastSkipped;
+    private int lastSkipped, lastChecks;
+    int lastChecks() { return lastChecks; }
     int lastSkipped() { return lastSkipped; }
     private void buildIncrementalPlan(Set<BlockPos> allowed) {
-        incrementalBoundary = new int[groups.length][];
-        incrementalUnits = new boolean[groups.length];
-        for (int g = 0; g < groups.length; g++) {
-            int[] group = groups[g]; int first = group[0];
+        incrementalBoundary = new int[executionGroups.length][];
+        incrementalUnits = new boolean[executionGroups.length];
+        incrementalSeeds = new int[executionGroups.length][];
+        var seedNodes = new HashSet<>(inputs.values());
+        for (int g = 0; g < executionGroups.length; g++) {
+            int[] group = executionGroups[g]; int first = group[0];
             var table = tableStarts[first];
             if (group.length == 1 && (aliases[first] != first || (tableMembers[first] && table == null))) continue;
             int[] nodes = table == null ? group : table.nodes;
@@ -58,32 +113,37 @@ public final class LogicProgram {
             for (int node : nodes) { members.add(node); eligible &= allowed.contains(positions[node]); }
             for (int node : nodes) for (int parent : parents[node])
                 if (!members.contains(aliases[parent])) boundary.add(aliases[parent]);
-            incrementalUnits[g] = eligible;
+            incrementalSeeds[g] = Arrays.stream(nodes).filter(seedNodes::contains).toArray();
+            incrementalUnits[g] = eligible || wholeTables.containsKey(first);
             incrementalBoundary[g] = boundary.stream().mapToInt(Integer::intValue).toArray();
         }
         incrementalValid = false;
     }
     private boolean canSkip(int g, boolean[] values, boolean[] seeds) {
         if (!incrementalValid || incrementalUnits == null || !incrementalUnits[g]) return false;
-        for (int node : groups[g]) if (seeds[node] != previousSeeds[node]) return false;
-        for (int parent : incrementalBoundary[g]) if (values[parent] != stable[parent]) return false;
+        for (int node : incrementalSeeds[g]) { lastChecks++; if (seeds[node] != previousSeeds[node]) return false; }
+        for (int parent : incrementalBoundary[g]) { lastChecks++; if (values[parent] != stable[parent]) return false; }
         return true;
     }
-    public int truthTableCount() { return tableCount; }
-    public int truthTableBytes() { return tableBytes; }
-    public int truthTableNodes() { return tableNodes; }
+    public int truthTableCount() { return tableCount + installedTables.size(); }
+    public int truthTableBytes() { return tableBytes + installedTables.stream().mapToInt(t -> t.table.bytes()).sum(); }
+    public int truthTableNodes() { return tableNodes + installedTables.stream().mapToInt(t -> t.nodes.length).sum(); }
     public int nodeCount() { return operations.length; }
     public int evaluationNodeCount() {
         int count = 0; for (int i = 0; i < aliases.length; i++)
             if (aliases[i] == i && (!tableMembers[i] || tableStarts[i] != null)) count++;
+        for (var t : installedTables) count -= t.nodes.length - 1;
         return count;
     }
     private record Expression(Op op, List<Integer> parents) {}
     /** Keep original IDs/topology for saved memory and feedback; simplify only the execution plan. */
     void optimize(Set<BlockPos> allowed) {
-        optimize(allowed, true);
+        optimize(allowed, false);
     }
     void optimize(Set<BlockPos> allowed, boolean useTables) {
+        allowed = new HashSet<>(allowed);
+        for (var t : installedTables) for (int node : t.nodes) allowed.remove(positions[node]);
+        optimizationPositions = Set.copyOf(allowed);
         Arrays.fill(tableStarts, null); Arrays.fill(tableMembers, false);
         tableCount = tableBytes = tableNodes = 0;
         for (int i = 0; i < aliases.length; i++) aliases[i] = i;
@@ -175,7 +235,7 @@ public final class LogicProgram {
     private final Map<BlockPos, Integer> inputs, outputs;
 
     private LogicProgram(List<Node> nodes, int[][] groups, Map<BlockPos, Integer> inputs, Map<BlockPos, Integer> outputs) {
-        this.groups = groups; this.inputs = Map.copyOf(inputs); this.outputs = Map.copyOf(outputs);
+        this.groups = groups; this.executionGroups = groups; this.inputs = Map.copyOf(inputs); this.outputs = Map.copyOf(outputs);
         operations = new Op[nodes.size()]; parents = new int[nodes.size()][];
         children = new int[nodes.size()][]; component = new int[nodes.size()];
         dataSources = new int[nodes.size()]; enableSources = new int[nodes.size()];
@@ -249,15 +309,17 @@ public final class LogicProgram {
         return switch (op) { case NOT, NAND, NOR, XNOR -> !value; default -> value; };
     }
     public Map<BlockPos, Boolean> evaluate(Map<BlockPos, Boolean> externalInputs) {
-        lastWork = 0; lastSkipped = 0;
+        lastWork = 0; lastSkipped = 0; lastChecks = 0;
         memoryChanged = false;
         boolean[] values = stable.clone(), seeds = new boolean[operations.length];
         inputs.forEach((pos, node) -> seeds[node] |= externalInputs.getOrDefault(pos, false));
         int[] work = {0};
         boolean[] queued = new boolean[operations.length];
-        for (int g = 0; g < groups.length; g++) {
-            int[] group = groups[g];
+        for (int g = 0; g < executionGroups.length; g++) {
+            int[] group = executionGroups[g];
             if (canSkip(g, values, seeds)) { lastSkipped++; continue; }
+            var whole = wholeTables.get(group[0]);
+            if (whole != null) { evaluateTable(whole, values, seeds, work); continue; }
             if (group.length == 1) {
                 int node = group[0]; if (aliases[node] != node) continue;
                 var table = tableStarts[node];

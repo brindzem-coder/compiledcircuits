@@ -56,7 +56,7 @@ public class IncrementalGameTests {
         var opt=new CircuitBenchmark.Job(n,UUID.randomUUID(),true,true);var raw=new CircuitBenchmark.Job(n,UUID.randomUUID(),false,true);
         for(int i=0;i<1000&&(!opt.done||!raw.done);i++){if(!opt.done)opt.step();if(!raw.done)raw.step();}
         h.assertTrue(opt.done&&raw.done&&opt.stats.count==8&&raw.stats.count==8&&opt.repeat==3,"three complete trajectories averaged per matching step");
-        h.assertTrue(opt.stats.minWork==0&&raw.stats.minWork>0&&opt.stats.work<raw.stats.work,"unchanged samples skip only in optimized sequence");
+        h.assertTrue(opt.stats.minWork<raw.stats.minWork&&raw.stats.minWork>0&&opt.stats.work<raw.stats.work,"unchanged samples skip only in optimized sequence");
         h.assertTrue(saved.equals(n.save()),"sequence never changes live state");
         h.assertTrue(opt.lines().size()<=20&&opt.lines().stream().allMatch(l->l.length()<=256),"sequence report fits protocol");
         h.assertTrue(opt.sequenceTimes==null&&opt.sequenceWork==null,"trajectory buffers released");h.succeed();

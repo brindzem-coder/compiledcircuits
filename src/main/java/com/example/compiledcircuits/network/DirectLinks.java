@@ -96,6 +96,22 @@ final class DirectLinks {
                 }
             }
             result.program=LogicProgram.compile(states,links,owners);result.program.importNodeMemory(memory);
+            // A network-level cycle is deliberately conservative: table contraction must not alter settling order.
+            Map<CompiledNetwork, Set<CompiledNetwork>> successors = new IdentityHashMap<>();
+            for (var n : members) {
+                var next = new HashSet<CompiledNetwork>();
+                for (var p : n.directPorts()) if (!p.input()) { var target = peer(n, p); if (target != null) next.add(target.network); }
+                successors.put(n, next);
+            }
+            for (var n : members) if (n.networkTable() != null) {
+                var seen = new HashSet<CompiledNetwork>(); var queue = new ArrayDeque<>(successors.get(n)); boolean cycle = false;
+                while (!queue.isEmpty()) { var next = queue.remove(); if (next == n) { cycle = true; break; } if (seen.add(next)) queue.addAll(successors.get(next)); }
+                if (cycle) { n.tableStatus("Saved table suspended: inter-network cycle; using graph"); continue; }
+                try {
+                    var region = new HashSet<BlockPos>(); for (var e : n.getElements()) region.add(e.getPos());
+                    result.program.installTable(n.networkTable(), region); n.tableStatus("Saved table active in linked graph");
+                } catch (IllegalArgumentException unavailable) { n.tableStatus(unavailable.getMessage() + "; using graph"); }
+            }
             Set<BlockPos> optimized = new HashSet<>();
             for (var n : members) if (n.isOptimized()) for (var e : n.getElements()) optimized.add(e.getPos());
             if (!optimized.isEmpty()) result.program.optimize(optimized);

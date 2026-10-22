@@ -88,6 +88,32 @@ public class CompiledNetwork {
     public BlockPos getLogicErrorPosition() { return feedbackError == null ? null : feedbackError.position; }
     boolean logicMemoryChanged() { return logic != null && logic.memoryChanged(); }
     private Map<BlockPos, Boolean> outputSignals = Map.of();
+    private NetworkTruthTable networkTable;
+    private String tableStatus = "No saved table";
+    NetworkTruthTable networkTable() { return networkTable; }
+    public String tableStatus() { return tableStatus; }
+    void tableStatus(String status) { tableStatus = status; }
+    Map<BlockPos, net.minecraft.world.level.block.state.BlockState> tableStates() {
+        var states = new java.util.HashMap<BlockPos, net.minecraft.world.level.block.state.BlockState>();
+        for (var e : elements.values()) states.put(e.getPos(), e.resolveState().state().orElseThrow());
+        return states;
+    }
+    void setNetworkTable(NetworkTruthTable table) {
+        var states = tableStates(); var replacement = LogicProgram.compile(states);
+        if (table != null) {
+            validateTable(table, replacement); replacement.installTable(table, states.keySet());
+        }
+        if (table == null && !LogicProgram.hasLogic(states.values())) replacement = null;
+        if (replacement != null && optimized) replacement.optimize(states.keySet());
+        if (replacement != null && logic != null) replacement.importNodeMemory(logic.nodeMemory());
+        networkTable = table; logic = replacement; logicPrepared = true; logicInvalid = false;
+        tableStatus = table == null ? "No saved table" : "Saved table active (local graph)";
+    }
+    private static void validateTable(NetworkTruthTable table, LogicProgram program) {
+        if (!table.graph.equals(program.graphSignature()) || !table.inputs.equals(program.benchmarkInputs())
+                || !table.outputs.equals(program.tableOutputs()) || program.hasStatefulMemory())
+            throw new IllegalArgumentException("Saved table does not match network topology");
+    }
     private boolean optimized;
     public boolean isOptimized() { return optimized; }
     public String enableOptimization() {
@@ -100,14 +126,18 @@ public class CompiledNetwork {
                 + "; truth tables: " + logic.truthTableCount() + " (" + logic.truthTableBytes() + " bytes).";
     }
     void prepareLogic(Map<BlockPos, net.minecraft.world.level.block.state.BlockState> states) {
-        logic = LogicProgram.hasLogic(states.values()) ? LogicProgram.compile(states) : null;
+        logic = networkTable != null || LogicProgram.hasLogic(states.values()) ? LogicProgram.compile(states) : null;
+        if (logic != null && networkTable != null) {
+            try { validateTable(networkTable, logic); logic.installTable(networkTable, states.keySet()); tableStatus = "Saved table active (local graph)"; }
+            catch (IllegalArgumentException invalid) { networkTable = null; tableStatus = "Invalid saved table discarded; using graph"; }
+        }
         if (logic != null && optimized) logic.optimize(states.keySet());
         logicPrepared = true;
     }
     void restoreLogic() {
         if (logicPrepared) return;
         logicPrepared = true;
-        if (!hasGateElements) return;
+        if (!hasGateElements && networkTable == null) return;
         try {
             Map<BlockPos, net.minecraft.world.level.block.state.BlockState> states = new java.util.HashMap<>();
             for (var element : elements.values()) states.put(element.getPos(), element.resolveState().state().orElseThrow(
@@ -378,6 +408,7 @@ public class CompiledNetwork {
 
         tag.putBoolean("powered", powered);
         tag.putBoolean("optimized", optimized);
+        if (networkTable != null) tag.put("networkTable", networkTable.save());
         CompoundTag memory = logic != null && !logicInvalid ? logic.saveMemory() : savedLogicMemory;
         if (!memory.isEmpty()) tag.put("logicMemory", memory.copy());
 
@@ -472,6 +503,10 @@ public class CompiledNetwork {
                 tag.getBoolean("powered");
         network.savedLogicMemory = tag.getCompound("logicMemory").copy();
         network.optimized = tag.getBoolean("optimized");
+        if (tag.contains("networkTable")) {
+            try { network.networkTable = NetworkTruthTable.load(tag.getCompound("networkTable")); network.tableStatus = "Saved table awaiting graph"; }
+            catch (IllegalArgumentException invalid) { network.tableStatus = "Invalid saved table discarded; using graph"; }
+        }
 
         network.savedIntegrityPending = tag.getBoolean("integrityUnverified");
         ListTag brokenList = tag.getList("brokenElements", Tag.TAG_COMPOUND);

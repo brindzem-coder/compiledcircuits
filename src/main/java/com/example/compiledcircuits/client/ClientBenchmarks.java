@@ -46,7 +46,7 @@ public final class ClientBenchmarks {
         }
         if (id == null) return;
         var lines = lines(id); var g = event.getGuiGraphics(); int y = 8;
-        for (int i = 0; i < Math.min(11, lines.size()); i++) {
+        for (int i = 0; i < Math.min(13, lines.size()); i++) {
             String text = mc.font.plainSubstrByWidth(lines.get(i), Math.max(40, mc.getWindow().getGuiScaledWidth() - 20));
             g.fill(6, y - 1, 10 + mc.font.width(text), y + 10, 0xB0000000);
             g.drawString(mc.font, text, 8, y, 0xFFFFFF); y += 11;

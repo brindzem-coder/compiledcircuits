@@ -40,6 +40,10 @@ public final class CircuitCommands {
         dispatcher.register(
                 Commands.literal("circuit")
                         .then(Commands.literal("optimize").executes(c -> com.example.compiledcircuits.network.CircuitOptimization.optimize(c.getSource())))
+                        .then(Commands.literal("table")
+                                .then(Commands.literal("create").executes(c -> com.example.compiledcircuits.network.CircuitTables.command(c.getSource(), "create")))
+                                .then(Commands.literal("remove").executes(c -> com.example.compiledcircuits.network.CircuitTables.command(c.getSource(), "remove")))
+                                .then(Commands.literal("status").executes(c -> com.example.compiledcircuits.network.CircuitTables.command(c.getSource(), "status"))))
                         .then(Commands.literal("benchmark")
                                 .executes(c -> com.example.compiledcircuits.network.CircuitBenchmark.start(c.getSource()))
                                 .then(Commands.literal("baseline").executes(c -> com.example.compiledcircuits.network.CircuitBenchmark.start(c.getSource(), true)))
