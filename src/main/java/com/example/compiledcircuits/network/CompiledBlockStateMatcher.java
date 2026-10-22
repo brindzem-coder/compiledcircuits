@@ -5,7 +5,15 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class CompiledBlockStateMatcher {
     public enum Match { MATCH, BLOCK_MISMATCH, STATE_MISMATCH, UNRESOLVED }
     private CompiledBlockStateMatcher() {}
+    public static Match match(CompiledCircuitElement element, net.minecraft.world.level.BlockGetter level, BlockState actual, boolean exact) {
+        var result = match(element, actual, exact);
+        if (result == Match.MATCH && actual.getBlock() instanceof com.example.compiledcircuits.block.IdWireBlock
+                && !element.wireId().equals(com.example.compiledcircuits.block.IdWireBlock.id(level, element.getPos(), actual))) return Match.STATE_MISMATCH;
+        return result;
+    }
     public static Match match(CompiledCircuitElement element, BlockState actual, boolean exact) {
+        if ((element.getBlockId().equals("compiledcircuits:id_wire") || actual.getBlock() instanceof com.example.compiledcircuits.block.IdWireBlock)
+                && !element.getBlockId().equals(BuiltInRegistries.BLOCK.getKey(actual.getBlock()).toString())) return Match.BLOCK_MISMATCH;
         var decoded = element.resolveState();
         if (decoded.status() == CompiledBlockStateCodec.Status.UNRESOLVED) return Match.UNRESOLVED;
         // Wire arms are derived geometry. Only ports are persistent functional state;

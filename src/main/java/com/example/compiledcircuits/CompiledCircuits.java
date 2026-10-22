@@ -20,6 +20,7 @@ public class CompiledCircuits {
                 net.minecraftforge.fml.config.ModConfig.Type.SERVER,
                 com.example.compiledcircuits.config.ServerConfig.SPEC, "compiledcircuits-server.toml");
         ModBlocks.register(modEventBus);
+        com.example.compiledcircuits.registry.ModBlockEntities.TYPES.register(modEventBus);
         ModItems.register(modEventBus);
 
         ModNetworking.register();

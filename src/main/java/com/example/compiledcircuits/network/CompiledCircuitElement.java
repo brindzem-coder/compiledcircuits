@@ -18,7 +18,7 @@ public class CompiledCircuitElement {
                 String required = switch (blockId) {
                     case "compiledcircuits:input_endpoint" -> "INPUT";
                     case "compiledcircuits:output_endpoint" -> "OUTPUT";
-                    case "compiledcircuits:basic_wire", "compiledcircuits:network_wire" -> "WIRE";
+                    case "compiledcircuits:basic_wire", "compiledcircuits:network_wire", "compiledcircuits:id_wire" -> "WIRE";
                     case "compiledcircuits:and_gate", "compiledcircuits:or_gate", "compiledcircuits:not_gate", "compiledcircuits:d_latch",
                         "compiledcircuits:nand_gate", "compiledcircuits:nor_gate", "compiledcircuits:xor_gate", "compiledcircuits:xnor_gate" -> "GATE";
                     case "compiledcircuits:gate_input" -> "GATE_INPUT";
@@ -69,6 +69,17 @@ public class CompiledCircuitElement {
         this(id, pos, type, blockId, legacyData(), false);
     }
 
+    public String wireId() { return stateData.getString("wireId"); }
+    public int wireColor() { return stateData.getInt("wireColor"); }
+    public CompiledCircuitElement captureWire(net.minecraft.world.level.BlockGetter level) {
+        if (level.getBlockEntity(pos) instanceof com.example.compiledcircuits.block.IdWireEntity wire) {
+            String id = com.example.compiledcircuits.network.WireIds.normalize(wire.wireId());
+            if (id.equals("0")) throw new IllegalArgumentException("Unconfigured wire");
+            stateData.putString("wireId", id); stateData.putInt("wireColor", wire.color());
+        }
+        if (blockId.equals("compiledcircuits:id_wire") && wireId().isEmpty()) throw new IllegalArgumentException("Unconfigured ID wire");
+        return this;
+    }
     public int getId() {
         return id;
     }
@@ -109,11 +120,18 @@ public class CompiledCircuitElement {
         }
 
         CompoundTag data = new CompoundTag();
-        for (String key : new String[]{"stateDataVersion", "stateOrigin", "compiledBlockState"}) {
+        for (String key : new String[]{"stateDataVersion", "stateOrigin", "compiledBlockState", "wireId", "wireColor"}) {
             if (tag.contains(key)) data.put(key, tag.get(key).copy());
         }
         boolean upgrade = data.isEmpty();
-        return new CompiledCircuitElement(id, pos, type, tag.getString("blockId"),
+        var element = new CompiledCircuitElement(id, pos, type, tag.getString("blockId"),
                 upgrade ? legacyData() : data, upgrade);
+        if (element.blockId.equals("compiledcircuits:id_wire")) {
+            try {
+                String wireId = WireIds.normalize(element.wireId());
+                if (wireId.equals("0") || !wireId.equals(element.wireId())) throw new IllegalArgumentException();
+            } catch (IllegalArgumentException invalid) { element.decoded = CompiledBlockStateCodec.invalid("Missing or invalid wire ID"); }
+        }
+        return element;
     }
 }

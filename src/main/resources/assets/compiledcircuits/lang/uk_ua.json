@@ -19,5 +19,16 @@
   "item.compiledcircuits.gate_separator": "Розділювач корпусів",
   "item.compiledcircuits.network_input": "Міжмережевий вхід",
   "item.compiledcircuits.network_output": "Міжмережевий вихід",
-  "block.compiledcircuits.network_wire": "Дріт із міжмережевими портами"
+  "block.compiledcircuits.network_wire": "Дріт із міжмережевими портами",
+  "block.compiledcircuits.id_wire": "Дріт із ID",
+  "wire.compiledcircuits.title": "ID та колір дроту",
+  "wire.compiledcircuits.catalog": "ID у цьому світі",
+  "wire.compiledcircuits.id": "ID (0 = базовий дріт)",
+  "wire.compiledcircuits.palette": "Колір",
+  "wire.compiledcircuits.fixed": "ID 0: завжди червоний",
+  "wire.compiledcircuits.hex": "Колір HEX",
+  "wire.compiledcircuits.hint": "ПКМ у повітря / Shift + ПКМ: налаштування",
+  "wire.compiledcircuits.hold": "Візьміть дріт із ID у руку, щоб відкрити налаштування.",
+  "wire.compiledcircuits.locked_short": "Колір заблоковано",
+  "wire.compiledcircuits.locked": "Цей ID належить скомпільованій мережі. Щоб змінити колір, декомпілюйте всі мережі, які його використовують."
 }

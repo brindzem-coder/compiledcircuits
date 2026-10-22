@@ -56,7 +56,7 @@ public final class NetworkIntegrityManager {
         var actual = level.getBlockState(pos);
         String actualBlockId = BuiltInRegistries.BLOCK.getKey(actual.getBlock()).toString();
         element.logUnresolved(network.getId());
-        boolean repaired = CompiledBlockStateMatcher.match(element, actual, exactIntegrityEnabled())
+        boolean repaired = CompiledBlockStateMatcher.match(element, level, actual, exactIntegrityEnabled())
                 == CompiledBlockStateMatcher.Match.MATCH;
         boolean wasDamaged = network.isDamaged();
         boolean changed = repaired

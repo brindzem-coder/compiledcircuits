@@ -79,7 +79,7 @@ public final class CircuitBenchmark {
                     var e = elements.next(); states.put(e.getPos(), e.resolveState().state().orElseThrow());
                 }
                 if (elements.hasNext()) return;
-                program = LogicProgram.compile(states); program.importNodeMemory(memory);
+                program = LogicProgram.compile(states, network.wireIds()); program.importNodeMemory(memory);
                 if (tableSnapshot != null) program.installTable(tableSnapshot, states.keySet());
                 if (optimized) program.optimize(states.keySet());
                 originalNodes = program.nodeCount(); evaluationNodes = program.evaluationNodeCount();

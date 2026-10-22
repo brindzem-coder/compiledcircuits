@@ -102,7 +102,8 @@ public final class ClientNetworkSelection {
                     continue;
                 }
 
-                if (com.example.compiledcircuits.block.CircuitConnections.connects(currentState, neighborState, direction)) {
+                // Read wire IDs from block entities, just like hover and server compilation.
+                if (com.example.compiledcircuits.block.CircuitConnections.connects(level, currentPos, currentState, neighborState, direction)) {
                     queue.add(neighborPos.immutable());
                 }
             }

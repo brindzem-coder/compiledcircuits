@@ -17,6 +17,9 @@ import java.util.function.BooleanSupplier;
 final class ProtectedRepairPlacement {
     private ProtectedRepairPlacement() {}
     static boolean place(ServerLevel level, BlockPos pos, BlockState state, ServerPlayer player, BooleanSupplier stillAllowed) {
+        return place(level, pos, state, player, stillAllowed, () -> {});
+    }
+    static boolean place(ServerLevel level, BlockPos pos, BlockState state, ServerPlayer player, BooleanSupplier stillAllowed, Runnable initialize) {
         if (!stillAllowed.getAsBoolean() || level.captureBlockSnapshots || level.restoringBlockSnapshots
                 || !level.capturedBlockSnapshots.isEmpty() || !level.hasChunkAt(pos)) return false;
         List<BlockSnapshot> snapshots = new ArrayList<>();
@@ -24,7 +27,15 @@ final class ProtectedRepairPlacement {
         try {
             level.captureBlockSnapshots = true;
             boolean placed;
-            try { placed = level.setBlock(pos, state, Block.UPDATE_ALL); }
+            try {
+                // A changed wire ID may leave the BlockState identical. Capture its BE NBT too,
+                // so claim-protection cancellation restores identity as well as geometry.
+                if (state == level.getBlockState(pos) && state.getBlock() instanceof com.example.compiledcircuits.block.IdWireBlock) {
+                    snapshots.add(BlockSnapshot.create(level.dimension(), level, pos, Block.UPDATE_ALL));
+                    placed = true;
+                } else placed = level.setBlock(pos, state, Block.UPDATE_ALL);
+                if (placed) initialize.run();
+            }
             finally {
                 level.captureBlockSnapshots = false;
                 snapshots.addAll(level.capturedBlockSnapshots); level.capturedBlockSnapshots.clear();

@@ -39,6 +39,11 @@ public final class CircuitCommands {
 
         dispatcher.register(
                 Commands.literal("circuit")
+                        .then(Commands.literal("wire").executes(c -> {
+                            var player = c.getSource().getPlayerOrException();
+                            var hand = player.getMainHandItem().getItem() instanceof com.example.compiledcircuits.item.IdWireItem ? net.minecraft.world.InteractionHand.MAIN_HAND : net.minecraft.world.InteractionHand.OFF_HAND;
+                            return com.example.compiledcircuits.network.WireToolService.open(player, hand);
+                        }))
                         .then(Commands.literal("optimize").executes(c -> com.example.compiledcircuits.network.CircuitOptimization.optimize(c.getSource())))
                         .then(Commands.literal("table")
                                 .then(Commands.literal("create").executes(c -> com.example.compiledcircuits.network.CircuitTables.command(c.getSource(), "create")))

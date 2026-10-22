@@ -111,6 +111,6 @@ public final class ClientHoveredCircuit {
         var current = loadedState(level, from);
         var neighbor = loadedState(level, to);
         return current != null && neighbor != null
-                && com.example.compiledcircuits.block.CircuitConnections.connects(current, neighbor, direction);
+                && com.example.compiledcircuits.block.CircuitConnections.connects(level, from, current, neighbor, direction);
     }
 }

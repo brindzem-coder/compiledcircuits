@@ -194,6 +194,8 @@ public class BasicWireBlock extends Block implements IWireConnectable {
         if (level instanceof net.minecraft.server.level.ServerLevel server
                 && !com.example.compiledcircuits.network.CircuitBoundary.allows(server,currentPos,neighborPos)) return false;
         BlockState neighborState = level.getBlockState(neighborPos);
+        BlockState ownState = level.getBlockState(currentPos);
+        if (!IdWireBlock.compatible(ownState, IdWireBlock.id(level, currentPos, ownState), neighborState, IdWireBlock.id(level, neighborPos, neighborState))) return false;
 
         if (neighborState.getBlock() instanceof IWireConnectable connectable) {
             return connectable.canWireConnect(

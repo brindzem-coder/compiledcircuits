@@ -435,6 +435,14 @@ public final class LogicProgram {
     }
     public static LogicProgram compile(Map<BlockPos, BlockState> states) {return compile(states,java.util.Map.of(),java.util.Map.of());}
     static LogicProgram compile(Map<BlockPos,BlockState> states,Map<BlockPos,Set<BlockPos>> links,Map<BlockPos,Integer> ownership) {
+        return compile(states, links, ownership, Map.of());
+    }
+    public static LogicProgram compile(Map<BlockPos,BlockState> states, Map<BlockPos,String> wireIds) { return compile(states, Map.of(), Map.of(), wireIds); }
+    static LogicProgram compile(Map<BlockPos,BlockState> states,Map<BlockPos,Set<BlockPos>> links,Map<BlockPos,Integer> ownership,Map<BlockPos,String> wireIds) {
+        for (var entry : states.entrySet()) if (entry.getValue().getBlock() instanceof IdWireBlock) {
+            String id = wireIds.get(entry.getKey());
+            if (id == null || !WireIds.normalize(id).equals(id) || id.equals("0")) throw error("Missing or invalid wire ID", entry.getKey());
+        }
         if (states.size() > MAX_ELEMENTS)
             throw new IllegalArgumentException("Logic circuits support at most " + MAX_ELEMENTS + " elements.");
         // Stable node IDs are required for repeatable startup and saved feedback state.
@@ -471,7 +479,7 @@ public final class LogicProgram {
                     BlockPos next = current.relative(direction); BlockState other = states.get(next);
                     if (other == null || component.containsKey(next) || CircuitConnections.isTerminal(other)) continue;
                     boolean otherBody = other.getBlock() instanceof GateBodyBlock;
-                    if (body != otherBody || !java.util.Objects.equals(ownership.get(current),ownership.get(next)) || !CircuitConnections.connects(currentState, other, direction)) continue;
+                    if (body != otherBody || !java.util.Objects.equals(ownership.get(current),ownership.get(next)) || !CircuitConnections.connects(currentState, wireIds.getOrDefault(current, "0"), other, wireIds.getOrDefault(next, "0"), direction)) continue;
                     component.put(next, id); queue.add(next);
                 }
             }
@@ -521,11 +529,11 @@ public final class LogicProgram {
                 int node = add(nodes, Op.OR, pos);
                 if (port == 1) {
                     edge(nodes, node, owner);
-                    if (neighbor != null && neighbor.getBlock() instanceof BasicWireBlock && java.util.Objects.equals(ownership.get(pos),ownership.get(next)) && CircuitConnections.connects(state,neighbor,side))
+                    if (neighbor != null && neighbor.getBlock() instanceof BasicWireBlock && java.util.Objects.equals(ownership.get(pos),ownership.get(next)) && CircuitConnections.connects(state, wireIds.getOrDefault(pos, "0"), neighbor, wireIds.getOrDefault(next, "0"), side))
                         edge(nodes, component.get(next), node);
                 } else {
                     edge(nodes, owner, node); bodiesWithOutputs.add(owner);
-                    if (neighbor != null && neighbor.getBlock() instanceof BasicWireBlock && java.util.Objects.equals(ownership.get(pos),ownership.get(next)) && CircuitConnections.connects(state,neighbor,side))
+                    if (neighbor != null && neighbor.getBlock() instanceof BasicWireBlock && java.util.Objects.equals(ownership.get(pos),ownership.get(next)) && CircuitConnections.connects(state, wireIds.getOrDefault(pos, "0"), neighbor, wireIds.getOrDefault(next, "0"), side))
                         edge(nodes, node, component.get(next));
                 }
             }
@@ -545,7 +553,7 @@ public final class LogicProgram {
                         && DLatchBlock.enableSide(other) == direction.getOpposite()) to = enableSink.get(next);
                 if (other == null || to == null || from.equals(to)
                         || !java.util.Objects.equals(ownership.get(pos),ownership.get(next))
-                        || !CircuitConnections.connects(state, other, direction)) continue;
+                        || !CircuitConnections.connects(state, wireIds.getOrDefault(pos, "0"), other, wireIds.getOrDefault(next, "0"), direction)) continue;
                 if (CircuitConnections.isTerminal(state) && !CircuitConnections.sends(state, direction)) continue;
                 if (CircuitConnections.isTerminal(other) && !CircuitConnections.receives(other, direction.getOpposite())) continue;
                 edge(nodes, from, to);

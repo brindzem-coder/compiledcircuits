@@ -1,0 +1,46 @@
+{
+  "textures": {
+    "wire": "minecraft:block/white_concrete",
+    "particle": "minecraft:block/white_concrete"
+  },
+  "elements": [
+    {
+      "from": [
+        5.5,
+        5.5,
+        0
+      ],
+      "to": [
+        10.5,
+        10.5,
+        5.5
+      ],
+      "faces": {
+        "down": {
+          "texture": "#wire",
+          "tintindex": 0
+        },
+        "up": {
+          "texture": "#wire",
+          "tintindex": 0
+        },
+        "north": {
+          "texture": "#wire",
+          "tintindex": 0
+        },
+        "south": {
+          "texture": "#wire",
+          "tintindex": 0
+        },
+        "west": {
+          "texture": "#wire",
+          "tintindex": 0
+        },
+        "east": {
+          "texture": "#wire",
+          "tintindex": 0
+        }
+      }
+    }
+  ]
+}

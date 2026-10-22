@@ -19,5 +19,16 @@
   "item.compiledcircuits.gate_separator": "Gate Body Separator",
   "item.compiledcircuits.network_input": "Direct Network Input",
   "item.compiledcircuits.network_output": "Direct Network Output",
-  "block.compiledcircuits.network_wire": "Network Port Wire"
+  "block.compiledcircuits.network_wire": "Network Port Wire",
+  "block.compiledcircuits.id_wire": "ID Wire",
+  "wire.compiledcircuits.title": "Wire ID & color",
+  "wire.compiledcircuits.catalog": "IDs in this world",
+  "wire.compiledcircuits.id": "ID (0 = basic wire)",
+  "wire.compiledcircuits.palette": "Color",
+  "wire.compiledcircuits.fixed": "ID 0: always red",
+  "wire.compiledcircuits.hex": "Hex color",
+  "wire.compiledcircuits.hint": "Right-click air / Shift + right-click: settings",
+  "wire.compiledcircuits.hold": "Hold ID Wire to open its settings.",
+  "wire.compiledcircuits.locked_short": "Color locked: compiled",
+  "wire.compiledcircuits.locked": "This ID is used by a compiled network. Decompile all networks using it before changing its color."
 }

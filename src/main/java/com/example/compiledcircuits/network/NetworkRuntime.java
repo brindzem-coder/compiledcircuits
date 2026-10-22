@@ -119,7 +119,7 @@ public final class NetworkRuntime {
         var network = entry.network;
         var key = new ChunkKey(network.getDimension(), RuntimeSignalReader.chunk(element.getPos()));
         entry.parts.computeIfAbsent(key, k -> new Part()).elements.add(element);
-        if(element.getBlockId().equals("compiledcircuits:network_wire")) entry.parts.get(key).input=true;
+        if((element.getBlockId().equals("compiledcircuits:network_wire") || element.getBlockId().equals("compiledcircuits:id_wire"))) entry.parts.get(key).input=true;
         if (element.getType() == CircuitElementType.INPUT) {
             var dependencies = RuntimeSignalReader.dependencyChunks(element.getPos());
             for (long chunk : dependencies)

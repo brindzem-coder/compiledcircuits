@@ -69,7 +69,7 @@ public final class CompiledElementFactory {
                             candidate.pos(),
                             candidate.type(),
                             CompiledBlockStateCodec.capture(state)
-                    )
+                    ).captureWire(level)
             );
         }
 

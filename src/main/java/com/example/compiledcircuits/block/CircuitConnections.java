@@ -6,7 +6,16 @@ import net.minecraft.world.level.block.state.BlockState;
 /** Undirected discovery of a circuit, distinct from its directed signal graph. */
 public final class CircuitConnections {
     private CircuitConnections() {}
+    public static boolean connects(net.minecraft.world.level.BlockGetter level, net.minecraft.core.BlockPos pos, BlockState a, BlockState b, Direction side) {
+        return connects(a, IdWireBlock.id(level, pos, a), b, IdWireBlock.id(level, pos.relative(side), b), side);
+    }
+    public static boolean connects(BlockState a, String left, BlockState b, String right, Direction side) {
+        return IdWireBlock.compatible(a, left, b, right) && structural(a, b, side);
+    }
     public static boolean connects(BlockState a, BlockState b, Direction side) {
+        return connects(a, "", b, "", side);
+    }
+    private static boolean structural(BlockState a, BlockState b, Direction side) {
         if(a.getBlock() instanceof NetworkWireBlock && NetworkWireBlock.face(a,side)>=2
                 || b.getBlock() instanceof NetworkWireBlock && NetworkWireBlock.face(b,side.getOpposite())>=2)return false;
         if (a.getBlock() instanceof GateBodyBlock body) {
@@ -14,7 +23,7 @@ public final class CircuitConnections {
                     || b.getBlock() instanceof GatePortBlock
                     || b.getBlock() instanceof BasicWireBlock && body.canWireConnect(a, side);
         }
-        if (b.getBlock() instanceof GateBodyBlock) return connects(b, a, side.getOpposite());
+        if (b.getBlock() instanceof GateBodyBlock) return structural(b, a, side.getOpposite());
         if (!(a.getBlock() instanceof IWireConnectable left) || !(b.getBlock() instanceof IWireConnectable right)
                 || !left.canWireConnect(a, side) || !right.canWireConnect(b, side.getOpposite())) return false;
         if (isTerminal(a) && isTerminal(b))

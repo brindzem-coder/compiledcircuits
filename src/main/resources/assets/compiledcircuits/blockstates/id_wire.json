@@ -1,0 +1,153 @@
+{
+  "multipart": [
+    {
+      "apply": {
+        "model": "compiledcircuits:block/id_wire_center"
+      }
+    },
+    {
+      "when": {
+        "face_down": "1|2|3"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/id_wire_down"
+      }
+    },
+    {
+      "when": {
+        "face_down": "2"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_down_2"
+      }
+    },
+    {
+      "when": {
+        "face_down": "3"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_down_3"
+      }
+    },
+    {
+      "when": {
+        "face_up": "1|2|3"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/id_wire_up"
+      }
+    },
+    {
+      "when": {
+        "face_up": "2"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_up_2"
+      }
+    },
+    {
+      "when": {
+        "face_up": "3"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_up_3"
+      }
+    },
+    {
+      "when": {
+        "face_north": "1|2|3"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/id_wire_north"
+      }
+    },
+    {
+      "when": {
+        "face_north": "2"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_north_2"
+      }
+    },
+    {
+      "when": {
+        "face_north": "3"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_north_3"
+      }
+    },
+    {
+      "when": {
+        "face_south": "1|2|3"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/id_wire_south"
+      }
+    },
+    {
+      "when": {
+        "face_south": "2"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_south_2"
+      }
+    },
+    {
+      "when": {
+        "face_south": "3"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_south_3"
+      }
+    },
+    {
+      "when": {
+        "face_west": "1|2|3"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/id_wire_west"
+      }
+    },
+    {
+      "when": {
+        "face_west": "2"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_west_2"
+      }
+    },
+    {
+      "when": {
+        "face_west": "3"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_west_3"
+      }
+    },
+    {
+      "when": {
+        "face_east": "1|2|3"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/id_wire_east"
+      }
+    },
+    {
+      "when": {
+        "face_east": "2"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_east_2"
+      }
+    },
+    {
+      "when": {
+        "face_east": "3"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_east_3"
+      }
+    }
+  ]
+}

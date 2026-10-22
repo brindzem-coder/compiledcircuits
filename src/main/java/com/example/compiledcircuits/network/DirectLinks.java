@@ -31,7 +31,10 @@ final class DirectLinks {
     private Key key(CompiledNetwork n,CompiledNetwork.Port p){return new Key(n.getDimension(),p.pos(),p.side());}
     private Endpoint peer(CompiledNetwork n,CompiledNetwork.Port p){
         var other=ports.get(key(n,p).opposite());
-        return other!=null&&other.network!=n&&other.port.input()!=p.input()?other:null;
+        if (other == null || other.network == n || other.port.input() == p.input()) return null;
+        var left = n.getElementAt(p.pos()); var right = other.network.getElementAt(other.port.pos());
+        if (left != null && right != null && left.getBlockId().equals("compiledcircuits:id_wire") && right.getBlockId().equals("compiledcircuits:id_wire") && !left.wireId().equals(right.wireId())) return null;
+        return other;
     }
     void add(CompiledNetwork n){
         if(n.directPorts().isEmpty())return;
@@ -83,9 +86,11 @@ final class DirectLinks {
         }}
         var result=new Group(members);
         try {
+            Map<BlockPos,String> wireIds=new HashMap<>();
             Map<BlockPos,BlockState> states=new HashMap<>();Map<BlockPos,Integer> owners=new HashMap<>();
             Map<BlockPos,Set<BlockPos>> links=new HashMap<>();Map<String,Boolean> memory=new HashMap<>();
             for(var n:members){
+                wireIds.putAll(n.wireIds());
                 for(var e:n.getElements()){
                     if(states.size()>=LogicProgram.MAX_ELEMENTS)throw new IllegalArgumentException("Linked circuits exceed "+LogicProgram.MAX_ELEMENTS+" elements");
                     states.put(e.getPos(),e.resolveState().state().orElseThrow());owners.put(e.getPos(),n.getId());
@@ -95,7 +100,7 @@ final class DirectLinks {
                     var target=peer(n,p);if(target!=null)links.computeIfAbsent(p.pos(),k->new HashSet<>()).add(target.port.pos());
                 }
             }
-            result.program=LogicProgram.compile(states,links,owners);result.program.importNodeMemory(memory);
+            result.program=LogicProgram.compile(states,links,owners,wireIds);result.program.importNodeMemory(memory);
             // A network-level cycle is deliberately conservative: table contraction must not alter settling order.
             Map<CompiledNetwork, Set<CompiledNetwork>> successors = new IdentityHashMap<>();
             for (var n : members) {

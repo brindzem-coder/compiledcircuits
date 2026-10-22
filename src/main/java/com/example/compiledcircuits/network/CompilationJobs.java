@@ -190,7 +190,7 @@ public final class CompilationJobs {
                                 : state.getBlock() instanceof GatePortBlock port ? (port.isInput() ? CircuitElementType.GATE_INPUT : CircuitElementType.GATE_OUTPUT)
                                 : state.getBlock() instanceof GateBodyBlock || state.getBlock() instanceof NotGateBlock
                                 || state.getBlock() instanceof DLatchBlock ? CircuitElementType.GATE : CircuitElementType.WIRE;
-                        builder.add(new CompiledCircuitElement(++elementId, item.getKey(), type, CompiledBlockStateCodec.capture(state)));
+                        builder.add(new CompiledCircuitElement(++elementId, item.getKey(), type, CompiledBlockStateCodec.capture(state)).captureWire(level));
                     } else {
                         if (builder.inputsEmpty() || builder.outputsEmpty()) { fail(Code.INVALID_START, "Circuit needs an input and an output."); return; }
                         candidate = builder.seal(name, dimension);
@@ -275,7 +275,7 @@ public final class CompilationJobs {
                 if (!level.isOutsideBuildHeight(next) && !snapshots.containsKey(next)
                         && CircuitBoundary.uncompiled(data,dimension,next)) {
                     BlockState state = read(next); if (state == null) return;
-                    if (CircuitConnections.connects(current.state, state, dir)) enqueue(next, state);
+                    if (CircuitConnections.connects(level, current.pos, current.state, state, dir)) enqueue(next, state);
                 }
             }
             if (direction == DIRECTIONS.length) current = null;
