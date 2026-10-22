@@ -158,6 +158,7 @@ public final class CompilationJobs {
         Iterator<CompiledCircuitElement> preparation;
         Iterator<Chunk> chunkValidation, cleanupChunks;
         CompiledNetwork candidate;
+        long directRevision;
         NetworkSavedData.PreparedAdmission admission;
         Job(Manager manager, CommandSourceStack source, ServerPlayer player, NetworkSavedData data, BlockPos start, String name) {
             this.manager = manager; this.source = source; this.player = player; this.level = player.serverLevel();
@@ -195,6 +196,7 @@ public final class CompilationJobs {
                         if (builder.inputsEmpty() || builder.outputsEmpty()) { fail(Code.INVALID_START, "Circuit needs an input and an output."); return; }
                         candidate = builder.seal(name, dimension);
                         if (hasLogic) candidate.prepareLogic(snapshots);
+                        directRevision = data.runtime().validateBundleCompilation(candidate);
                         admission = data.prepareCompilation(candidate);
                         preparation = candidate.getElements().iterator(); phase = Phase.PREPARING;
                     }
@@ -217,6 +219,7 @@ public final class CompilationJobs {
                         fail(Code.INVALID_ARGUMENT, "World border no longer contains the circuit."); return;
                     }
                     // Every O(N) collection/index was prepared above; no world callbacks occur here.
+                    if (data.runtime().directRevision() != directRevision) throw new IllegalArgumentException("Linked networks changed during compilation; retry.");
                     long began = System.nanoTime(); admission.publish();
                     PerformanceDiagnostics.max("scan.commit.maxNanos", System.nanoTime() - began);
                     PerformanceDiagnostics.add("scan.success", 1);
@@ -242,7 +245,7 @@ public final class CompilationJobs {
         }
         void enqueue(BlockPos pos, BlockState state) {
             if (snapshots.containsKey(pos)) return;
-            hasLogic |= state.getBlock() instanceof com.example.compiledcircuits.block.NetworkWireBlock || state.getBlock() instanceof GateBodyBlock || CircuitConnections.isTerminal(state);
+            hasLogic |= BundleTopology.element(state) || state.getBlock() instanceof com.example.compiledcircuits.block.NetworkWireBlock || state.getBlock() instanceof GateBodyBlock || CircuitConnections.isTerminal(state);
             if (hasLogic && snapshots.size() >= LogicProgram.MAX_ELEMENTS) {
                 fail(Code.TOO_LARGE, "Logic circuits support at most " + LogicProgram.MAX_ELEMENTS + " elements."); return;
             }

@@ -20,6 +20,8 @@ public final class NetworkRuntime {
     private final NetworkSavedData data;
     private MinecraftServer server;
     private final DirectLinks direct;
+    long validateBundleCompilation(CompiledNetwork candidate) { return direct.validateCompilation(candidate); }
+    long directRevision() { return direct.revision(); }
     private final Map<CompiledNetwork, Entry> entries = new IdentityHashMap<>();
     private final Map<ChunkKey, Map<Entry, Part>> chunks = new HashMap<>();
     private final LinkedHashSet<ChunkKey> unloading = new LinkedHashSet<>();

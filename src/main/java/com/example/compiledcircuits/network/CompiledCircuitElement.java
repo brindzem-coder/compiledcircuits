@@ -18,7 +18,9 @@ public class CompiledCircuitElement {
                 String required = switch (blockId) {
                     case "compiledcircuits:input_endpoint" -> "INPUT";
                     case "compiledcircuits:output_endpoint" -> "OUTPUT";
-                    case "compiledcircuits:basic_wire", "compiledcircuits:network_wire", "compiledcircuits:id_wire" -> "WIRE";
+                    case "compiledcircuits:basic_wire", "compiledcircuits:network_wire", "compiledcircuits:id_wire",
+                    "compiledcircuits:bundled_wire", "compiledcircuits:bundle_input", "compiledcircuits:bundle_output",
+                    "compiledcircuits:bundle_network_input", "compiledcircuits:bundle_network_output" -> "WIRE";
                     case "compiledcircuits:and_gate", "compiledcircuits:or_gate", "compiledcircuits:not_gate", "compiledcircuits:d_latch",
                         "compiledcircuits:nand_gate", "compiledcircuits:nor_gate", "compiledcircuits:xor_gate", "compiledcircuits:xnor_gate" -> "GATE";
                     case "compiledcircuits:gate_input" -> "GATE_INPUT";
@@ -69,6 +71,8 @@ public class CompiledCircuitElement {
         this(id, pos, type, blockId, legacyData(), false);
     }
 
+    public CompoundTag bundleFaces() { return stateData.getCompound("bundleFaces").copy(); }
+    public String channelId() { return stateData.getString("channelId"); }
     public String wireId() { return stateData.getString("wireId"); }
     public int wireColor() { return stateData.getInt("wireColor"); }
     public CompiledCircuitElement captureWire(net.minecraft.world.level.BlockGetter level) {
@@ -77,6 +81,10 @@ public class CompiledCircuitElement {
             if (id.equals("0")) throw new IllegalArgumentException("Unconfigured wire");
             stateData.putString("wireId", id); stateData.putInt("wireColor", wire.color());
         }
+        if (level.getBlockEntity(pos) instanceof com.example.compiledcircuits.block.BundlePortEntity port)
+            stateData.putString("channelId", WireIds.normalize(port.channel()));
+        if (level.getBlockEntity(pos) instanceof com.example.compiledcircuits.block.BundleWireEntity wire)
+            stateData.put("bundleFaces", wire.portData());
         if (blockId.equals("compiledcircuits:id_wire") && wireId().isEmpty()) throw new IllegalArgumentException("Unconfigured ID wire");
         return this;
     }
@@ -120,7 +128,7 @@ public class CompiledCircuitElement {
         }
 
         CompoundTag data = new CompoundTag();
-        for (String key : new String[]{"stateDataVersion", "stateOrigin", "compiledBlockState", "wireId", "wireColor"}) {
+        for (String key : new String[]{"stateDataVersion", "stateOrigin", "compiledBlockState", "wireId", "wireColor", "channelId", "bundleFaces"}) {
             if (tag.contains(key)) data.put(key, tag.get(key).copy());
         }
         boolean upgrade = data.isEmpty();
@@ -131,6 +139,14 @@ public class CompiledCircuitElement {
                 String wireId = WireIds.normalize(element.wireId());
                 if (wireId.equals("0") || !wireId.equals(element.wireId())) throw new IllegalArgumentException();
             } catch (IllegalArgumentException invalid) { element.decoded = CompiledBlockStateCodec.invalid("Missing or invalid wire ID"); }
+        }
+        if (element.blockId.startsWith("compiledcircuits:bundle_")) {
+            try { if (!WireIds.normalize(element.channelId()).equals(element.channelId())) throw new IllegalArgumentException(); }
+            catch (IllegalArgumentException invalid) { element.decoded = CompiledBlockStateCodec.invalid("Missing or invalid bundle channel"); }
+        }
+        if (element.blockId.equals("compiledcircuits:bundled_wire")) {
+            try { com.example.compiledcircuits.block.BundleWireEntity.decode(element.bundleFaces()); }
+            catch (IllegalArgumentException invalid) { element.decoded = CompiledBlockStateCodec.invalid("Invalid bundle face data"); }
         }
         return element;
     }

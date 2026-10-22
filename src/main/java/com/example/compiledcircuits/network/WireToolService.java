@@ -35,6 +35,6 @@ public final class WireToolService {
         IdWireItem.configure(session.stack, id, data.color(id, color));
         player.containerMenu.broadcastChanges();
     }
-    public static void forget(ServerPlayer player) { sessions.remove(player.getUUID()); }
-    public static void clear() { sessions.clear(); }
+    public static void forget(ServerPlayer player) { sessions.remove(player.getUUID()); BundleToolService.forget(player); }
+    public static void clear() { sessions.clear(); BundleToolService.clear(); }
 }

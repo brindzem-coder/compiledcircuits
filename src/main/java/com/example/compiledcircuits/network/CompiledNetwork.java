@@ -31,6 +31,17 @@ public class CompiledNetwork {
     private final java.util.List<Port> directPorts;
     public java.util.List<Port> directPorts(){return directPorts;}
     private static void collectPorts(CompiledCircuitElement element, java.util.List<Port> result) {
+        var resolved = element.resolveState().state().orElse(null);
+        if (resolved != null && resolved.getBlock() instanceof com.example.compiledcircuits.block.BundledWireBlock) {
+            com.example.compiledcircuits.block.BundleWireEntity.decode(element.bundleFaces()).forEach((side, port) -> {
+                if (port.external()) result.add(new Port(element.getPos(), side, port.input()));
+            });
+            return;
+        }
+        if (resolved != null && resolved.getBlock() instanceof com.example.compiledcircuits.block.BundlePortBlock port) {
+            if (port.isExternal()) result.add(new Port(element.getPos(), resolved.getValue(com.example.compiledcircuits.block.EndpointBlock.FACING), port.isInput()));
+            return;
+        }
         if (!(element.getBlockId().equals("compiledcircuits:network_wire") || element.getBlockId().equals("compiledcircuits:id_wire"))) return;
         var state=element.resolveState().state().orElse(null); if(state==null)return;
         for(var side:net.minecraft.core.Direction.values()) {
@@ -107,13 +118,20 @@ public class CompiledNetwork {
         for (var e : elements.values()) states.put(e.getPos(), e.resolveState().state().orElseThrow());
         return states;
     }
+    Map<BundleFace, com.example.compiledcircuits.block.BundleWireEntity.Port> bundleFaces() {
+        var faces = new java.util.HashMap<BundleFace, com.example.compiledcircuits.block.BundleWireEntity.Port>();
+        for (var element : elements.values()) if (element.getBlockId().equals("compiledcircuits:bundled_wire"))
+            com.example.compiledcircuits.block.BundleWireEntity.decode(element.bundleFaces()).forEach((side, port) -> faces.put(new BundleFace(element.getPos(), side), port));
+        return faces;
+    }
     Map<BlockPos, String> wireIds() {
         var ids = new java.util.HashMap<BlockPos, String>();
         for (var e : elements.values()) if (e.getBlockId().equals("compiledcircuits:id_wire")) ids.put(e.getPos(), e.wireId());
+        for (var e : elements.values()) if (e.getBlockId().startsWith("compiledcircuits:bundle_")) ids.put(e.getPos(), e.channelId());
         return ids;
     }
     void setNetworkTable(NetworkTruthTable table) {
-        var states = tableStates(); var replacement = LogicProgram.compile(states, wireIds());
+        var states = tableStates(); var replacement = LogicProgram.compileFaces(states, wireIds(), bundleFaces());
         if (table != null) {
             validateTable(table, replacement); replacement.installTable(table, states.keySet());
         }
@@ -125,7 +143,8 @@ public class CompiledNetwork {
     }
     private static void validateTable(NetworkTruthTable table, LogicProgram program) {
         if (!table.graph.equals(program.graphSignature()) || !table.inputs.equals(program.benchmarkInputs())
-                || !table.outputs.equals(program.tableOutputs()) || program.hasStatefulMemory())
+                || !table.outputs.equals(program.tableOutputs()) || !table.faceInputs.equals(program.tableFaceInputs())
+                || !table.faceOutputs.equals(program.tableFaceOutputs()) || program.hasStatefulMemory())
             throw new IllegalArgumentException("Saved table does not match network topology");
     }
     private boolean optimized;
@@ -140,7 +159,7 @@ public class CompiledNetwork {
                 + "; truth tables: " + logic.truthTableCount() + " (" + logic.truthTableBytes() + " bytes).";
     }
     void prepareLogic(Map<BlockPos, net.minecraft.world.level.block.state.BlockState> states) {
-        logic = networkTable != null || LogicProgram.hasLogic(states.values()) ? LogicProgram.compile(states, wireIds()) : null;
+        logic = networkTable != null || LogicProgram.hasLogic(states.values()) ? LogicProgram.compileFaces(states, wireIds(), bundleFaces()) : null;
         if (logic != null && networkTable != null) {
             try { validateTable(networkTable, logic); logic.installTable(networkTable, states.keySet()); tableStatus = "Saved table active (local graph)"; }
             catch (IllegalArgumentException invalid) { networkTable = null; tableStatus = "Invalid saved table discarded; using graph"; }
@@ -239,7 +258,9 @@ public class CompiledNetwork {
             if (this.elements.putIfAbsent(element.getId(), element) != null)
                 throw new IllegalArgumentException("Duplicate compiled element ID: " + element.getId());
             CircuitElementType requiredRole = switch (element.getBlockId()) {
-                case "compiledcircuits:basic_wire", "compiledcircuits:network_wire", "compiledcircuits:id_wire" -> CircuitElementType.WIRE;
+                case "compiledcircuits:basic_wire", "compiledcircuits:network_wire", "compiledcircuits:id_wire",
+                    "compiledcircuits:bundled_wire", "compiledcircuits:bundle_input", "compiledcircuits:bundle_output",
+                    "compiledcircuits:bundle_network_input", "compiledcircuits:bundle_network_output" -> CircuitElementType.WIRE;
                 case "compiledcircuits:input_endpoint" -> CircuitElementType.INPUT;
                 case "compiledcircuits:output_endpoint" -> CircuitElementType.OUTPUT;
                 case "compiledcircuits:and_gate", "compiledcircuits:or_gate", "compiledcircuits:not_gate", "compiledcircuits:d_latch",
@@ -250,7 +271,7 @@ public class CompiledNetwork {
             };
             if (element.getType() != requiredRole)
                 throw new IllegalArgumentException("Block/role mismatch for element " + element.getId());
-            hasGateElements |= isLogicRole(element.getType()) || (element.getBlockId().equals("compiledcircuits:network_wire") || element.getBlockId().equals("compiledcircuits:id_wire"));
+            hasGateElements |= isLogicRole(element.getType()) || (element.getBlockId().equals("compiledcircuits:network_wire") || element.getBlockId().equals("compiledcircuits:id_wire") || element.getBlockId().startsWith("compiledcircuits:bundle"));
             collectPorts(element,collectedPorts);
             collectWireColor(element, wirePalette);
             BlockPos pos = element.getPos().immutable();
@@ -281,7 +302,7 @@ public class CompiledNetwork {
             if (sealed || element.getId() != elements.size() + 1 || positions.containsKey(element.getPos()))
                 throw new IllegalArgumentException("Invalid staged element");
             elements.put(element.getId(), element); positions.put(element.getPos(), element);
-            hasGates |= isLogicRole(element.getType()) || (element.getBlockId().equals("compiledcircuits:network_wire") || element.getBlockId().equals("compiledcircuits:id_wire"));
+            hasGates |= isLogicRole(element.getType()) || (element.getBlockId().equals("compiledcircuits:network_wire") || element.getBlockId().equals("compiledcircuits:id_wire") || element.getBlockId().startsWith("compiledcircuits:bundle"));
             collectPorts(element,ports);
             collectWireColor(element, wirePalette);
             switch (element.getType()) {

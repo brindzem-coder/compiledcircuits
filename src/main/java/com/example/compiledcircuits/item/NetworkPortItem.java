@@ -13,7 +13,7 @@ public class NetworkPortItem extends Item {
     public NetworkPortItem(Properties properties,boolean input){super(properties);kind=input?2:3;}
     @Override public InteractionResult useOn(UseOnContext c){
         var level=c.getLevel();var pos=c.getClickedPos();var old=level.getBlockState(pos);var player=c.getPlayer();
-        if(!(old.getBlock() instanceof BasicWireBlock))return InteractionResult.PASS;
+        if(old.getBlock() instanceof com.example.compiledcircuits.block.BundledWireBlock || !(old.getBlock() instanceof BasicWireBlock))return InteractionResult.PASS;
         if(player==null||!player.mayBuild()||!player.mayUseItemAt(pos,c.getClickedFace(),c.getItemInHand()))return InteractionResult.FAIL;
         if(!level.isClientSide){
             var state=old.getBlock() instanceof NetworkWireBlock?old:ModBlocks.NETWORK_WIRE.get().defaultBlockState();

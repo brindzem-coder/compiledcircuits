@@ -30,5 +30,14 @@
   "wire.compiledcircuits.hint": "ПКМ у повітря / Shift + ПКМ: налаштування",
   "wire.compiledcircuits.hold": "Візьміть дріт із ID у руку, щоб відкрити налаштування.",
   "wire.compiledcircuits.locked_short": "Колір заблоковано",
-  "wire.compiledcircuits.locked": "Цей ID належить скомпільованій мережі. Щоб змінити колір, декомпілюйте всі мережі, які його використовують."
+  "wire.compiledcircuits.locked": "Цей ID належить скомпільованій мережі. Щоб змінити колір, декомпілюйте всі мережі, які його використовують.",
+  "block.compiledcircuits.bundled_wire": "Мультидріт",
+  "block.compiledcircuits.bundle_input": "Вхід мультидроту",
+  "block.compiledcircuits.bundle_output": "Вихід мультидроту",
+  "block.compiledcircuits.bundle_network_input": "Міжмережевий вхід мультидроту",
+  "block.compiledcircuits.bundle_network_output": "Міжмережевий вихід мультидроту",
+  "bundle.compiledcircuits.editor": "ID каналу мультидроту",
+  "bundle.compiledcircuits.channel": "ID каналу: %s",
+  "bundle.compiledcircuits.hint": "ПКМ по грані мультидроту — накласти/зняти порт. Shift + ПКМ або /circuit bundle — вибрати ID.",
+  "bundle.compiledcircuits.hold": "Візьміть порт мультидроту в руку, щоб вибрати канал."
 }

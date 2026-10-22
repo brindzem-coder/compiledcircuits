@@ -36,7 +36,7 @@ public final class CircuitTables {
         if (jobs.containsKey(source.getServer())) { source.sendFailure(Component.literal("A table is already being built on this server.")); return 0; }
         if (n.networkTable() != null) { source.sendFailure(Component.literal("Table already exists. Remove it before creating another.")); return 0; }
         try {
-            var builder = new NetworkTruthTable.Builder(LogicProgram.compile(n.tableStates(), n.wireIds()));
+            var builder = new NetworkTruthTable.Builder(LogicProgram.compileFaces(n.tableStates(), n.wireIds(), n.bundleFaces()));
             jobs.put(source.getServer(), new Job(n, player.getUUID(), builder, System.nanoTime()));
             source.sendSuccess(() -> Component.literal("Building " + builder.total + " rows; " + builder.rows.length * 8 + " bytes. /circuit table status shows progress; remove cancels."), false);
             return 1;

@@ -56,6 +56,8 @@ public final class CircuitBenchmark {
         LogicProgram program;
         boolean[] baseline;
         List<BlockPos> inputs = List.of();
+        List<BundleFace> faceInputs = List.of();
+        int inputCount;
         int total, next, warmup, failed, firstFailure = -1, repeat;
         long time, work;
         boolean combinationFailed, done, stateful;
@@ -79,17 +81,17 @@ public final class CircuitBenchmark {
                     var e = elements.next(); states.put(e.getPos(), e.resolveState().state().orElseThrow());
                 }
                 if (elements.hasNext()) return;
-                program = LogicProgram.compile(states, network.wireIds()); program.importNodeMemory(memory);
+                program = LogicProgram.compileFaces(states, network.wireIds(), network.bundleFaces()); program.importNodeMemory(memory);
                 if (tableSnapshot != null) program.installTable(tableSnapshot, states.keySet());
                 if (optimized) program.optimize(states.keySet());
                 originalNodes = program.nodeCount(); evaluationNodes = program.evaluationNodeCount();
                 tables = program.truthTableCount(); tableBytes = program.truthTableBytes(); tableNodes = program.truthTableNodes();
                 stateful = program.hasStatefulMemory();
-                baseline = program.benchmarkState(); inputs = program.benchmarkInputs();
-                if (inputs.size() > MAX_INPUTS) {
-                    finish("Too many independent inputs: " + inputs.size() + " (maximum 16)"); return;
+                baseline = program.benchmarkState(); inputs = program.benchmarkInputs(); faceInputs = program.tableFaceInputs(); inputCount = inputs.size() + faceInputs.size();
+                if (inputCount > MAX_INPUTS) {
+                    finish("Too many independent inputs: " + inputCount + " (maximum 16)"); return;
                 }
-                total = (1 << inputs.size()) * (sequence ? 2 : 1);
+                total = (1 << inputCount) * (sequence ? 2 : 1);
                 if (sequence) {
                     sequenceTimes = new long[total]; sequenceWork = new long[total]; sequenceFailed = new boolean[total];
                 }
@@ -131,9 +133,11 @@ public final class CircuitBenchmark {
         private void evaluate(int mask, boolean measured) {
             Map<BlockPos, Boolean> values = new HashMap<>();
             for (int i = 0; i < inputs.size(); i++) values.put(inputs.get(i), (mask & (1 << i)) != 0);
+            Map<BundleFace, Boolean> faces = new HashMap<>();
+            for (int i = 0; i < faceInputs.size(); i++) faces.put(faceInputs.get(i), (mask & (1 << (inputs.size() + i))) != 0);
             if (!sequence) program.benchmarkReset(baseline); // Preparation is outside the timed region.
             long start = System.nanoTime();
-            try { program.evaluate(values); }
+            try { program.evaluate(values, faces); }
             catch (LogicProgram.UnstableFeedback failure) { if (measured) combinationFailed = true; }
             finally { if (measured) { time += System.nanoTime() - start; work += program.lastWork() + program.lastChecks(); } }
         }
@@ -144,15 +148,15 @@ public final class CircuitBenchmark {
         String bits(int mask) {
             String prefix = sequence ? "step " + mask + ": " : "";
             if (sequence) mask = sequenceMask(mask);
-            if (inputs.isEmpty()) return prefix + "(no inputs)";
+            if (inputCount == 0) return prefix + "(no inputs)";
             var s = new StringBuilder(prefix);
-            for (int i = 0; i < inputs.size(); i++) s.append((mask & (1 << i)) == 0 ? '0' : '1');
+            for (int i = 0; i < inputCount; i++) s.append((mask & (1 << i)) == 0 ? '0' : '1');
             return s.toString();
         }
         List<String> lines() {
             List<String> lines = new ArrayList<>();
             lines.add("Network #" + network.getId() + " | " + status);
-            lines.add("Inputs: " + inputs.size() + (sequence ? " | sequence steps: " : " | combinations: ") + next + "/" + total
+            lines.add("Inputs: " + inputCount + (sequence ? " | sequence steps: " : " | combinations: ") + next + "/" + total
                     + " | repeats: " + REPEATS + (sequence && !done ? " | pass: " + (repeat + 1) + " step: " + sequenceStep : ""));
             lines.add((tableMode ? "Whole-network table" : optimized ? "Optimized graph" : "Original graph") + " | evaluation steps: " + originalNodes + " -> " + evaluationNodes);
             lines.add("Truth tables: " + tables + " | replaced nodes: " + tableNodes + " | data: " + tableBytes + " bytes");
@@ -178,6 +182,7 @@ public final class CircuitBenchmark {
                 }
                 lines.add(row.toString());
             }
+            for (int i = 0; i < faceInputs.size(); i++) lines.add("Bit " + (inputs.size() + i) + " = " + faceInputs.get(i).pos().toShortString() + " " + faceInputs.get(i).side());
             return lines;
         }
     }

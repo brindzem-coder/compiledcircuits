@@ -1,7 +1,7 @@
 {
   "textures": {
-    "wire": "minecraft:block/white_concrete",
-    "particle": "minecraft:block/white_concrete"
+    "wire": "compiledcircuits:block/wire_white",
+    "particle": "compiledcircuits:block/wire_white"
   },
   "elements": [
     {

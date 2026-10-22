@@ -81,6 +81,21 @@ public class ModBlocks {
                     )
             );
 
+    public static final RegistryObject<Block> BUNDLE_INPUT = BLOCKS.register("bundle_input",
+            () -> new com.example.compiledcircuits.block.BundlePortBlock(BlockBehaviour.Properties.of().strength(1).noOcclusion(), true, false));
+
+    public static final RegistryObject<Block> BUNDLE_OUTPUT = BLOCKS.register("bundle_output",
+            () -> new com.example.compiledcircuits.block.BundlePortBlock(BlockBehaviour.Properties.of().strength(1).noOcclusion(), false, false));
+
+    public static final RegistryObject<Block> BUNDLE_NETWORK_INPUT = BLOCKS.register("bundle_network_input",
+            () -> new com.example.compiledcircuits.block.BundlePortBlock(BlockBehaviour.Properties.of().strength(1).noOcclusion(), true, true));
+
+    public static final RegistryObject<Block> BUNDLE_NETWORK_OUTPUT = BLOCKS.register("bundle_network_output",
+            () -> new com.example.compiledcircuits.block.BundlePortBlock(BlockBehaviour.Properties.of().strength(1).noOcclusion(), false, true));
+
+    public static final RegistryObject<Block> BUNDLED_WIRE = BLOCKS.register("bundled_wire",
+            () -> new com.example.compiledcircuits.block.BundledWireBlock(BlockBehaviour.Properties.of().strength(1).noOcclusion()));
+
     public static void register(IEventBus eventBus) {
         BLOCKS.register(eventBus);
     }

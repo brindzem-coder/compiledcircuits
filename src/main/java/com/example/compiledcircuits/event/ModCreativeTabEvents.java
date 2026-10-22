@@ -20,6 +20,11 @@ public class ModCreativeTabEvents {
 
         if (event.getTabKey() == CreativeModeTabs.REDSTONE_BLOCKS) {
             event.accept(ModItems.BASIC_WIRE);
+            event.accept(ModItems.BUNDLE_INPUT);
+            event.accept(ModItems.BUNDLE_OUTPUT);
+            event.accept(ModItems.BUNDLE_NETWORK_INPUT);
+            event.accept(ModItems.BUNDLE_NETWORK_OUTPUT);
+            event.accept(ModItems.BUNDLED_WIRE);
             event.accept(ModItems.ID_WIRE);
             event.accept(ModItems.INPUT_ENDPOINT);
             event.accept(ModItems.OUTPUT_ENDPOINT);

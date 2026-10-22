@@ -8,7 +8,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 
 public final class ModNetworking {
 
-    private static final String PROTOCOL_VERSION = "17";
+    private static final String PROTOCOL_VERSION = "19";
 
     public static final SimpleChannel CHANNEL =
             NetworkRegistry.ChannelBuilder
@@ -33,6 +33,8 @@ public final class ModNetworking {
     }
 
     public static void register() {
+        CHANNEL.registerMessage(packetId++, BundleEditorS2CPacket.class, BundleEditorS2CPacket::encode, BundleEditorS2CPacket::decode, BundleEditorS2CPacket::handle, java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));
+        CHANNEL.registerMessage(packetId++, BundleSettingsC2SPacket.class, BundleSettingsC2SPacket::encode, BundleSettingsC2SPacket::decode, BundleSettingsC2SPacket::handle, java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER));
         CHANNEL.registerMessage(packetId++, WireEditorS2CPacket.class, WireEditorS2CPacket::encode, WireEditorS2CPacket::decode, WireEditorS2CPacket::handle, java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));
         CHANNEL.registerMessage(packetId++, WireCatalogS2CPacket.class, WireCatalogS2CPacket::encode, WireCatalogS2CPacket::decode, WireCatalogS2CPacket::handle, java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));
         CHANNEL.registerMessage(packetId++, WireSettingsC2SPacket.class, WireSettingsC2SPacket::encode, WireSettingsC2SPacket::decode, WireSettingsC2SPacket::handle, java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER));

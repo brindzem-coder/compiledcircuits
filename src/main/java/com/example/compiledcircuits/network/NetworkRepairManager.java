@@ -12,7 +12,7 @@ public final class NetworkRepairManager {
     public enum Outcome { PLACED, OCCUPIED, UNSUPPORTED, FAILED, CORRECT, UNLOADED, INVALID, PROTECTED, CHANGED }
     /** Explicitly supported placements; arbitrary saved block IDs must not bypass repair policy. */
     private static boolean supports(Block block) {
-        return block == ModBlocks.ID_WIRE.get() || block == ModBlocks.NETWORK_WIRE.get() || block == ModBlocks.BASIC_WIRE.get()
+        return block instanceof com.example.compiledcircuits.block.BundledWireBlock || block instanceof com.example.compiledcircuits.block.BundlePortBlock || block == ModBlocks.ID_WIRE.get() || block == ModBlocks.NETWORK_WIRE.get() || block == ModBlocks.BASIC_WIRE.get()
                 || block == ModBlocks.INPUT_ENDPOINT.get() || block == ModBlocks.OUTPUT_ENDPOINT.get()
                 || block == ModBlocks.AND_GATE.get() || block == ModBlocks.OR_GATE.get()
                 || block == ModBlocks.NAND_GATE.get() || block == ModBlocks.NOR_GATE.get()
@@ -49,11 +49,11 @@ public final class NetworkRepairManager {
         if(current==null)return Outcome.CHANGED;
         // Wire variants represent the same editable wire, with or without face ports.
         boolean repairFaces = match == CompiledBlockStateMatcher.Match.STATE_MISMATCH
-                && ((expected instanceof com.example.compiledcircuits.block.GateBodyBlock && actual.is(expected))
+                && (((expected instanceof com.example.compiledcircuits.block.GateBodyBlock || expected instanceof com.example.compiledcircuits.block.BundlePortBlock || expected instanceof com.example.compiledcircuits.block.BundledWireBlock) && actual.is(expected))
                 || (expected instanceof com.example.compiledcircuits.block.BasicWireBlock
                     && actual.getBlock() instanceof com.example.compiledcircuits.block.BasicWireBlock));
         if(!repairFaces && (match==CompiledBlockStateMatcher.Match.STATE_MISMATCH || !(actual.isAir()||actual.canBeReplaced()))
-                || actual.hasBlockEntity() && !(expected instanceof com.example.compiledcircuits.block.IdWireBlock && actual.is(expected)))return Outcome.OCCUPIED;
+                || actual.hasBlockEntity() && !((expected instanceof com.example.compiledcircuits.block.IdWireBlock || expected instanceof com.example.compiledcircuits.block.BundlePortBlock || expected instanceof com.example.compiledcircuits.block.BundledWireBlock) && actual.is(expected)))return Outcome.OCCUPIED;
         var restored=decoded.state().orElseGet(expected::defaultBlockState);
         if(expected instanceof com.example.compiledcircuits.block.BasicWireBlock)restored=Block.updateFromNeighbourShapes(restored,level,pos);
         if(!restored.is(expected) || !restored.canSurvive(level,pos)
@@ -61,9 +61,12 @@ public final class NetworkRepairManager {
         if(!ProtectedRepairPlacement.place(level,pos,restored,player,()->NetworkOperations.canModify(player)
                 && NetworkSavedData.get(level.getServer()).getNetwork(network.getId())==network
                 && target.sameOccurrence(network.getBrokenElement(target.getElementId())), () -> {
+                    if (level.getBlockEntity(pos) instanceof com.example.compiledcircuits.block.BundleWireEntity wire) wire.restorePorts(element.bundleFaces());
+                    if (level.getBlockEntity(pos) instanceof com.example.compiledcircuits.block.BundlePortEntity port) port.configure(element.channelId());
                     if (level.getBlockEntity(pos) instanceof com.example.compiledcircuits.block.IdWireEntity wire)
                         wire.configure(element.wireId(), WireCatalog.get(level.getServer()).color(element.wireId(), element.wireColor()));
                 }))return Outcome.PROTECTED;
+        if (level.getBlockEntity(pos) instanceof com.example.compiledcircuits.block.BundleWireEntity wire) wire.refreshConnections();
         NetworkIntegrityManager.scheduleCheck(level,pos);
         for(var direction:net.minecraft.core.Direction.values())NetworkIntegrityManager.scheduleCheck(level,pos.relative(direction));
         return Outcome.PLACED;

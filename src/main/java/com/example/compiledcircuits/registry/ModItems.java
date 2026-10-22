@@ -81,6 +81,21 @@ public class ModItems {
                     )
             );
 
+    public static final RegistryObject<Item> BUNDLE_INPUT = ITEMS.register("bundle_input",
+            () -> new com.example.compiledcircuits.item.BundlePortItem(ModBlocks.BUNDLE_INPUT.get(), new Item.Properties()));
+
+    public static final RegistryObject<Item> BUNDLE_OUTPUT = ITEMS.register("bundle_output",
+            () -> new com.example.compiledcircuits.item.BundlePortItem(ModBlocks.BUNDLE_OUTPUT.get(), new Item.Properties()));
+
+    public static final RegistryObject<Item> BUNDLE_NETWORK_INPUT = ITEMS.register("bundle_network_input",
+            () -> new com.example.compiledcircuits.item.BundlePortItem(ModBlocks.BUNDLE_NETWORK_INPUT.get(), new Item.Properties()));
+
+    public static final RegistryObject<Item> BUNDLE_NETWORK_OUTPUT = ITEMS.register("bundle_network_output",
+            () -> new com.example.compiledcircuits.item.BundlePortItem(ModBlocks.BUNDLE_NETWORK_OUTPUT.get(), new Item.Properties()));
+
+    public static final RegistryObject<Item> BUNDLED_WIRE = ITEMS.register("bundled_wire",
+            () -> new BlockItem(ModBlocks.BUNDLED_WIRE.get(), new Item.Properties()));
+
     public static void register(IEventBus eventBus) {
         ITEMS.register(eventBus);
     }

@@ -30,5 +30,14 @@
   "wire.compiledcircuits.hint": "Right-click air / Shift + right-click: settings",
   "wire.compiledcircuits.hold": "Hold ID Wire to open its settings.",
   "wire.compiledcircuits.locked_short": "Color locked: compiled",
-  "wire.compiledcircuits.locked": "This ID is used by a compiled network. Decompile all networks using it before changing its color."
+  "wire.compiledcircuits.locked": "This ID is used by a compiled network. Decompile all networks using it before changing its color.",
+  "block.compiledcircuits.bundled_wire": "Bundled Wire",
+  "block.compiledcircuits.bundle_input": "Bundle Input",
+  "block.compiledcircuits.bundle_output": "Bundle Output",
+  "block.compiledcircuits.bundle_network_input": "Inter-network Bundle Input",
+  "block.compiledcircuits.bundle_network_output": "Inter-network Bundle Output",
+  "bundle.compiledcircuits.editor": "Bundle channel ID",
+  "bundle.compiledcircuits.channel": "Channel ID: %s",
+  "bundle.compiledcircuits.hint": "Right-click a bundled wire face to apply/remove this port. Shift-right-click or use /circuit bundle to set its ID.",
+  "bundle.compiledcircuits.hold": "Hold a bundle port to configure its channel."
 }

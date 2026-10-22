@@ -39,6 +39,11 @@ public final class CircuitCommands {
 
         dispatcher.register(
                 Commands.literal("circuit")
+                        .then(Commands.literal("bundle").executes(c -> {
+                            var player = c.getSource().getPlayerOrException();
+                            var hand = player.getMainHandItem().getItem() instanceof com.example.compiledcircuits.item.BundlePortItem ? net.minecraft.world.InteractionHand.MAIN_HAND : net.minecraft.world.InteractionHand.OFF_HAND;
+                            return com.example.compiledcircuits.network.BundleToolService.open(player, hand);
+                        }))
                         .then(Commands.literal("wire").executes(c -> {
                             var player = c.getSource().getPlayerOrException();
                             var hand = player.getMainHandItem().getItem() instanceof com.example.compiledcircuits.item.IdWireItem ? net.minecraft.world.InteractionHand.MAIN_HAND : net.minecraft.world.InteractionHand.OFF_HAND;

@@ -43,8 +43,8 @@ public final class LogicProgram {
         if (members.isEmpty()) throw new IllegalArgumentException("Empty table region");
         for (int id : members) if (operations[id] == Op.LATCH || groups[component[id]].length > 1)
             throw new IllegalArgumentException("Table suspended: feedback crosses this network");
-        int[] ins = table.inputs.stream().mapToInt(p -> Objects.requireNonNull(inputs.get(p), "Missing table input")).toArray();
-        int[] outs = table.outputs.stream().mapToInt(p -> Objects.requireNonNull(outputs.get(p), "Missing table output")).toArray();
+        int[] ins = java.util.stream.IntStream.concat(table.inputs.stream().mapToInt(p -> Objects.requireNonNull(inputs.get(p), "Missing table input")), table.faceInputs.stream().mapToInt(p -> Objects.requireNonNull(faceInputNodes.get(p), "Missing table face input"))).toArray();
+        int[] outs = java.util.stream.IntStream.concat(table.outputs.stream().mapToInt(p -> Objects.requireNonNull(outputs.get(p), "Missing table output")), table.faceOutputs.stream().mapToInt(p -> Objects.requireNonNull(faceOutputs.get(p), "Missing table face output"))).toArray();
         int[][] incoming = new int[ins.length][];
         for (int i = 0; i < ins.length; i++) incoming[i] = Arrays.stream(parents[ins[i]]).filter(p -> !members.contains(p)).toArray();
         var unit = new WholeTable(table, members.stream().mapToInt(Integer::intValue).sorted().toArray(), ins, incoming, outs);
@@ -105,7 +105,7 @@ public final class LogicProgram {
         incrementalBoundary = new int[executionGroups.length][];
         incrementalUnits = new boolean[executionGroups.length];
         incrementalSeeds = new int[executionGroups.length][];
-        var seedNodes = new HashSet<>(inputs.values());
+        var seedNodes = new HashSet<>(inputs.values()); seedNodes.addAll(faceInputs);
         for (int g = 0; g < executionGroups.length; g++) {
             int[] group = executionGroups[g]; int first = group[0];
             var table = tableStarts[first];
@@ -152,7 +152,7 @@ public final class LogicProgram {
         for (int i = 0; i < aliases.length; i++) aliases[i] = i;
         executionOps = operations.clone(); executionParents = parents.clone();
         Arrays.fill(constants, (byte) -1);
-        Set<Integer> seeded = new HashSet<>(inputs.values());
+        Set<Integer> seeded = new HashSet<>(inputs.values()); seeded.addAll(faceInputs);
         Map<Expression, Integer> common = new HashMap<>();
         for (int[] group : groups) {
             if (group.length != 1) continue;
@@ -262,8 +262,19 @@ public final class LogicProgram {
     private final String signature;
     public static final int MAX_SETTLE_SWEEPS = 256, MAX_EVALUATION_WORK = 262144;
     private final Map<BlockPos, Integer> inputs, outputs;
+    private final Map<BundleFace, Integer> faceOutputs;
+    private final Set<Integer> faceInputs;
+    private final Map<BundleFace, Integer> faceInputNodes;
+    private static List<BundleFace> orderedFaces(Map<BundleFace, Integer> nodes) {
+        return nodes.keySet().stream().sorted(Comparator.comparing(BundleFace::pos).thenComparing(BundleFace::side)).toList();
+    }
+    List<BundleFace> tableFaceInputs() { return orderedFaces(faceInputNodes); }
+    List<BundleFace> tableFaceOutputs() { return orderedFaces(faceOutputs); }
+    boolean faceOutput(BundleFace face) { var node = faceOutputs.get(face); return node != null && stable[node]; }
+    boolean hasFaceTerminals() { return !faceInputs.isEmpty() || !faceOutputs.isEmpty(); }
 
-    private LogicProgram(List<Node> nodes, int[][] groups, Map<BlockPos, Integer> inputs, Map<BlockPos, Integer> outputs) {
+    private LogicProgram(List<Node> nodes, int[][] groups, Map<BlockPos, Integer> inputs, Map<BlockPos, Integer> outputs, Map<BundleFace, Integer> faceOutputs, Map<BundleFace, Integer> faceInputNodes) {
+        this.faceOutputs = Map.copyOf(faceOutputs); this.faceInputNodes = Map.copyOf(faceInputNodes); this.faceInputs = Set.copyOf(faceInputNodes.values());
         this.groups = groups; this.executionGroups = groups; this.inputs = Map.copyOf(inputs); this.outputs = Map.copyOf(outputs);
         operations = new Op[nodes.size()]; parents = new int[nodes.size()][];
         children = new int[nodes.size()][]; component = new int[nodes.size()];
@@ -340,11 +351,13 @@ public final class LogicProgram {
         }
         return switch (op) { case NOT, NAND, NOR, XNOR -> !value; default -> value; };
     }
-    public Map<BlockPos, Boolean> evaluate(Map<BlockPos, Boolean> externalInputs) {
+    public Map<BlockPos, Boolean> evaluate(Map<BlockPos, Boolean> externalInputs) { return evaluate(externalInputs, Map.of()); }
+    Map<BlockPos, Boolean> evaluate(Map<BlockPos, Boolean> externalInputs, Map<BundleFace, Boolean> externalFaces) {
         lastWork = 0; lastSkipped = 0; lastChecks = 0;
         memoryChanged = false;
         boolean[] values = stable.clone(), seeds = new boolean[operations.length];
         inputs.forEach((pos, node) -> seeds[node] |= externalInputs.getOrDefault(pos, false));
+        faceInputNodes.forEach((face, node) -> seeds[node] |= externalFaces.getOrDefault(face, false));
         int[] work = {0};
         boolean[] queued = new boolean[operations.length];
         for (int g = 0; g < executionGroups.length; g++) {
@@ -396,6 +409,8 @@ public final class LogicProgram {
         previousSeeds = seeds; incrementalValid = true;
         Map<BlockPos, Boolean> result = new HashMap<>();
         outputs.forEach((pos, node) -> result.put(pos, values[node]));
+        // Position summaries are for status only. Electrical links always use independent face nodes.
+        faceOutputs.forEach((face, node) -> result.merge(face.pos(), values[node], (a, b) -> a || b));
         return Map.copyOf(result);
     }
     private void charge(int node, int[] work) {
@@ -431,7 +446,7 @@ public final class LogicProgram {
         return bits;
     }
     public static boolean hasLogic(Collection<BlockState> states) {
-        return states.stream().anyMatch(s -> s.getBlock() instanceof GateBodyBlock || s.getBlock() instanceof NetworkWireBlock || CircuitConnections.isTerminal(s));
+        return states.stream().anyMatch(s -> BundleTopology.element(s) || s.getBlock() instanceof GateBodyBlock || s.getBlock() instanceof NetworkWireBlock || CircuitConnections.isTerminal(s));
     }
     public static LogicProgram compile(Map<BlockPos, BlockState> states) {return compile(states,java.util.Map.of(),java.util.Map.of());}
     static LogicProgram compile(Map<BlockPos,BlockState> states,Map<BlockPos,Set<BlockPos>> links,Map<BlockPos,Integer> ownership) {
@@ -439,6 +454,13 @@ public final class LogicProgram {
     }
     public static LogicProgram compile(Map<BlockPos,BlockState> states, Map<BlockPos,String> wireIds) { return compile(states, Map.of(), Map.of(), wireIds); }
     static LogicProgram compile(Map<BlockPos,BlockState> states,Map<BlockPos,Set<BlockPos>> links,Map<BlockPos,Integer> ownership,Map<BlockPos,String> wireIds) {
+        return compile(states, links, ownership, wireIds, Map.of(), List.of());
+    }
+    static LogicProgram compileFaces(Map<BlockPos,BlockState> states, Map<BlockPos,String> ids, Map<BundleFace,BundleWireEntity.Port> faces) {
+        return compile(states, Map.of(), Map.of(), ids, faces, List.of());
+    }
+    static LogicProgram compile(Map<BlockPos,BlockState> states, Map<BlockPos,Set<BlockPos>> links, Map<BlockPos,Integer> ownership,
+                                Map<BlockPos,String> wireIds, Map<BundleFace,BundleWireEntity.Port> faces, List<BundleFace.Link> faceLinks) {
         for (var entry : states.entrySet()) if (entry.getValue().getBlock() instanceof IdWireBlock) {
             String id = wireIds.get(entry.getKey());
             if (id == null || !WireIds.normalize(id).equals(id) || id.equals("0")) throw error("Missing or invalid wire ID", entry.getKey());
@@ -449,7 +471,10 @@ public final class LogicProgram {
         Map<BlockPos, BlockState> sorted = new TreeMap<>(Comparator.comparingInt((BlockPos p) -> p.getX())
                 .thenComparingInt(BlockPos::getY).thenComparingInt(BlockPos::getZ));
         sorted.putAll(states); states = sorted;
+        var bundleRoutes = BundleTopology.resolve(states, wireIds, ownership, faces);
         List<Node> nodes = new ArrayList<>();
+        Map<BundleFace, Integer> faceNodes = new HashMap<>(), faceOutputs = new HashMap<>();
+        Map<BundleFace, Integer> faceInputNodes = new HashMap<>();
         Map<BlockPos, Integer> component = new HashMap<>(), source = new HashMap<>(), sink = new HashMap<>();
         Map<BlockPos, Integer> enableSink = new HashMap<>();
         Map<BlockPos, Integer> inputs = new HashMap<>(), outputs = new HashMap<>();
@@ -457,7 +482,7 @@ public final class LogicProgram {
         // Flood-fill only homogeneous bodies or passive bus elements.
         for (var item : states.entrySet()) {
             BlockPos pos = item.getKey(); BlockState state = item.getValue();
-            if (component.containsKey(pos) || CircuitConnections.isTerminal(state)) continue;
+            if (component.containsKey(pos) || CircuitConnections.isTerminal(state) || BundleTopology.element(state)) continue;
             boolean body = state.getBlock() instanceof GateBodyBlock;
             if (!body && !(state.getBlock() instanceof IWireConnectable))
                 throw error("Unsupported circuit element", pos);
@@ -477,7 +502,7 @@ public final class LogicProgram {
                 BlockPos current = queue.removeFirst(); BlockState currentState = states.get(current);
                 for (Direction direction : Direction.values()) {
                     BlockPos next = current.relative(direction); BlockState other = states.get(next);
-                    if (other == null || component.containsKey(next) || CircuitConnections.isTerminal(other)) continue;
+                    if (other == null || component.containsKey(next) || CircuitConnections.isTerminal(other) || BundleTopology.element(other)) continue;
                     boolean otherBody = other.getBlock() instanceof GateBodyBlock;
                     if (body != otherBody || !java.util.Objects.equals(ownership.get(current),ownership.get(next)) || !CircuitConnections.connects(currentState, wireIds.getOrDefault(current, "0"), other, wireIds.getOrDefault(next, "0"), direction)) continue;
                     component.put(next, id); queue.add(next);
@@ -486,7 +511,20 @@ public final class LogicProgram {
         }
         for (var item : states.entrySet()) {
             BlockPos pos = item.getKey(); BlockState state = item.getValue();
-            if (state.getBlock() instanceof GatePortBlock port) {
+            if (BundleTopology.element(state)) {
+                if (state.getBlock() instanceof BundledWireBlock) for (var side : Direction.values()) {
+                    var face = new BundleFace(pos, side); var config = faces.get(face);
+                    if (config != null && config.external()) {
+                        int id = add(nodes, Op.OR, pos); faceNodes.put(face, id);
+                        if (config.input()) faceInputNodes.put(face, id); else faceOutputs.put(face, id);
+                    }
+                }
+                if (state.getBlock() instanceof BundlePortBlock port && port.isExternal()) {
+                    int id = add(nodes, Op.OR, pos);
+                    source.put(pos, id); sink.put(pos, id);
+                    if (port.isInput()) inputs.put(pos, id); else outputs.put(pos, id);
+                }
+            } else if (state.getBlock() instanceof GatePortBlock port) {
                 Set<Integer> owners = new HashSet<>();
                 for (Direction direction : Direction.values()) {
                     Integer id = component.get(pos.relative(direction));
@@ -563,7 +601,24 @@ public final class LogicProgram {
             Integer a=source.get(from),b=sink.get(to);if(a==null||b==null)throw error("Invalid direct link",from);
             if(!a.equals(b))edge(nodes,a,b);
         }));
+        for (var link : faceLinks) {
+            Integer from = faceNodes.containsKey(link.from()) ? faceNodes.get(link.from()) : source.get(link.from().pos());
+            Integer to = faceNodes.containsKey(link.to()) ? faceNodes.get(link.to()) : sink.get(link.to().pos());
+            if (from == null || to == null) throw error("Invalid direct face link", link.from().pos());
+            edge(nodes, from, to);
+        }
+        List<int[]> bundleEdges = new ArrayList<>();
+        for (var route : bundleRoutes) {
+            int from = bundleNode(states, route.input(), true, source, sink, enableSink, ownership, faceNodes);
+            int to = bundleNode(states, route.output(), false, source, sink, enableSink, ownership, faceNodes);
+            if (from == to) throw error("Bundle channel " + route.channel() + " forms a cycle", route.input().pos());
+            edge(nodes, from, to); bundleEdges.add(new int[]{from, to});
+        }
         int[][] groups = components(nodes);
+        int[] groupOf = new int[nodes.size()];
+        for (int g = 0; g < groups.length; g++) for (int node : groups[g]) groupOf[node] = g;
+        for (int[] route : bundleEdges) if (groupOf[route[0]] == groupOf[route[1]])
+            throw error("Feedback through a bundled channel is not allowed", nodes.get(route[0]).position);
         Set<Integer> seededNodes = new HashSet<>(inputs.values());
         for (int[] group : groups) {
             if (group.length < 2) continue;
@@ -576,7 +631,21 @@ public final class LogicProgram {
             if (ring && (inversions & 1) != 0)
                 throw error("Feedback cycle has no stable state", nodes.get(group[0]).position);
         }
-        return new LogicProgram(nodes, groups, inputs, outputs);
+        return new LogicProgram(nodes, groups, inputs, outputs, faceOutputs, faceInputNodes);
+    }
+    private static int bundleNode(Map<BlockPos, BlockState> states, BundleTopology.Port port, boolean input,
+                                  Map<BlockPos, Integer> sources, Map<BlockPos, Integer> sinks, Map<BlockPos, Integer> enable,
+                                  Map<BlockPos, Integer> ownership, Map<BundleFace, Integer> faceNodes) {
+        var pos = port.pos(); var side = port.face().side();
+        if (port.config().external()) return port.inline() ? faceNodes.get(port.face()) : (input ? sources : sinks).get(pos);
+        var next = pos.relative(side); var neighbor = states.get(next);
+        Integer node = (input ? sources : sinks).get(next);
+        if (!input && neighbor != null && neighbor.getBlock() instanceof DLatchBlock && DLatchBlock.enableSide(neighbor) == side.getOpposite()) node = enable.get(next);
+        if (neighbor == null || node == null || BundleTopology.element(neighbor) || !Objects.equals(ownership.get(pos), ownership.get(next))
+                || !(neighbor.getBlock() instanceof IWireConnectable wire) || !wire.canWireConnect(neighbor, side.getOpposite())
+                || CircuitConnections.isTerminal(neighbor) && !(input ? CircuitConnections.sends(neighbor, side.getOpposite()) : CircuitConnections.receives(neighbor, side.getOpposite())))
+            throw error("Internal bundle port needs a compatible signal connection", pos);
+        return node;
     }
     /** Iterative Kosaraju: stack-safe even for long chains, components in dependency order. */
     private static int[][] components(List<Node> nodes) {

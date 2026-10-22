@@ -7,6 +7,8 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class CircuitConnections {
     private CircuitConnections() {}
     public static boolean connects(net.minecraft.world.level.BlockGetter level, net.minecraft.core.BlockPos pos, BlockState a, BlockState b, Direction side) {
+        if (a.getBlock() instanceof BundledWireBlock || b.getBlock() instanceof BundledWireBlock)
+            return BundleConnections.connects(level, pos, a, b, side);
         return connects(a, IdWireBlock.id(level, pos, a), b, IdWireBlock.id(level, pos.relative(side), b), side);
     }
     public static boolean connects(BlockState a, String left, BlockState b, String right, Direction side) {
@@ -16,6 +18,16 @@ public final class CircuitConnections {
         return connects(a, "", b, "", side);
     }
     private static boolean structural(BlockState a, BlockState b, Direction side) {
+        if (a.getBlock() instanceof BundledWireBlock)
+            return b.getBlock() instanceof BundledWireBlock || b.getBlock() instanceof BundlePortBlock && BundlePortBlock.cableSide(b) == side.getOpposite();
+        if (b.getBlock() instanceof BundledWireBlock) return structural(b, a, side.getOpposite());
+        if (a.getBlock() instanceof BundlePortBlock port) {
+            if (b.getBlock() instanceof NetworkWireBlock && NetworkWireBlock.face(b, side.getOpposite()) >= 2) return false;
+            if (b.getBlock() instanceof BundlePortBlock || port.isExternal() || side != a.getValue(EndpointBlock.FACING)) return false;
+            if (!(b.getBlock() instanceof IWireConnectable wire) || !wire.canWireConnect(b, side.getOpposite())) return false;
+            return !isTerminal(b) || (port.isInput() ? sends(b, side.getOpposite()) : receives(b, side.getOpposite()));
+        }
+        if (b.getBlock() instanceof BundlePortBlock) return structural(b, a, side.getOpposite());
         if(a.getBlock() instanceof NetworkWireBlock && NetworkWireBlock.face(a,side)>=2
                 || b.getBlock() instanceof NetworkWireBlock && NetworkWireBlock.face(b,side.getOpposite())>=2)return false;
         if (a.getBlock() instanceof GateBodyBlock body) {

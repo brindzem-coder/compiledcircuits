@@ -24,6 +24,48 @@ final class DirectLinks {
     private final LinkedHashSet<CompiledNetwork> dirty=new LinkedHashSet<>();
     private final Consumer<CompiledNetwork> changed;
     private final NetworkSavedData data;
+    private long revision;
+    long revision() { return revision; }
+    /** Validate the prospective linked graph without publishing endpoints or changing runtime state. */
+    long validateCompilation(CompiledNetwork candidate) {
+        if (candidate.directPorts().isEmpty()) return revision;
+        var overlay = new HashMap<Key, Endpoint>();
+        for (var p : candidate.directPorts()) overlay.put(key(candidate, p), new Endpoint(candidate, p));
+        java.util.function.BiFunction<CompiledNetwork, CompiledNetwork.Port, Endpoint> lookup = (network, port) -> {
+            var key = key(network, port).opposite();
+            var other = overlay.getOrDefault(key, ports.get(key));
+            if (other == null || other.network == network || other.port.input() == port.input()) return null;
+            var a = network.getElementAt(port.pos()); var b = other.network.getElementAt(other.port.pos());
+            if (a.getBlockId().equals("compiledcircuits:id_wire") && b.getBlockId().equals("compiledcircuits:id_wire") && !a.wireId().equals(b.wireId())) return null;
+            return other;
+        };
+        Set<CompiledNetwork> members = Collections.newSetFromMap(new IdentityHashMap<>());
+        var queue = new ArrayDeque<CompiledNetwork>(); queue.add(candidate); members.add(candidate);
+        int count = 0;
+        while (!queue.isEmpty()) {
+            var network = queue.remove(); count += network.getElements().size();
+            if (count > LogicProgram.MAX_ELEMENTS) throw new IllegalArgumentException("Linked circuits exceed " + LogicProgram.MAX_ELEMENTS + " elements");
+            for (var port : network.directPorts()) {
+                var other = lookup.apply(network, port);
+                if (other != null && members.add(other.network)) queue.add(other.network);
+            }
+        }
+        // Preserve existing feedback semantics when the linked graph has no bundled channels.
+        if (members.stream().noneMatch(n -> n.getElements().stream().anyMatch(e -> e.getBlockId().startsWith("compiledcircuits:bundle")))) return revision;
+        Map<BlockPos, BlockState> states = new HashMap<>(); Map<BlockPos, String> ids = new HashMap<>();
+        Map<BlockPos, Integer> owners = new HashMap<>(); List<BundleFace.Link> faceLinks = new ArrayList<>();
+        Map<BundleFace, com.example.compiledcircuits.block.BundleWireEntity.Port> faces = new HashMap<>(); int owner = 0;
+        for (var network : members) {
+            owner++; ids.putAll(network.wireIds()); faces.putAll(network.bundleFaces());
+            for (var e : network.getElements()) { states.put(e.getPos(), e.resolveState().state().orElseThrow()); owners.put(e.getPos(), owner); }
+            for (var port : network.directPorts()) if (!port.input()) {
+                var other = lookup.apply(network, port);
+                if (other != null) faceLinks.add(new BundleFace.Link(new BundleFace(port.pos(), port.side()), new BundleFace(other.port.pos(), other.port.side())));
+            }
+        }
+        LogicProgram.compile(states, Map.of(), owners, ids, faces, faceLinks);
+        return revision;
+    }
     DirectLinks(NetworkSavedData data,Consumer<CompiledNetwork> changed){this.data=data;this.changed=changed;}
     void clear(){ports.clear();samples.clear();groups.clear();dirty.clear();}
     boolean contains(CompiledNetwork n){return samples.containsKey(n);}
@@ -38,6 +80,7 @@ final class DirectLinks {
     }
     void add(CompiledNetwork n){
         if(n.directPorts().isEmpty())return;
+        revision++;
         samples.put(n,new Sample(Map.of(),false));n.directAvailability(false);
         for(var p:n.directPorts())ports.put(key(n,p),new Endpoint(n,p));
         var affected=new HashSet<CompiledNetwork>();affected.add(n);
@@ -46,6 +89,7 @@ final class DirectLinks {
     }
     void remove(CompiledNetwork n){
         if(samples.remove(n)==null)return;
+        revision++;
         var affected=new HashSet<CompiledNetwork>();affected.add(n);
         for(var p:n.directPorts()){var other=peer(n,p);if(other!=null)affected.add(other.network);}
         var oldGroup=groups.get(n);
@@ -88,19 +132,20 @@ final class DirectLinks {
         try {
             Map<BlockPos,String> wireIds=new HashMap<>();
             Map<BlockPos,BlockState> states=new HashMap<>();Map<BlockPos,Integer> owners=new HashMap<>();
-            Map<BlockPos,Set<BlockPos>> links=new HashMap<>();Map<String,Boolean> memory=new HashMap<>();
+            List<BundleFace.Link> faceLinks=new ArrayList<>();Map<String,Boolean> memory=new HashMap<>();
+            Map<BundleFace, com.example.compiledcircuits.block.BundleWireEntity.Port> faces=new HashMap<>();
             for(var n:members){
-                wireIds.putAll(n.wireIds());
+                wireIds.putAll(n.wireIds()); faces.putAll(n.bundleFaces());
                 for(var e:n.getElements()){
                     if(states.size()>=LogicProgram.MAX_ELEMENTS)throw new IllegalArgumentException("Linked circuits exceed "+LogicProgram.MAX_ELEMENTS+" elements");
                     states.put(e.getPos(),e.resolveState().state().orElseThrow());owners.put(e.getPos(),n.getId());
                 }
                 memory.putAll(n.nodeMemory());
                 for(var p:n.directPorts())if(!p.input()){
-                    var target=peer(n,p);if(target!=null)links.computeIfAbsent(p.pos(),k->new HashSet<>()).add(target.port.pos());
+                    var target=peer(n,p);if(target!=null)faceLinks.add(new BundleFace.Link(new BundleFace(p.pos(),p.side()),new BundleFace(target.port.pos(),target.port.side())));
                 }
             }
-            result.program=LogicProgram.compile(states,links,owners,wireIds);result.program.importNodeMemory(memory);
+            result.program=LogicProgram.compile(states,Map.of(),owners,wireIds,faces,faceLinks);result.program.importNodeMemory(memory);
             // A network-level cycle is deliberately conservative: table contraction must not alter settling order.
             Map<CompiledNetwork, Set<CompiledNetwork>> successors = new IdentityHashMap<>();
             for (var n : members) {
@@ -129,6 +174,9 @@ final class DirectLinks {
         if(!samples.containsKey(first)){dirty.remove(first);return;}
         var group=group(first);dirty.removeAll(group.members);
         boolean ready=group.members.stream().allMatch(n->samples.get(n).ready&&n.directReady());
+        // A disconnected transport input is unavailable, rather than a valid LOW that a gate could invert.
+        ready &= group.members.stream().allMatch(n -> n.directPorts().stream().noneMatch(p -> p.input()
+                && (n.getElementAt(p.pos()).getBlockId().equals("compiledcircuits:bundle_network_input") || n.getElementAt(p.pos()).getBlockId().equals("compiledcircuits:bundled_wire")) && peer(n, p) == null));
         Map<BlockPos,Boolean> result=Map.of();Map<String,Boolean> memory=null;String error=group.error;
         if(ready&&error.isEmpty())try{
             Map<BlockPos,Boolean> inputs=new HashMap<>();for(var n:group.members)inputs.putAll(samples.get(n).values);

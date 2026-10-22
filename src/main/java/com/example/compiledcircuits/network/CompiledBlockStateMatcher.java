@@ -9,10 +9,20 @@ public final class CompiledBlockStateMatcher {
         var result = match(element, actual, exact);
         if (result == Match.MATCH && actual.getBlock() instanceof com.example.compiledcircuits.block.IdWireBlock
                 && !element.wireId().equals(com.example.compiledcircuits.block.IdWireBlock.id(level, element.getPos(), actual))) return Match.STATE_MISMATCH;
+        if (result == Match.MATCH && actual.getBlock() instanceof com.example.compiledcircuits.block.BundlePortBlock
+                && (!(level.getBlockEntity(element.getPos()) instanceof com.example.compiledcircuits.block.BundlePortEntity port)
+                    || !element.channelId().equals(port.channel()))) return Match.STATE_MISMATCH;
+        if (result == Match.MATCH && actual.getBlock() instanceof com.example.compiledcircuits.block.BundledWireBlock) {
+            var entity = level.getBlockEntity(element.getPos());
+            var actualFaces = entity instanceof com.example.compiledcircuits.block.BundleWireEntity wire ? wire.portData() : new net.minecraft.nbt.CompoundTag();
+            if (!element.bundleFaces().equals(actualFaces)) return Match.STATE_MISMATCH;
+        }
         return result;
     }
     public static Match match(CompiledCircuitElement element, BlockState actual, boolean exact) {
         if ((element.getBlockId().equals("compiledcircuits:id_wire") || actual.getBlock() instanceof com.example.compiledcircuits.block.IdWireBlock)
+                && !element.getBlockId().equals(BuiltInRegistries.BLOCK.getKey(actual.getBlock()).toString())) return Match.BLOCK_MISMATCH;
+        if ((element.getBlockId().equals("compiledcircuits:bundled_wire") || actual.getBlock() instanceof com.example.compiledcircuits.block.BundledWireBlock)
                 && !element.getBlockId().equals(BuiltInRegistries.BLOCK.getKey(actual.getBlock()).toString())) return Match.BLOCK_MISMATCH;
         var decoded = element.resolveState();
         if (decoded.status() == CompiledBlockStateCodec.Status.UNRESOLVED) return Match.UNRESOLVED;
@@ -33,7 +43,7 @@ public final class CompiledBlockStateMatcher {
             return Match.MATCH;
         }
         if (!element.getBlockId().equals(BuiltInRegistries.BLOCK.getKey(actual.getBlock()).toString())) return Match.BLOCK_MISMATCH;
-        boolean functionalState = actual.getBlock() instanceof com.example.compiledcircuits.block.NetworkWireBlock || actual.getBlock() instanceof com.example.compiledcircuits.block.NotGateBlock
+        boolean functionalState = actual.getBlock() instanceof com.example.compiledcircuits.block.BundlePortBlock || actual.getBlock() instanceof com.example.compiledcircuits.block.NetworkWireBlock || actual.getBlock() instanceof com.example.compiledcircuits.block.NotGateBlock
                 || actual.getBlock() instanceof com.example.compiledcircuits.block.DLatchBlock
                 || actual.getBlock() instanceof com.example.compiledcircuits.block.GateBodyBlock;
         if ((exact || functionalState) && decoded.status() == CompiledBlockStateCodec.Status.EXACT && !decoded.state().orElseThrow().equals(actual)) return Match.STATE_MISMATCH;
