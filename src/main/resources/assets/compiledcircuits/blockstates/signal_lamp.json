@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "lit=false": {
+      "model": "compiledcircuits:block/signal_lamp_off"
+    },
+    "lit=true": {
+      "model": "compiledcircuits:block/signal_lamp_on"
+    }
+  }
+}

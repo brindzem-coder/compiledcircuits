@@ -39,5 +39,7 @@
   "bundle.compiledcircuits.editor": "ID каналу мультидроту",
   "bundle.compiledcircuits.channel": "ID каналу: %s",
   "bundle.compiledcircuits.hint": "ПКМ по грані мультидроту — накласти/зняти порт. Shift + ПКМ або /circuit bundle — вибрати ID.",
-  "bundle.compiledcircuits.hold": "Візьміть порт мультидроту в руку, щоб вибрати канал."
+  "bundle.compiledcircuits.hold": "Візьміть порт мультидроту в руку, щоб вибрати канал.",
+  "block.compiledcircuits.signal_switch": "Перемикач сигналу",
+  "block.compiledcircuits.signal_lamp": "Сигнальна лампа"
 }

@@ -39,5 +39,7 @@
   "bundle.compiledcircuits.editor": "Bundle channel ID",
   "bundle.compiledcircuits.channel": "Channel ID: %s",
   "bundle.compiledcircuits.hint": "Right-click a bundled wire face to apply/remove this port. Shift-right-click or use /circuit bundle to set its ID.",
-  "bundle.compiledcircuits.hold": "Hold a bundle port to configure its channel."
+  "bundle.compiledcircuits.hold": "Hold a bundle port to configure its channel.",
+  "block.compiledcircuits.signal_switch": "Signal Switch",
+  "block.compiledcircuits.signal_lamp": "Signal Lamp"
 }

@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "powered=false": {
+      "model": "compiledcircuits:block/signal_switch_0"
+    },
+    "powered=true": {
+      "model": "compiledcircuits:block/signal_switch_1"
+    }
+  }
+}

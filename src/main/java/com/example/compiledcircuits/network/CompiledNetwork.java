@@ -261,8 +261,8 @@ public class CompiledNetwork {
                 case "compiledcircuits:basic_wire", "compiledcircuits:network_wire", "compiledcircuits:id_wire",
                     "compiledcircuits:bundled_wire", "compiledcircuits:bundle_input", "compiledcircuits:bundle_output",
                     "compiledcircuits:bundle_network_input", "compiledcircuits:bundle_network_output" -> CircuitElementType.WIRE;
-                case "compiledcircuits:input_endpoint" -> CircuitElementType.INPUT;
-                case "compiledcircuits:output_endpoint" -> CircuitElementType.OUTPUT;
+                case "compiledcircuits:input_endpoint", "compiledcircuits:signal_switch" -> CircuitElementType.INPUT;
+                case "compiledcircuits:output_endpoint", "compiledcircuits:signal_lamp" -> CircuitElementType.OUTPUT;
                 case "compiledcircuits:and_gate", "compiledcircuits:or_gate", "compiledcircuits:not_gate", "compiledcircuits:d_latch",
                         "compiledcircuits:nand_gate", "compiledcircuits:nor_gate", "compiledcircuits:xor_gate", "compiledcircuits:xnor_gate" -> CircuitElementType.GATE;
                 case "compiledcircuits:gate_input" -> CircuitElementType.GATE_INPUT;

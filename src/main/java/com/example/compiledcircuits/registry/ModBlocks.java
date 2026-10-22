@@ -96,6 +96,12 @@ public class ModBlocks {
     public static final RegistryObject<Block> BUNDLED_WIRE = BLOCKS.register("bundled_wire",
             () -> new com.example.compiledcircuits.block.BundledWireBlock(BlockBehaviour.Properties.of().strength(1).noOcclusion()));
 
+    public static final RegistryObject<Block> SIGNAL_SWITCH = BLOCKS.register("signal_switch",
+            () -> new com.example.compiledcircuits.block.SignalSwitchBlock(BlockBehaviour.Properties.of().strength(1).mapColor(MapColor.SNOW)));
+    public static final RegistryObject<Block> SIGNAL_LAMP = BLOCKS.register("signal_lamp",
+            () -> new com.example.compiledcircuits.block.SignalLampBlock(BlockBehaviour.Properties.of().strength(1).mapColor(MapColor.COLOR_YELLOW)
+                    .lightLevel(state -> state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.LIT) ? 15 : 0)));
+
     public static void register(IEventBus eventBus) {
         BLOCKS.register(eventBus);
     }

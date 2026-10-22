@@ -14,6 +14,9 @@ public class ModItems {
     public static final DeferredRegister<Item> ITEMS =
             DeferredRegister.create(ForgeRegistries.ITEMS, CompiledCircuits.MOD_ID);
 
+    public static final RegistryObject<Item> SIGNAL_SWITCH = ITEMS.register("signal_switch", () -> new BlockItem(ModBlocks.SIGNAL_SWITCH.get(), new Item.Properties()));
+    public static final RegistryObject<Item> SIGNAL_LAMP = ITEMS.register("signal_lamp", () -> new BlockItem(ModBlocks.SIGNAL_LAMP.get(), new Item.Properties()));
+
     public static final RegistryObject<Item> AND_GATE = ITEMS.register("and_gate",
             () -> new BlockItem(ModBlocks.AND_GATE.get(), new Item.Properties()));
     public static final RegistryObject<Item> OR_GATE = ITEMS.register("or_gate",

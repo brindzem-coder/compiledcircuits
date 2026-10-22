@@ -20,6 +20,9 @@ public final class RuntimeSignalReader implements SignalGetter {
     public boolean available() { return available; }
     public int readInput(BlockPos input) {
         if (!canRead(input)) return 0;
+        var inputState = getBlockState(input);
+        if (inputState.getBlock() instanceof com.example.compiledcircuits.block.SignalSwitchBlock)
+            return inputState.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.POWERED) ? 15 : 0;
         int signal = 0;
         // Visit every side even after HIGH. Only solid/weak-power-checking neighbors
         // require the second ring; air must not invent an unavailable dependency.
