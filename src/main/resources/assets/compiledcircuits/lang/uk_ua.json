@@ -41,5 +41,15 @@
   "bundle.compiledcircuits.hint": "ПКМ по грані мультидроту — накласти/зняти порт. Shift + ПКМ або /circuit bundle — вибрати ID.",
   "bundle.compiledcircuits.hold": "Візьміть порт мультидроту в руку, щоб вибрати канал.",
   "block.compiledcircuits.signal_switch": "Перемикач сигналу",
-  "block.compiledcircuits.signal_lamp": "Сигнальна лампа"
+  "block.compiledcircuits.signal_lamp": "Сигнальна лампа",
+  "item.compiledcircuits.circuit_copier": "Копіювач компіляцій",
+  "blueprint.compiledcircuits.copy": "Копіювати",
+  "blueprint.compiledcircuits.copied": "Скопійовано: %s",
+  "blueprint.compiledcircuits.placed": "Вставлено компіляцію №%s",
+  "blueprint.compiledcircuits.no_network": "Для копіювання наведіть на скомпільовану мережу",
+  "blueprint.compiledcircuits.hold_tool": "Тримайте копіювач компіляцій у руці",
+  "blueprint.compiledcircuits.hint": "Shift + ПКМ з інструментом: копіювати. ПКМ: вставити.",
+  "blueprint.compiledcircuits.controls": "R: поворот | F: фіксація | Стрілки: X/Z | PgUp/PgDn: Y | ПКМ: вставити | Esc: скасувати",
+  "blueprint.compiledcircuits.cancelled": "Прев’ю скасовано. F: відновити",
+  "gui.compiledcircuits.teleport": "Телепорт"
 }

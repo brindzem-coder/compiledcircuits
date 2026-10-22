@@ -14,7 +14,7 @@ import java.util.*;
 public final class NetworkOperations {
     public enum Action { COMPILE, OPEN_COMPILE, DECOMPILE, RENAME_NETWORK, MOVE_NETWORKS, MOVE_PATH,
         CREATE_FOLDER, RENAME_FOLDER, MOVE_FOLDERS, DELETE_FOLDERS, REPAIR, HIGHLIGHT,
-        LIST, GUI, SELECTED, DEBUG, LIST_CONFLICTS, REMOVE_CONFLICT }
+        LIST, GUI, SELECTED, DEBUG, LIST_CONFLICTS, REMOVE_CONFLICT, TELEPORT }
     public enum Code { OK, QUEUED, FORBIDDEN, NOT_FOUND, INVALID_ARGUMENT, CONFLICT, RATE_LIMITED,
         INVALID_START, INCOMPLETE_UNLOADED, TOO_LARGE, CHANGED_DURING_SCAN, BUSY, TIMEOUT, CANCELLED }
     public record Result(Code code, String message, List<CompiledNetwork> networks) {
@@ -110,9 +110,9 @@ public final class NetworkOperations {
         var data = NetworkSavedData.get(source.getServer());
         boolean folderTargets = action == Action.CREATE_FOLDER || action == Action.RENAME_FOLDER || action == Action.MOVE_FOLDERS || action == Action.DELETE_FOLDERS;
         boolean networkTargets = action == Action.RENAME_NETWORK || action == Action.MOVE_NETWORKS || action == Action.MOVE_PATH
-                || action == Action.DECOMPILE || action == Action.REPAIR || action == Action.HIGHLIGHT;
+                || action == Action.DECOMPILE || action == Action.REPAIR || action == Action.HIGHLIGHT || action == Action.TELEPORT;
         if ((folderTargets || networkTargets) && ids.isEmpty()) return result(Code.INVALID_ARGUMENT, "No targets selected.");
-        boolean single = action == Action.CREATE_FOLDER || action == Action.RENAME_FOLDER || action == Action.RENAME_NETWORK || action == Action.MOVE_PATH;
+        boolean single = action == Action.CREATE_FOLDER || action == Action.RENAME_FOLDER || action == Action.RENAME_NETWORK || action == Action.MOVE_PATH || action == Action.TELEPORT;
         if (single && ids.size() != 1) return result(Code.INVALID_ARGUMENT, "Exactly one target is required.");
         for (int id : ids) {
             if (folderTargets && !data.folderExists(id)) return result(Code.NOT_FOUND, "Folder does not exist.");
@@ -176,6 +176,10 @@ public final class NetworkOperations {
         rate = charge(source, (int)work, false); if (rate != null) return rate;
         boolean success;
         switch (action) {
+            case TELEPORT -> {
+                try { NetworkTeleport.teleport(player, networks.get(0)); return ok(""); }
+                catch (IllegalArgumentException failure) { return result(Code.INVALID_ARGUMENT, failure.getMessage()); }
+            }
             case HIGHLIGHT -> { return new Result(Code.OK, "", List.copyOf(networks)); }
             case RENAME_NETWORK -> { networks.get(0).setName(value.trim()); data.setDirty(); success = true; }
             case MOVE_NETWORKS -> success = data.moveNetworks(ids, target);

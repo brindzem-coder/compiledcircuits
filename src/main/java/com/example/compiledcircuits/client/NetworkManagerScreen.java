@@ -35,7 +35,7 @@ public class NetworkManagerScreen
     private EditBox searchBox;
     private Integer initialNavigateNetworkId;
     private boolean openingChild;
-    private Button benchmarkButton;
+    private Button benchmarkButton, copyButton, teleportButton;
 
     public NetworkManagerScreen(List<NetworkListS2CPacket.Entry> nextEntries,
                                 List<NetworkListS2CPacket.FolderEntry> nextFolders) {
@@ -93,6 +93,23 @@ public class NetworkManagerScreen
             Minecraft.getInstance().setScreen(new BenchmarkScreen(this, state.selectedNetworkIds.iterator().next()));
         }).bounds(8, 6, 52, 20).build());
         benchmarkButton.active = state.selectedNetworkIds.size() == 1;
+        copyButton = addRenderableWidget(Button.builder(Component.translatable("blueprint.compiledcircuits.copy"), b -> {
+            if (state.selectedNetworkIds.size() != 1) return;
+            var player = Minecraft.getInstance().player;
+            if (player == null || !(player.getMainHandItem().is(com.example.compiledcircuits.registry.ModItems.CIRCUIT_COPIER.get()) || player.getOffhandItem().is(com.example.compiledcircuits.registry.ModItems.CIRCUIT_COPIER.get()))) {
+                if (player != null) player.displayClientMessage(Component.translatable("blueprint.compiledcircuits.hold_tool"), false);
+                return;
+            }
+            ModNetworking.CHANNEL.sendToServer(new com.example.compiledcircuits.networking.BlueprintRequestC2SPacket(state.selectedNetworkIds.iterator().next()));
+            onClose();
+        }).bounds(0, 0, 20, 20).build());
+
+
+        teleportButton = addRenderableWidget(Button.builder(Component.translatable("gui.compiledcircuits.teleport"), b -> {
+            if (state.selectionType != SelectionType.NETWORKS || state.selectedNetworkIds.size() != 1) return;
+            ModNetworking.CHANNEL.sendToServer(new NetworkActionC2SPacket(NetworkActionC2SPacket.Action.TELEPORT, state.selectedNetworkIds.iterator().next(), ""));
+            onClose();
+        }).bounds(0, 0, 20, 20).build());
 
         String searchText = state.searchText;
         boolean restoreSearchFocus = state.searchFocused;
@@ -132,7 +149,7 @@ public class NetworkManagerScreen
                 button -> decompileSelectedBrokenNetworks()).bounds(12 + actionWidth, buttonY, actionWidth, 20).build());
 
         int x = layout.folderPanelWidth + 4;
-        int networkButtonWidth = (this.width - x - 16) / 3;
+        int networkButtonWidth = (this.width - x - 24) / 5;
 
         highlightButton =
                 addRenderableWidget(
@@ -185,6 +202,13 @@ public class NetworkManagerScreen
                                 )
                                 .build()
                 );
+
+        copyButton.setX(x + networkButtonWidth + 4);
+        copyButton.setY(buttonY);
+        copyButton.setWidth(networkButtonWidth);
+        teleportButton.setX(x + 2 * (networkButtonWidth + 4));
+        teleportButton.setY(buttonY);
+        teleportButton.setWidth(networkButtonWidth);
 
         int folderButtonY =
                 this.height - 28;
@@ -697,6 +721,8 @@ public class NetworkManagerScreen
     private void updateButtons() {
         boolean networks = state.selectionType == SelectionType.NETWORKS && !state.selectedNetworkIds.isEmpty();
         benchmarkButton.active = networks && state.selectedNetworkIds.size() == 1;
+        if(copyButton!=null)copyButton.active=networks&&state.selectedNetworkIds.size()==1;
+        if(teleportButton!=null)teleportButton.active=networks&&state.selectedNetworkIds.size()==1;
         boolean foldersSelected = state.selectionType == SelectionType.FOLDERS && !state.selectedFolderIds.isEmpty();
         newFolderButton.active = !isSearchMode();
         highlightButton.active = networks;
@@ -765,7 +791,7 @@ public class NetworkManagerScreen
         boolean networkMode = state.mainViewMode == MainViewMode.NETWORKS;
         searchBox.visible = networkMode;
         searchBox.active = networkMode;
-        for (Button button : List.of(searchFilterButton, highlightButton, renameButton, decompileButton,
+        for (Button button : List.of(searchFilterButton, highlightButton, renameButton, decompileButton, copyButton, teleportButton,
                 newFolderButton, renameFolderButton, deleteFolderButton)) {
             button.visible = networkMode;
             button.active = networkMode;

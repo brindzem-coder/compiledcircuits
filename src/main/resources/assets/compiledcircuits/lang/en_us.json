@@ -41,5 +41,15 @@
   "bundle.compiledcircuits.hint": "Right-click a bundled wire face to apply/remove this port. Shift-right-click or use /circuit bundle to set its ID.",
   "bundle.compiledcircuits.hold": "Hold a bundle port to configure its channel.",
   "block.compiledcircuits.signal_switch": "Signal Switch",
-  "block.compiledcircuits.signal_lamp": "Signal Lamp"
+  "block.compiledcircuits.signal_lamp": "Signal Lamp",
+  "item.compiledcircuits.circuit_copier": "Circuit Copier",
+  "blueprint.compiledcircuits.copy": "Copy",
+  "blueprint.compiledcircuits.copied": "Copied %s",
+  "blueprint.compiledcircuits.placed": "Placed compilation #%s",
+  "blueprint.compiledcircuits.no_network": "Look at a compiled circuit to copy it",
+  "blueprint.compiledcircuits.hold_tool": "Hold the Circuit Copier in either hand",
+  "blueprint.compiledcircuits.hint": "Hold + Shift-right-click: copy. Right-click: paste.",
+  "blueprint.compiledcircuits.controls": "R: rotate | F: lock/unlock | Arrows: X/Z | PgUp/PgDn: Y | RMB: paste | Esc: cancel",
+  "blueprint.compiledcircuits.cancelled": "Preview cancelled. F: resume",
+  "gui.compiledcircuits.teleport": "Teleport"
 }

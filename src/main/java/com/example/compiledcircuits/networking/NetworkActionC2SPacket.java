@@ -18,7 +18,8 @@ public class NetworkActionC2SPacket {
         CREATE_FOLDER,
         RENAME_FOLDER,
         DELETE_FOLDER,
-        MOVE_FOLDER
+        MOVE_FOLDER,
+        TELEPORT
     }
 
     private final Action action;
@@ -62,7 +63,7 @@ public class NetworkActionC2SPacket {
             if(packet.action==Action.HIGHLIGHT){HighlightSync.request(player,packet.highlight,List.of(packet.networkId));return;}
             var result = execute(packet, player);
             NetworkOperations.reply(player.createCommandSourceStack(), result);
-            if (!result.success()) return;
+            if (!result.success() || packet.action == Action.TELEPORT) return;
             NetworkGuiSync.sendList(player);
         });
         context.setPacketHandled(true);
