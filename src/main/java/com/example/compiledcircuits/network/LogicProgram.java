@@ -85,6 +85,9 @@ public final class LogicProgram {
     private boolean memoryChanged;
     private int lastWork;
     private int[] aliases;
+    private Op[] executionOps;
+    private int[][] executionParents;
+    private byte[] constants; // -1 unknown, 0/1 proven without reading live signals
     public static final int MAX_TABLE_INPUTS = 8, MAX_TABLE_NODES = 64,
             MAX_TABLE_BYTES = 65536, MAX_TABLE_BUILD_WORK = 262144;
     private record TruthTable(int[] inputs, int[] nodes, long[] rows, int work) {}
@@ -111,7 +114,7 @@ public final class LogicProgram {
             boolean eligible = true;
             Set<Integer> members = new HashSet<>(), boundary = new TreeSet<>();
             for (int node : nodes) { members.add(node); eligible &= allowed.contains(positions[node]); }
-            for (int node : nodes) for (int parent : parents[node])
+            for (int node : nodes) for (int parent : executionParents[node])
                 if (!members.contains(aliases[parent])) boundary.add(aliases[parent]);
             incrementalSeeds[g] = Arrays.stream(nodes).filter(seedNodes::contains).toArray();
             incrementalUnits[g] = eligible || wholeTables.containsKey(first);
@@ -147,6 +150,8 @@ public final class LogicProgram {
         Arrays.fill(tableStarts, null); Arrays.fill(tableMembers, false);
         tableCount = tableBytes = tableNodes = 0;
         for (int i = 0; i < aliases.length; i++) aliases[i] = i;
+        executionOps = operations.clone(); executionParents = parents.clone();
+        Arrays.fill(constants, (byte) -1);
         Set<Integer> seeded = new HashSet<>(inputs.values());
         Map<Expression, Integer> common = new HashMap<>();
         for (int[] group : groups) {
@@ -154,14 +159,38 @@ public final class LogicProgram {
             int id = group[0]; Op op = operations[id];
             if (!allowed.contains(positions[id]) || seeded.contains(id) || op == Op.LATCH) continue;
             int[] sources = Arrays.stream(parents[id]).map(p -> aliases[p]).sorted().toArray();
-            if (op == Op.OR && sources.length == 1) { aliases[id] = sources[0]; continue; }
-            if (op == Op.NOT && sources.length == 1) {
-                int parent = sources[0];
-                if (operations[parent] == Op.NOT && groups[component[parent]].length == 1 && parents[parent].length == 1) {
-                    aliases[id] = aliases[parents[parent][0]]; continue;
-                }
+            boolean invert = op == Op.NOT || op == Op.NOR || op == Op.NAND || op == Op.XNOR;
+            Op base = op == Op.AND || op == Op.NAND ? Op.AND : op == Op.XOR || op == Op.XNOR ? Op.XOR : Op.OR;
+            var remaining = new TreeSet<Integer>(); boolean forced = false;
+            for (int source : sources) {
+                byte c = constants[source];
+                if (c >= 0) {
+                    if (base == Op.AND && c == 0 || base == Op.OR && c == 1) { forced = true; break; }
+                    if (base == Op.XOR && c == 1) invert = !invert;
+                } else if (base == Op.XOR) {
+                    if (!remaining.add(source)) remaining.remove(source); // Equal XOR operands cancel in pairs.
+                } else remaining.add(source);
             }
-            // Preserve duplicate inputs: XOR(A,A) must stay false, not become A.
+            if (forced || remaining.isEmpty()) {
+                boolean result = forced ? base == Op.OR : base == Op.AND;
+                constants[id] = (byte) ((result ^ invert) ? 1 : 0);
+                executionParents[id] = new int[0];
+                continue;
+            }
+            sources = remaining.stream().mapToInt(Integer::intValue).toArray();
+            if (sources.length == 1) {
+                if (!invert) { aliases[id] = sources[0]; continue; }
+                int parent = sources[0];
+                if (executionOps[parent] == Op.NOT && groups[component[parent]].length == 1 && executionParents[parent].length == 1) {
+                    aliases[id] = aliases[executionParents[parent][0]]; continue;
+                }
+                op = Op.NOT;
+            } else op = switch (base) {
+                case AND -> invert ? Op.NAND : Op.AND;
+                case XOR -> invert ? Op.XNOR : Op.XOR;
+                default -> invert ? Op.NOR : Op.OR;
+            };
+            executionOps[id] = op; executionParents[id] = sources;
             var key = new Expression(op, Arrays.stream(sources).boxed().toList());
             Integer earlier = common.putIfAbsent(key, id);
             if (earlier != null) aliases[id] = earlier;
@@ -255,6 +284,8 @@ public final class LogicProgram {
         hasMemory = feedback || Arrays.asList(operations).contains(Op.LATCH);
         aliases = new int[nodes.size()]; for (int i = 0; i < aliases.length; i++) aliases[i] = i;
         tableStarts = new TruthTable[nodes.size()]; tableMembers = new boolean[nodes.size()];
+        executionOps = operations.clone(); executionParents = parents.clone();
+        constants = new byte[nodes.size()]; Arrays.fill(constants, (byte) -1);
     }
     public static final class UnstableFeedback extends IllegalStateException {
         public final BlockPos position;
@@ -298,10 +329,11 @@ public final class LogicProgram {
         incrementalValid = false;
     }
     private boolean value(int node, boolean[] values, boolean[] seeds) {
-        Op op = operations[node];
+        if (constants[node] >= 0) return constants[node] == 1;
+        Op op = executionOps[node];
         if (op == Op.LATCH) return values[aliases[enableSources[node]]] ? values[aliases[dataSources[node]]] : values[node];
         boolean value = op == Op.AND || op == Op.NAND || seeds[node];
-        for (int parent : parents[node]) {
+        for (int parent : executionParents[node]) {
             if (op == Op.AND || op == Op.NAND) value &= values[aliases[parent]];
             else if (op == Op.XOR || op == Op.XNOR) value ^= values[aliases[parent]];
             else value |= values[aliases[parent]];
@@ -367,7 +399,7 @@ public final class LogicProgram {
         return Map.copyOf(result);
     }
     private void charge(int node, int[] work) {
-        chargeWork(1 + parents[node].length, node, work);
+        chargeWork(1 + executionParents[node].length, node, work);
     }
     private void chargeWork(int amount, int node, int[] work) {
         work[0] += amount;
