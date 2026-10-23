@@ -76,7 +76,7 @@ public class SignalBlockGameTests {
         var positions=List.of(input,basic,id,lamp,input.below(),isolated);
         Map<BlockPos,BlockState> old=new LinkedHashMap<>();Set<Long> forced=new HashSet<>();
         Runnable cleanup=()->{
-            CompilationJobs.stop(server);NetworkOperations.forget(player);
+            CompilationJobs.stop(server);RepairJobs.stop(server);NetworkOperations.forget(player);
             for(var n:new ArrayList<>(data.getNetworks()))data.removeNetwork(n.getId());
             old.forEach((pos,state)->level.setBlock(pos,state,3));
             for(long c:forced)level.setChunkForced(net.minecraft.world.level.ChunkPos.getX(c),net.minecraft.world.level.ChunkPos.getZ(c),false);
@@ -105,6 +105,10 @@ public class SignalBlockGameTests {
             level.setBlock(lamp,SignalPorts.with(ModBlocks.SIGNAL_LAMP.get().defaultBlockState(),Direction.WEST,true),3);
             new Runnable(){int phase,attempts;CompiledNetwork network;
                 void toggle(){var result=level.getBlockState(input).use(level,player,net.minecraft.world.InteractionHand.MAIN_HAND,new net.minecraft.world.phys.BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(input),Direction.UP,input,false));h.assertTrue(result.consumesAction(),"switch click accepted: "+result);}
+                void repair(){
+                    h.assertTrue(NetworkOperations.execute(player.createCommandSourceStack(),NetworkOperations.Action.REPAIR,List.of(network.getId()),0,"").code()==NetworkOperations.Code.QUEUED,"GUI repair action queues signal blocks");
+                }
+                void damage(BlockPos pos,BlockState state){level.setBlock(pos,state,3);NetworkIntegrityManager.checkPosition(level,pos);}
                 boolean lit(){return level.getBlockState(lamp).getValue(BlockStateProperties.LIT);}
                 public void run(){try{
                     if(++attempts>220){String details=" state="+level.getBlockState(input)+" value="+(network==null?"none":network.getEffectiveSignal(lamp)+" "+network.getRuntimeStatus())+" read="+new RuntimeSignalReader(level).readInput(input);cleanup.run();h.fail("signal integration timeout phase "+phase+details);return;}
@@ -136,17 +140,45 @@ public class SignalBlockGameTests {
                         level.setBlock(basic,ModBlocks.BASIC_WIRE.get().defaultBlockState(),3);NetworkIntegrityManager.checkPosition(level,basic);phase=6;
                     }else if(phase==6){
                         if(!lit()){h.runAfterDelay(1,()->run());return;}
-                        data.removeNetwork(network.getId());phase=7;
+                        damage(input,Blocks.AIR.defaultBlockState());damage(lamp,Blocks.AIR.defaultBlockState());repair();phase=9;
                     }else if(phase==7){
                         if(lit()){h.runAfterDelay(1,()->run());return;}
                         // Simulate loading a saved lit block after its compilation was removed.
                         level.setBlock(lamp,level.getBlockState(lamp).setValue(BlockStateProperties.LIT,true),2);
                         ((SignalLampEntity)level.getBlockEntity(lamp)).onLoad();phase=8;
+                    }else if(phase==9){
+                        if(RepairJobs.isBusy(player)||network.isDamaged()||!network.getRuntimeStatus().equals("READY")){h.runAfterDelay(1,()->run());return;}
+                        h.assertTrue(level.getBlockState(input).is(ModBlocks.SIGNAL_SWITCH.get())&&level.getBlockEntity(lamp) instanceof SignalLampEntity,"GUI repair recreates both blocks and lamp entity");
+                        h.assertTrue(SignalPorts.has(level.getBlockState(input),Direction.EAST)&&SignalPorts.has(level.getBlockState(lamp),Direction.WEST),"GUI repair restores saved ports");
+                        h.assertTrue(!level.getBlockState(input).getValue(BlockStateProperties.POWERED)&&!lit(),"missing switch restores saved OFF state");
+                        toggle();phase=10;
+                    }else if(phase==10){
+                        if(!lit()){h.runAfterDelay(1,()->run());return;}
+                        damage(input,SignalPorts.with(level.getBlockState(input),Direction.EAST,false));
+                        damage(lamp,SignalPorts.with(level.getBlockState(lamp),Direction.WEST,false));repair();phase=11;
+                    }else if(phase==11){
+                        if(RepairJobs.isBusy(player)||network.isDamaged()||!lit()){h.runAfterDelay(1,()->run());return;}
+                        h.assertTrue(SignalPorts.has(level.getBlockState(input),Direction.EAST)&&SignalPorts.has(level.getBlockState(lamp),Direction.WEST),"GUI repair restores ports in place");
+                        h.assertTrue(level.getBlockState(input).getValue(BlockStateProperties.POWERED),"port repair preserves live ON switch");
+                        // Protection cancellation must also restore an existing lamp and its ports.
+                        damage(lamp,SignalPorts.with(level.getBlockState(lamp),Direction.WEST,false));
+                        var before=level.getBlockState(lamp);
+                        java.util.function.Consumer<net.minecraftforge.event.level.BlockEvent.EntityPlaceEvent> deny=e->{if(e.getEntity()==player)e.setCanceled(true);};
+                        net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(deny);
+                        try{
+                            var target=network.getBrokenElement(network.getElementAt(lamp).getId());
+                            h.assertTrue(NetworkRepairManager.attempt(level,network,target,player)==NetworkRepairManager.Outcome.PROTECTED,"lamp repair honors placement protection");
+                            h.assertTrue(level.getBlockState(lamp)==before&&level.getBlockEntity(lamp) instanceof SignalLampEntity,"denial restores original lamp and entity");
+                        }finally{net.minecraftforge.common.MinecraftForge.EVENT_BUS.unregister(deny);}
+                        repair();phase=12;
+                    }else if(phase==12){
+                        if(RepairJobs.isBusy(player)||network.isDamaged()||!lit()){h.runAfterDelay(1,()->run());return;}
+                        data.removeNetwork(network.getId());phase=7;
                     }else{
                         if(lit()){h.runAfterDelay(1,()->run());return;}
                         cleanup.run();h.succeed();return;
                     }
-                    h.runAfterDelay(2,()->run());
+                    h.runAfterDelay(6,()->run());
                 }catch(Throwable failure){cleanup.run();throw failure;}}
             }.run();
         }catch(Throwable failure){cleanup.run();throw failure;}

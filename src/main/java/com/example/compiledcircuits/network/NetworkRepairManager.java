@@ -14,6 +14,7 @@ public final class NetworkRepairManager {
     private static boolean supports(Block block) {
         return block instanceof com.example.compiledcircuits.block.BundledWireBlock || block instanceof com.example.compiledcircuits.block.BundlePortBlock || block == ModBlocks.ID_WIRE.get() || block == ModBlocks.NETWORK_WIRE.get() || block == ModBlocks.BASIC_WIRE.get()
                 || block == ModBlocks.INPUT_ENDPOINT.get() || block == ModBlocks.OUTPUT_ENDPOINT.get()
+                || block == ModBlocks.SIGNAL_SWITCH.get() || block == ModBlocks.SIGNAL_LAMP.get()
                 || block == ModBlocks.AND_GATE.get() || block == ModBlocks.OR_GATE.get()
                 || block == ModBlocks.NAND_GATE.get() || block == ModBlocks.NOR_GATE.get()
                 || block == ModBlocks.XOR_GATE.get() || block == ModBlocks.XNOR_GATE.get()
@@ -49,12 +50,18 @@ public final class NetworkRepairManager {
         if(current==null)return Outcome.CHANGED;
         // Wire variants represent the same editable wire, with or without face ports.
         boolean repairFaces = match == CompiledBlockStateMatcher.Match.STATE_MISMATCH
-                && (((expected instanceof com.example.compiledcircuits.block.GateBodyBlock || expected instanceof com.example.compiledcircuits.block.BundlePortBlock || expected instanceof com.example.compiledcircuits.block.BundledWireBlock) && actual.is(expected))
+                && (((expected instanceof com.example.compiledcircuits.block.SignalSwitchBlock || expected instanceof com.example.compiledcircuits.block.SignalLampBlock || expected instanceof com.example.compiledcircuits.block.GateBodyBlock || expected instanceof com.example.compiledcircuits.block.BundlePortBlock || expected instanceof com.example.compiledcircuits.block.BundledWireBlock) && actual.is(expected))
                 || (expected instanceof com.example.compiledcircuits.block.BasicWireBlock
                     && actual.getBlock() instanceof com.example.compiledcircuits.block.BasicWireBlock));
         if(!repairFaces && (match==CompiledBlockStateMatcher.Match.STATE_MISMATCH || !(actual.isAir()||actual.canBeReplaced()))
-                || actual.hasBlockEntity() && !((expected instanceof com.example.compiledcircuits.block.IdWireBlock || expected instanceof com.example.compiledcircuits.block.BundlePortBlock || expected instanceof com.example.compiledcircuits.block.BundledWireBlock) && actual.is(expected)))return Outcome.OCCUPIED;
+                || actual.hasBlockEntity() && !((expected instanceof com.example.compiledcircuits.block.SignalLampBlock || expected instanceof com.example.compiledcircuits.block.IdWireBlock || expected instanceof com.example.compiledcircuits.block.BundlePortBlock || expected instanceof com.example.compiledcircuits.block.BundledWireBlock) && actual.is(expected)))return Outcome.OCCUPIED;
         var restored=decoded.state().orElseGet(expected::defaultBlockState);
+        // Repair topology without resetting the user's live switch value or copying stale lamp light.
+        if(expected instanceof com.example.compiledcircuits.block.SignalSwitchBlock && actual.is(expected))
+            restored=restored.setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.POWERED,
+                    actual.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.POWERED));
+        if(expected instanceof com.example.compiledcircuits.block.SignalLampBlock)
+            restored=restored.setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.LIT,false);
         if(expected instanceof com.example.compiledcircuits.block.BasicWireBlock)restored=Block.updateFromNeighbourShapes(restored,level,pos);
         if(!restored.is(expected) || !restored.canSurvive(level,pos)
                 || !level.isUnobstructed(restored,pos,net.minecraft.world.phys.shapes.CollisionContext.empty()))return Outcome.FAILED;
@@ -67,6 +74,7 @@ public final class NetworkRepairManager {
                         wire.configure(element.wireId(), WireCatalog.get(level.getServer()).color(element.wireId(), element.wireColor()));
                 }))return Outcome.PROTECTED;
         if (level.getBlockEntity(pos) instanceof com.example.compiledcircuits.block.BundleWireEntity wire) wire.refreshConnections();
+        if(expected instanceof com.example.compiledcircuits.block.SignalLampBlock)level.scheduleTick(pos,expected,1);
         NetworkIntegrityManager.scheduleCheck(level,pos);
         for(var direction:net.minecraft.core.Direction.values())NetworkIntegrityManager.scheduleCheck(level,pos.relative(direction));
         return Outcome.PLACED;
