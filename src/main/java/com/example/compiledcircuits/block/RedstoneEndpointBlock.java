@@ -67,8 +67,8 @@ public abstract class RedstoneEndpointBlock extends EndpointBlock {
     private boolean connects(BlockState state, BlockGetter level, BlockPos pos, Direction side) {
         BlockPos other = pos.relative(side);
         BlockState neighbor = level.getBlockState(other);
-        // Only these two wire types get an arm; endpoints never join each other visually.
-        if (!neighbor.is(ModBlocks.BASIC_WIRE.get()) && !(neighbor.getBlock() instanceof IdWireBlock)) return false;
+        // Plain wires become NetworkWireBlock when a face port is installed; ID wires extend it too.
+        if (!neighbor.is(ModBlocks.BASIC_WIRE.get()) && !(neighbor.getBlock() instanceof NetworkWireBlock)) return false;
         if (level instanceof ServerLevel server && !CircuitBoundary.allows(server, pos, other)) return false;
         return CircuitConnections.connects(level, pos, state, neighbor, side);
     }
