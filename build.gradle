@@ -252,9 +252,10 @@ tasks.register('membershipCheck', JavaExec) {
     javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(17) }
 }
 
-// Client-only physical index observer. The Mixin processor generates the refmap.
+// Client and server Mixins need both an injection refmap and shadow-member mappings.
 dependencies { annotationProcessor 'org.spongepowered:mixin:0.8.5' }
 def visualRefmapDir = layout.buildDirectory.dir('generated/visualMixin')
+def mixinMemberMappings = visualRefmapDir.map { it.file('members.srg') }
 tasks.register('createVisualMixinSrg') {
     dependsOn tasks.named('createMcpToSrg')
     inputs.file(layout.buildDirectory.file('createMcpToSrg/output.tsrg'))
@@ -268,14 +269,22 @@ tasks.register('createVisualMixinSrg') {
 }
 tasks.named('compileJava', JavaCompile).configure {
     dependsOn tasks.named('createVisualMixinSrg')
+    outputs.file(mixinMemberMappings)
     options.annotationProcessorPath = configurations.annotationProcessor + sourceSets.main.compileClasspath
     doFirst { visualRefmapDir.get().asFile.mkdirs() }
     options.compilerArgs += [
         '-AdefaultObfuscationEnv=searge',
+        "-AoutSrgFile=${mixinMemberMappings.get().asFile}",
         "-AreobfSrgFile=${layout.buildDirectory.file('generated/visualMixin/input.srg').get().asFile}",
         "-AoutRefMapFile=${visualRefmapDir.get().file('compiledcircuits.visual.refmap.json').asFile}"
     ]
 }
+// Refmaps cover injection targets; @Shadow members must also be renamed in the JAR.
+tasks.withType(net.minecraftforge.gradle.userdev.tasks.RenameJarInPlace).configureEach {
+    dependsOn tasks.named('compileJava')
+    extraMappings.from(mixinMemberMappings)
+}
+
 tasks.named('jar', Jar).configure {
     manifest.attributes('MixinConfigs': 'compiledcircuits.visual.mixins.json,compiledcircuits.runtime.mixins.json')
 }

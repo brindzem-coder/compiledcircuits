@@ -25,6 +25,11 @@ public class SignalBlockGameTests {
         for(var pair:List.of(Map.entry(input,CircuitElementType.INPUT),Map.entry(output,CircuitElementType.OUTPUT))) {
             var state=pair.getKey();var element=new CompiledCircuitElement(1,BlockPos.ZERO,pair.getValue(),CompiledBlockStateCodec.capture(state));
             var changed=state.cycle(pair.getValue()==CircuitElementType.INPUT?BlockStateProperties.POWERED:BlockStateProperties.LIT);
+            h.assertTrue(CompiledBlockStateMatcher.liveSignalChange(state,changed),"signal toggle is not a topology mutation");
+            h.assertTrue(CompiledBlockStateMatcher.liveSignalChange(changed,state),"signal toggle off is not a topology mutation");
+            var withArm=changed.setValue(RedstoneEndpointBlock.connectionProperty(Direction.NORTH),true);
+            h.assertTrue(CompiledBlockStateMatcher.liveSignalChange(state,withArm),"signal and derived arm changes are not topology mutations");
+            h.assertTrue(!CompiledBlockStateMatcher.liveSignalChange(state,Blocks.AIR.defaultBlockState()),"removing a signal block is a topology mutation");
             h.assertTrue(CompiledBlockStateMatcher.match(CompiledCircuitElement.load(element.save()),changed,true)==CompiledBlockStateMatcher.Match.MATCH,"live signal survives save/load and exact integrity checks");
             h.assertTrue(state.getShape(h.getLevel(),BlockPos.ZERO).bounds().getSize()==1,"full cube outline");
         }

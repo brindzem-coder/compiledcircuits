@@ -7,15 +7,17 @@ public final class CompiledBlockStateMatcher {
     private CompiledBlockStateMatcher() {}
     public static boolean liveSignalChange(BlockState before, BlockState after) {
         if (!before.is(after.getBlock())) return false;
+        // Normalize live values before testing the shared endpoint superclass.
+        // Switches and lamps are endpoints too, and may also change connection arms.
+        if (before.getBlock() instanceof com.example.compiledcircuits.block.SignalSwitchBlock)
+            before = before.setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.POWERED,
+                    after.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.POWERED));
+        if (before.getBlock() instanceof com.example.compiledcircuits.block.SignalLampBlock)
+            before = before.setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.LIT,
+                    after.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.LIT));
         if (before.getBlock() instanceof com.example.compiledcircuits.block.RedstoneEndpointBlock)
             return com.example.compiledcircuits.block.RedstoneEndpointBlock.withoutArms(before)
                     .equals(com.example.compiledcircuits.block.RedstoneEndpointBlock.withoutArms(after));
-        if (before.getBlock() instanceof com.example.compiledcircuits.block.SignalSwitchBlock)
-            return before.setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.POWERED,
-                    after.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.POWERED)).equals(after);
-        if (before.getBlock() instanceof com.example.compiledcircuits.block.SignalLampBlock)
-            return before.setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.LIT,
-                    after.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.LIT)).equals(after);
         return false;
     }
     public static Match match(CompiledCircuitElement element, net.minecraft.world.level.BlockGetter level, BlockState actual, boolean exact) {
