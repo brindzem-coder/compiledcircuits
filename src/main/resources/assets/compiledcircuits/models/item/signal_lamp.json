@@ -1,3 +1,6 @@
 {
-  "parent": "compiledcircuits:block/signal_lamp_off"
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "compiledcircuits:item/signal_lamp"
+  }
 }

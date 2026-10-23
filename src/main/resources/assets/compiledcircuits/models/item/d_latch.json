@@ -1,3 +1,6 @@
 {
-  "parent": "compiledcircuits:block/d_latch_north_0"
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "compiledcircuits:item/d_latch"
+  }
 }

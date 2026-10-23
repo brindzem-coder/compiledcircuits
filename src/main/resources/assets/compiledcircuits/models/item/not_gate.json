@@ -1,3 +1,6 @@
 {
-  "parent": "compiledcircuits:block/not_gate"
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "compiledcircuits:item/not_gate"
+  }
 }

@@ -1,3 +1,6 @@
 {
-  "parent": "compiledcircuits:block/gate_output"
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "compiledcircuits:item/gate_output"
+  }
 }

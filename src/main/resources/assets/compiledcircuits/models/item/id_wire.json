@@ -1,3 +1,7 @@
 {
-  "parent": "compiledcircuits:block/id_wire_center"
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "compiledcircuits:item/id_wire",
+    "layer1": "compiledcircuits:item/id_wire_hardware"
+  }
 }

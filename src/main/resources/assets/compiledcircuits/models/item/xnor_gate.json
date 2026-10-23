@@ -1,3 +1,6 @@
 {
-  "parent": "compiledcircuits:block/xnor_gate"
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "compiledcircuits:item/xnor_gate"
+  }
 }

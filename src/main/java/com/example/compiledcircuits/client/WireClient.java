@@ -55,7 +55,8 @@ public final class WireClient {
             event.register((state, level, pos, tint) -> level != null && pos != null && level.getBlockEntity(pos) instanceof IdWireEntity wire ? color(wire.wireId(), wire.color()) : WireIds.RED, ModBlocks.ID_WIRE.get());
         }
         @SubscribeEvent public static void items(RegisterColorHandlersEvent.Item event) {
-            event.register((stack, tint) -> color(IdWireItem.id(stack), IdWireItem.color(stack)), ModItems.ID_WIRE.get());
+            // Only the insulation is tinted; the second layer keeps copper and the ID tag neutral.
+            event.register((stack, tint) -> tint == 0 ? color(IdWireItem.id(stack), IdWireItem.color(stack)) : -1, ModItems.ID_WIRE.get());
         }
     }
 }

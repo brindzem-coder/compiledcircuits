@@ -1,3 +1,6 @@
 {
-  "parent": "compiledcircuits:block/basic_wire_center"
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "compiledcircuits:item/basic_wire"
+  }
 }

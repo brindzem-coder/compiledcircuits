@@ -1,12 +1,6 @@
 {
-  "parent": "minecraft:block/cube",
+  "parent": "minecraft:item/generated",
   "textures": {
-    "down": "minecraft:block/white_concrete",
-    "up": "minecraft:block/white_concrete",
-    "north": "minecraft:block/gray_concrete",
-    "south": "minecraft:block/gray_concrete",
-    "west": "minecraft:block/white_concrete",
-    "east": "minecraft:block/white_concrete",
-    "particle": "minecraft:block/gray_concrete"
+    "layer0": "compiledcircuits:item/gate_separator"
   }
 }

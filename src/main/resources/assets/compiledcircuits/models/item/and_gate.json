@@ -1,3 +1,6 @@
 {
-  "parent": "compiledcircuits:block/and_gate"
+  "parent": "minecraft:item/generated",
+  "textures": {
+    "layer0": "compiledcircuits:item/and_gate"
+  }
 }
