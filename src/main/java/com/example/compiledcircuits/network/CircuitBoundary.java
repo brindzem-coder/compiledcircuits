@@ -30,8 +30,11 @@ public final class CircuitBoundary {
         }
     }
     private static void queueWire(ServerLevel level, BlockPos pos) {
-        if (level.hasChunkAt(pos) && level.getBlockState(pos).getBlock() instanceof com.example.compiledcircuits.block.BasicWireBlock wire)
-            level.scheduleTick(pos,wire,1);
+        if (!level.hasChunkAt(pos)) return;
+        var block = level.getBlockState(pos).getBlock();
+        if (block instanceof com.example.compiledcircuits.block.BasicWireBlock
+                || block instanceof com.example.compiledcircuits.block.RedstoneEndpointBlock)
+            level.scheduleTick(pos,block,1);
     }
     public static void refreshWire(ServerLevel level, BlockPos pos) {
         if (!uncompiled(NetworkSavedData.get(level.getServer()),level.dimension().location().toString(),pos)) return;

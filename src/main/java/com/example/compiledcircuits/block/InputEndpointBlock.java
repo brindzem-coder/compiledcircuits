@@ -8,7 +8,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
 public class InputEndpointBlock
-        extends EndpointBlock {
+        extends RedstoneEndpointBlock {
 
     public InputEndpointBlock(
             Properties properties

@@ -7,6 +7,9 @@ public final class CompiledBlockStateMatcher {
     private CompiledBlockStateMatcher() {}
     public static boolean liveSignalChange(BlockState before, BlockState after) {
         if (!before.is(after.getBlock())) return false;
+        if (before.getBlock() instanceof com.example.compiledcircuits.block.RedstoneEndpointBlock)
+            return com.example.compiledcircuits.block.RedstoneEndpointBlock.withoutArms(before)
+                    .equals(com.example.compiledcircuits.block.RedstoneEndpointBlock.withoutArms(after));
         if (before.getBlock() instanceof com.example.compiledcircuits.block.SignalSwitchBlock)
             return before.setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.POWERED,
                     after.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.POWERED)).equals(after);
@@ -53,6 +56,10 @@ public final class CompiledBlockStateMatcher {
             return Match.MATCH;
         }
         if (!element.getBlockId().equals(BuiltInRegistries.BLOCK.getKey(actual.getBlock()).toString())) return Match.BLOCK_MISMATCH;
+        if (saved != null && actual.getBlock() instanceof com.example.compiledcircuits.block.RedstoneEndpointBlock) {
+            saved = com.example.compiledcircuits.block.RedstoneEndpointBlock.withoutArms(saved);
+            actual = com.example.compiledcircuits.block.RedstoneEndpointBlock.withoutArms(actual);
+        }
         // Live input/output values are not compiled topology, even in exact mode.
         if (saved != null && actual.getBlock() instanceof com.example.compiledcircuits.block.SignalSwitchBlock)
             actual = actual.setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.POWERED,
@@ -63,7 +70,7 @@ public final class CompiledBlockStateMatcher {
         boolean functionalState = actual.getBlock() instanceof com.example.compiledcircuits.block.BundlePortBlock || actual.getBlock() instanceof com.example.compiledcircuits.block.NetworkWireBlock || actual.getBlock() instanceof com.example.compiledcircuits.block.NotGateBlock
                 || actual.getBlock() instanceof com.example.compiledcircuits.block.DLatchBlock
                 || actual.getBlock() instanceof com.example.compiledcircuits.block.GateBodyBlock;
-        if ((exact || functionalState) && decoded.status() == CompiledBlockStateCodec.Status.EXACT && !decoded.state().orElseThrow().equals(actual)) return Match.STATE_MISMATCH;
+        if ((exact || functionalState) && decoded.status() == CompiledBlockStateCodec.Status.EXACT && !saved.equals(actual)) return Match.STATE_MISMATCH;
         return Match.MATCH;
     }
 }

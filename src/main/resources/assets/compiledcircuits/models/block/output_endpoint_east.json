@@ -1,0 +1,40 @@
+{
+  "textures": {
+    "wire": "compiledcircuits:block/output_endpoint",
+    "particle": "compiledcircuits:block/output_endpoint"
+  },
+  "elements": [
+    {
+      "from": [
+        11,
+        5,
+        5
+      ],
+      "to": [
+        16,
+        11,
+        11
+      ],
+      "faces": {
+        "down": {
+          "texture": "#wire"
+        },
+        "up": {
+          "texture": "#wire"
+        },
+        "north": {
+          "texture": "#wire"
+        },
+        "south": {
+          "texture": "#wire"
+        },
+        "west": {
+          "texture": "#wire"
+        },
+        "east": {
+          "texture": "#wire"
+        }
+      }
+    }
+  ]
+}

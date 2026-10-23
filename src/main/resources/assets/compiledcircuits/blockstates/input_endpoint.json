@@ -1,27 +1,57 @@
 {
-  "variants": {
-    "facing=north": {
-      "model": "compiledcircuits:block/input_endpoint"
+  "multipart": [
+    {
+      "apply": {
+        "model": "compiledcircuits:block/input_endpoint"
+      }
     },
-    "facing=south": {
-      "model": "compiledcircuits:block/input_endpoint",
-      "y": 180
+    {
+      "apply": {
+        "model": "compiledcircuits:block/input_endpoint_north"
+      },
+      "when": {
+        "north": "true"
+      }
     },
-    "facing=east": {
-      "model": "compiledcircuits:block/input_endpoint",
-      "y": 90
+    {
+      "apply": {
+        "model": "compiledcircuits:block/input_endpoint_south"
+      },
+      "when": {
+        "south": "true"
+      }
     },
-    "facing=west": {
-      "model": "compiledcircuits:block/input_endpoint",
-      "y": 270
+    {
+      "apply": {
+        "model": "compiledcircuits:block/input_endpoint_east"
+      },
+      "when": {
+        "east": "true"
+      }
     },
-    "facing=up": {
-      "model": "compiledcircuits:block/input_endpoint",
-      "x": 270
+    {
+      "apply": {
+        "model": "compiledcircuits:block/input_endpoint_west"
+      },
+      "when": {
+        "west": "true"
+      }
     },
-    "facing=down": {
-      "model": "compiledcircuits:block/input_endpoint",
-      "x": 90
+    {
+      "apply": {
+        "model": "compiledcircuits:block/input_endpoint_up"
+      },
+      "when": {
+        "up": "true"
+      }
+    },
+    {
+      "apply": {
+        "model": "compiledcircuits:block/input_endpoint_down"
+      },
+      "when": {
+        "down": "true"
+      }
     }
-  }
+  ]
 }

@@ -66,7 +66,10 @@ public final class CompiledBlockStateCodec {
         // Before surface ports, gate bodies had an explicitly empty property schema.
         if (properties.isEmpty() && state.getBlock() instanceof com.example.compiledcircuits.block.GateBodyBlock)
             return new DecodeResult(Status.EXACT, Optional.of(state), "Migrated portless gate body");
-        if (properties.size() > 64 || properties.size() != state.getProperties().size()) return invalid("Incomplete property schema");
+        // Older redstone endpoints stored only facing; their new arms are derived visual state.
+        boolean oldEndpoint = state.getBlock() instanceof com.example.compiledcircuits.block.RedstoneEndpointBlock
+                && properties.size() == 1 && properties.contains("facing", Tag.TAG_STRING);
+        if (properties.size() > 64 || !oldEndpoint && properties.size() != state.getProperties().size()) return invalid("Incomplete property schema");
         for (String key : properties.getAllKeys()) {
             if (key.length() > 128 || !properties.contains(key, Tag.TAG_STRING) || properties.getString(key).length() > 128) {
                 return invalid("Invalid property type/length: " + key);

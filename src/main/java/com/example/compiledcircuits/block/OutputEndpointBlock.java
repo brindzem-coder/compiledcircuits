@@ -9,7 +9,7 @@ import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.state.BlockState;
 
 public class OutputEndpointBlock
-        extends EndpointBlock {
+        extends RedstoneEndpointBlock {
 
     public OutputEndpointBlock(
             Properties properties
