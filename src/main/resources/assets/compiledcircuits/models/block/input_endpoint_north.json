@@ -1,7 +1,7 @@
 {
   "textures": {
-    "wire": "compiledcircuits:block/input_endpoint",
-    "particle": "compiledcircuits:block/input_endpoint"
+    "wire": "compiledcircuits:block/redstone_input_insulation",
+    "particle": "compiledcircuits:block/redstone_input_insulation"
   },
   "elements": [
     {
