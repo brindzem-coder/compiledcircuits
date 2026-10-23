@@ -2,6 +2,7 @@ package com.example.compiledcircuits;
 
 import com.example.compiledcircuits.registry.ModBlocks;
 import com.example.compiledcircuits.registry.ModItems;
+import com.example.compiledcircuits.registry.ModCreativeTabs;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
@@ -22,6 +23,7 @@ public class CompiledCircuits {
         ModBlocks.register(modEventBus);
         com.example.compiledcircuits.registry.ModBlockEntities.TYPES.register(modEventBus);
         ModItems.register(modEventBus);
+        ModCreativeTabs.register(modEventBus);
 
         ModNetworking.register();
     }

@@ -1,4 +1,5 @@
 {
+  "itemGroup.compiledcircuits": "Compiled Circuits",
   "block.compiledcircuits.basic_wire": "Basic Wire",
   "block.compiledcircuits.input_endpoint": "Input Endpoint",
   "block.compiledcircuits.output_endpoint": "Output Endpoint",
