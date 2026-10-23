@@ -47,6 +47,8 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.NETWORK_OUTPUT.get());
                         output.accept(ModItems.SIGNAL_SWITCH.get());
                         output.accept(ModItems.SIGNAL_LAMP.get());
+                        output.accept(ModItems.SWITCH_OUTPUT.get());
+                        output.accept(ModItems.LAMP_INPUT.get());
 
                         // Tools.
                         output.accept(ModItems.NETWORK_SELECTOR.get());

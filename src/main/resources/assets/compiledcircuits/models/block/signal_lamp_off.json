@@ -1,5 +1,5 @@
 {
-  "parent": "minecraft:block/cube_all",
+  "parent": "compiledcircuits:block/signal_lamp_frame",
   "textures": {
     "all": "compiledcircuits:block/signal_lamp_off"
   }

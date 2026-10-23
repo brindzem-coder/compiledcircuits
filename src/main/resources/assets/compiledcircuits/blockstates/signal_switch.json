@@ -1,10 +1,68 @@
 {
-  "variants": {
-    "powered=false": {
-      "model": "compiledcircuits:block/signal_switch_0"
+  "multipart": [
+    {
+      "when": {
+        "powered": "false"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/signal_switch_0"
+      }
     },
-    "powered=true": {
-      "model": "compiledcircuits:block/signal_switch_1"
+    {
+      "when": {
+        "powered": "true"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/signal_switch_1"
+      }
+    },
+    {
+      "when": {
+        "down": "true"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/gate_face_down_2"
+      }
+    },
+    {
+      "when": {
+        "up": "true"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/gate_face_up_2"
+      }
+    },
+    {
+      "when": {
+        "north": "true"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/gate_face_north_2"
+      }
+    },
+    {
+      "when": {
+        "south": "true"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/gate_face_south_2"
+      }
+    },
+    {
+      "when": {
+        "west": "true"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/gate_face_west_2"
+      }
+    },
+    {
+      "when": {
+        "east": "true"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/gate_face_east_2"
+      }
     }
-  }
+  ]
 }

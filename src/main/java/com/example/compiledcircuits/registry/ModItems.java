@@ -18,6 +18,9 @@ public class ModItems {
     public static final RegistryObject<Item> SIGNAL_SWITCH = ITEMS.register("signal_switch", () -> new BlockItem(ModBlocks.SIGNAL_SWITCH.get(), new Item.Properties()));
     public static final RegistryObject<Item> SIGNAL_LAMP = ITEMS.register("signal_lamp", () -> new BlockItem(ModBlocks.SIGNAL_LAMP.get(), new Item.Properties()));
 
+    public static final RegistryObject<Item> SWITCH_OUTPUT = ITEMS.register("switch_output", () -> new com.example.compiledcircuits.item.SignalFacePortItem(new Item.Properties(), false));
+    public static final RegistryObject<Item> LAMP_INPUT = ITEMS.register("lamp_input", () -> new com.example.compiledcircuits.item.SignalFacePortItem(new Item.Properties(), true));
+
     public static final RegistryObject<Item> AND_GATE = ITEMS.register("and_gate",
             () -> new BlockItem(ModBlocks.AND_GATE.get(), new Item.Properties()));
     public static final RegistryObject<Item> OR_GATE = ITEMS.register("or_gate",

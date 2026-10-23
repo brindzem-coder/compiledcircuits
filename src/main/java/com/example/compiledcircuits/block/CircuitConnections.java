@@ -30,6 +30,14 @@ public final class CircuitConnections {
         if (b.getBlock() instanceof BundlePortBlock) return structural(b, a, side.getOpposite());
         if(a.getBlock() instanceof NetworkWireBlock && NetworkWireBlock.face(a,side)>=2
                 || b.getBlock() instanceof NetworkWireBlock && NetworkWireBlock.face(b,side.getOpposite())>=2)return false;
+        if (SignalPorts.isControl(a) || SignalPorts.isControl(b)) {
+            if (SignalPorts.isControl(a) && SignalPorts.isControl(b)) return false;
+            BlockState control = SignalPorts.isControl(a) ? a : b;
+            BlockState wire = SignalPorts.isControl(a) ? b : a;
+            Direction face = SignalPorts.isControl(a) ? side : side.getOpposite();
+            return wire.getBlock() instanceof BasicWireBlock && SignalPorts.has(control, face)
+                    && ((IWireConnectable) wire.getBlock()).canWireConnect(wire, face.getOpposite());
+        }
         if (a.getBlock() instanceof GateBodyBlock body) {
             return b.getBlock() instanceof GateBodyBlock other && body.kind() == other.kind() && GateBodyBlock.port(a, side) != 3 && GateBodyBlock.port(b, side.getOpposite()) != 3
                     || b.getBlock() instanceof GatePortBlock
@@ -44,15 +52,17 @@ public final class CircuitConnections {
         return true;
     }
     public static boolean isTerminal(BlockState state) {
-        return state.getBlock() instanceof GatePortBlock || state.getBlock() instanceof NotGateBlock
+        return SignalPorts.isControl(state) || state.getBlock() instanceof GatePortBlock || state.getBlock() instanceof NotGateBlock
                 || state.getBlock() instanceof DLatchBlock;
     }
     public static boolean sends(BlockState state, Direction side) {
+        if (SignalPorts.isControl(state)) return state.getBlock() instanceof SignalSwitchBlock && SignalPorts.has(state, side);
         if (state.getBlock() instanceof GatePortBlock port) return !port.isInput();
         return (state.getBlock() instanceof NotGateBlock || state.getBlock() instanceof DLatchBlock)
                 && state.getValue(EndpointBlock.FACING) == side;
     }
     public static boolean receives(BlockState state, Direction side) {
+        if (SignalPorts.isControl(state)) return state.getBlock() instanceof SignalLampBlock && SignalPorts.has(state, side);
         if (state.getBlock() instanceof GatePortBlock port) return port.isInput();
         if (state.getBlock() instanceof DLatchBlock)
             return state.getValue(EndpointBlock.FACING).getOpposite() == side || DLatchBlock.enableSide(state) == side;

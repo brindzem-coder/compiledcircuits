@@ -543,6 +543,10 @@ public final class LogicProgram {
             } else if (state.getBlock() instanceof NotGateBlock) {
                 int input = add(nodes, Op.OR, pos), output = add(nodes, Op.NOT, pos);
                 sink.put(pos, input); source.put(pos, output); edge(nodes, input, output);
+            } else if (state.getBlock() instanceof SignalSwitchBlock) {
+                int id = add(nodes, Op.OR, pos); source.put(pos, id); inputs.put(pos, id);
+            } else if (state.getBlock() instanceof SignalLampBlock) {
+                int id = add(nodes, Op.OR, pos); sink.put(pos, id); outputs.put(pos, id);
             } else if (!(state.getBlock() instanceof GateBodyBlock)) {
                 int id = component.get(pos);
                 source.put(pos, id); sink.put(pos, id);

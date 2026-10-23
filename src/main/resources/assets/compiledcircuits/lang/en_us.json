@@ -65,5 +65,7 @@
   "key.compiledcircuits.table_status": "Truth table status",
   "key.categories.compiledcircuits": "Compiled Circuits",
   "screen.compiledcircuits.rename": "Rename circuit",
-  "screen.compiledcircuits.rename.submit": "Rename"
+  "screen.compiledcircuits.rename.submit": "Rename",
+  "item.compiledcircuits.switch_output": "Switch Output",
+  "item.compiledcircuits.lamp_input": "Signal Lamp Input"
 }

@@ -65,5 +65,7 @@
   "key.compiledcircuits.table_status": "Стан таблиці істинності",
   "key.categories.compiledcircuits": "Compiled Circuits",
   "screen.compiledcircuits.rename": "Перейменувати мережу",
-  "screen.compiledcircuits.rename.submit": "Перейменувати"
+  "screen.compiledcircuits.rename.submit": "Перейменувати",
+  "item.compiledcircuits.switch_output": "Вихід перемикача",
+  "item.compiledcircuits.lamp_input": "Вхід сигнальної лампи"
 }

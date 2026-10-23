@@ -14,12 +14,19 @@ public final class SignalSwitchBlock extends InputEndpointBlock {
     public SignalSwitchBlock(Properties properties) {
         super(properties); registerDefaultState(defaultBlockState().setValue(BlockStateProperties.POWERED, false));
     }
+    @Override public boolean canWireConnect(BlockState state, net.minecraft.core.Direction side) { return SignalPorts.has(state, side); }
+    @Override public BlockState getStateForPlacement(net.minecraft.world.item.context.BlockPlaceContext context) {
+        return defaultBlockState().setValue(FACING, context.getNearestLookingDirection());
+    }
+    @Override public BlockState updateShape(BlockState state, net.minecraft.core.Direction side, BlockState neighbor,
+            net.minecraft.world.level.LevelAccessor level, BlockPos pos, BlockPos other) { return state; }
     @Override protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
         super.createBlockStateDefinition(builder); builder.add(BlockStateProperties.POWERED);
     }
     @Override public net.minecraft.world.InteractionResult use(BlockState state, Level level, BlockPos pos,
             net.minecraft.world.entity.player.Player player, net.minecraft.world.InteractionHand hand,
             net.minecraft.world.phys.BlockHitResult hit) {
+        if (player.getItemInHand(hand).getItem() instanceof com.example.compiledcircuits.item.SignalFacePortItem) return net.minecraft.world.InteractionResult.PASS;
         if (player.isSpectator() || !player.mayBuild()) return net.minecraft.world.InteractionResult.FAIL;
         if (level instanceof ServerLevel server) {
             if (!server.mayInteract(player, pos)) return net.minecraft.world.InteractionResult.FAIL;

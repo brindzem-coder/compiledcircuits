@@ -13,6 +13,12 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 
 /** A light-emitting compiled output, without redstone feedback into neighboring inputs. */
 public final class SignalLampBlock extends OutputEndpointBlock implements net.minecraft.world.level.block.EntityBlock {
+    @Override public boolean canWireConnect(BlockState state, net.minecraft.core.Direction side) { return SignalPorts.has(state, side); }
+    @Override public BlockState getStateForPlacement(net.minecraft.world.item.context.BlockPlaceContext context) {
+        return defaultBlockState().setValue(FACING, context.getNearestLookingDirection());
+    }
+    @Override public BlockState updateShape(BlockState state, net.minecraft.core.Direction side, BlockState neighbor,
+            net.minecraft.world.level.LevelAccessor level, BlockPos pos, BlockPos other) { return state; }
     @Override public net.minecraft.world.level.block.entity.BlockEntity newBlockEntity(BlockPos pos, BlockState state) { return new SignalLampEntity(pos, state); }
     public SignalLampBlock(Properties properties) {
         super(properties); registerDefaultState(defaultBlockState().setValue(BlockStateProperties.LIT, false));

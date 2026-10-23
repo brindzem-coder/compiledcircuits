@@ -13,9 +13,9 @@ import java.util.*;
 public class BlueprintGameTests {
     static CompiledNetwork source() {
         var a=new BlockPos(0,3,0);var b=a.east();var c=b.above();
-        var input=new CompiledCircuitElement(1,a,CircuitElementType.INPUT,CompiledBlockStateCodec.capture(ModBlocks.SIGNAL_SWITCH.get().defaultBlockState().setValue(BlockStateProperties.POWERED,true)));
+        var input=new CompiledCircuitElement(1,a,CircuitElementType.INPUT,CompiledBlockStateCodec.capture(SignalPorts.with(ModBlocks.SIGNAL_SWITCH.get().defaultBlockState().setValue(BlockStateProperties.POWERED,true),Direction.EAST,true)));
         var wire=new CompiledCircuitElement(2,b,CircuitElementType.WIRE,CompiledBlockStateCodec.capture(NetworkWireBlock.withFace(NetworkWireBlock.withFace(ModBlocks.ID_WIRE.get().defaultBlockState(),Direction.WEST,1),Direction.UP,1))).save();wire.putString("wireId","42");wire.putInt("wireColor",0x123456);
-        var output=new CompiledCircuitElement(3,c,CircuitElementType.OUTPUT,CompiledBlockStateCodec.capture(ModBlocks.SIGNAL_LAMP.get().defaultBlockState()));
+        var output=new CompiledCircuitElement(3,c,CircuitElementType.OUTPUT,CompiledBlockStateCodec.capture(SignalPorts.with(ModBlocks.SIGNAL_LAMP.get().defaultBlockState(),Direction.DOWN,true)));
         var n=new CompiledNetwork(1,"blueprint source",0,"minecraft:overworld",List.of(input,CompiledCircuitElement.load(wire),output));n.restoreLogic();
         var builder=new NetworkTruthTable.Builder(LogicProgram.compileFaces(n.tableStates(),n.wireIds(),n.bundleFaces()));while(!builder.step()){}n.setNetworkTable(builder.finish());n.enableOptimization();return n;
     }

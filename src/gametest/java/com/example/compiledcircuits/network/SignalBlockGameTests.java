@@ -19,8 +19,8 @@ public class SignalBlockGameTests {
         var output=ModBlocks.SIGNAL_LAMP.get().defaultBlockState();
         h.assertTrue(!input.getValue(BlockStateProperties.POWERED)&&!output.getValue(BlockStateProperties.LIT),"new blocks default to LOW");
         for(var side:Direction.values()) for(var wire:List.of(ModBlocks.BASIC_WIRE.get(),ModBlocks.ID_WIRE.get())) {
-            h.assertTrue(CircuitConnections.connects(input,"0",wire.defaultBlockState(),"42",side),"switch accepts either wire on all sides");
-            h.assertTrue(CircuitConnections.connects(output,"0",wire.defaultBlockState(),"42",side),"lamp accepts either wire on all sides");
+            h.assertTrue(CircuitConnections.connects(SignalPorts.with(input,side,true),"0",wire.defaultBlockState(),"42",side),"switch accepts either wire on all sides");
+            h.assertTrue(CircuitConnections.connects(SignalPorts.with(output,side,true),"0",wire.defaultBlockState(),"42",side),"lamp accepts either wire on all sides");
         }
         for(var pair:List.of(Map.entry(input,CircuitElementType.INPUT),Map.entry(output,CircuitElementType.OUTPUT))) {
             var state=pair.getKey();var element=new CompiledCircuitElement(1,BlockPos.ZERO,pair.getValue(),CompiledBlockStateCodec.capture(state));
@@ -28,12 +28,42 @@ public class SignalBlockGameTests {
             h.assertTrue(CompiledBlockStateMatcher.liveSignalChange(state,changed),"signal toggle is not a topology mutation");
             h.assertTrue(CompiledBlockStateMatcher.liveSignalChange(changed,state),"signal toggle off is not a topology mutation");
             var withArm=changed.setValue(RedstoneEndpointBlock.connectionProperty(Direction.NORTH),true);
-            h.assertTrue(CompiledBlockStateMatcher.liveSignalChange(state,withArm),"signal and derived arm changes are not topology mutations");
+            h.assertTrue(!CompiledBlockStateMatcher.liveSignalChange(state,withArm),"port edits change topology");
+            h.assertTrue(CompiledBlockStateMatcher.match(element,withArm,false)==CompiledBlockStateMatcher.Match.STATE_MISMATCH,"port edits invalidate even non-exact snapshots");
             h.assertTrue(!CompiledBlockStateMatcher.liveSignalChange(state,Blocks.AIR.defaultBlockState()),"removing a signal block is a topology mutation");
             h.assertTrue(CompiledBlockStateMatcher.match(CompiledCircuitElement.load(element.save()),changed,true)==CompiledBlockStateMatcher.Match.MATCH,"live signal survives save/load and exact integrity checks");
             h.assertTrue(state.getShape(h.getLevel(),BlockPos.ZERO).bounds().getSize()==1,"full cube outline");
         }
         h.assertTrue(output.setValue(BlockStateProperties.LIT,true).getLightEmission()==15&&output.getLightEmission()==0,"lamp light level follows its state");
+        for (var side:Direction.values()) {
+            h.assertTrue(!CircuitConnections.connects(input,ModBlocks.BASIC_WIRE.get().defaultBlockState(),side),"bare switch does not connect");
+            h.assertTrue(!CircuitConnections.connects(output,ModBlocks.BASIC_WIRE.get().defaultBlockState(),side),"bare lamp does not connect");
+            for(var left:List.of(input,output)) for(var right:List.of(input,output)) {
+                h.assertTrue(!CircuitConnections.connects(SignalPorts.with(left,side,true),SignalPorts.with(right,side.getOpposite(),true),side),"controls never connect directly");
+            }
+        }
+        h.succeed();
+    }
+    @GameTest(template="empty",batch="signal_ports")
+    public static void controlsAreDirectedTerminals(GameTestHelper h) {
+        var west=new BlockPos(-1,0,0); var east=new BlockPos(1,0,0);
+        var drive=new BlockPos(-2,0,0); var probe=new BlockPos(2,0,0);
+        for(var block:List.of(ModBlocks.SIGNAL_SWITCH.get(),ModBlocks.SIGNAL_LAMP.get())) {
+            var control=SignalPorts.with(SignalPorts.with(block.defaultBlockState(),Direction.WEST,true),Direction.EAST,true);
+            var states=new HashMap<BlockPos,BlockState>();
+            states.put(BlockPos.ZERO,control);
+            states.put(west,ModBlocks.BASIC_WIRE.get().defaultBlockState());
+            states.put(east,ModBlocks.BASIC_WIRE.get().defaultBlockState());
+            states.put(drive,ModBlocks.INPUT_ENDPOINT.get().defaultBlockState());
+            states.put(probe,ModBlocks.OUTPUT_ENDPOINT.get().defaultBlockState());
+            var program=LogicProgram.compile(states);
+            var result=program.evaluate(Map.of(drive,true,BlockPos.ZERO,false));
+            h.assertTrue(!result.getOrDefault(probe,false),"control never bridges wire buses");
+            if(block instanceof SignalSwitchBlock) {
+                result=program.evaluate(Map.of(drive,false,BlockPos.ZERO,true));
+                h.assertTrue(result.getOrDefault(probe,false),"switch drives its output port");
+            } else h.assertTrue(result.getOrDefault(BlockPos.ZERO,false),"lamp receives its input");
+        }
         h.succeed();
     }
     @GameTest(template="empty",batch="signal_blocks_world",timeoutTicks=500)
@@ -42,7 +72,8 @@ public class SignalBlockGameTests {
         server.overworld().getDataStorage().set("compiledcircuits_networks",data);
         var player=new net.minecraftforge.common.util.FakePlayer(level,new com.mojang.authlib.GameProfile(UUID.randomUUID(),"signal-blocks"));player.getAbilities().mayBuild=true;
         var input=h.absolutePos(new BlockPos(2,4,2));var basic=input.east();var id=basic.east();var lamp=id.east();
-        var positions=List.of(input,basic,id,lamp,input.below());
+        var isolated=input.north();
+        var positions=List.of(input,basic,id,lamp,input.below(),isolated);
         Map<BlockPos,BlockState> old=new LinkedHashMap<>();Set<Long> forced=new HashSet<>();
         Runnable cleanup=()->{
             CompilationJobs.stop(server);NetworkOperations.forget(player);
@@ -58,10 +89,20 @@ public class SignalBlockGameTests {
             }
             for(var pos:positions)old.put(pos,level.getBlockState(pos));
             level.setBlock(input,ModBlocks.SIGNAL_SWITCH.get().defaultBlockState(),3);
+            var tool=new net.minecraft.world.item.ItemStack(ModItems.SWITCH_OUTPUT.get());
+            player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND,tool);
+            var hit=new net.minecraft.world.phys.BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(input),Direction.EAST,input,false);
+            h.assertTrue(level.getBlockState(input).use(level,player,net.minecraft.world.InteractionHand.MAIN_HAND,hit)==net.minecraft.world.InteractionResult.PASS,"switch lets port tool handle click");
+            var context=new net.minecraft.world.item.context.UseOnContext(player,net.minecraft.world.InteractionHand.MAIN_HAND,hit);
+            tool.useOn(context); h.assertTrue(SignalPorts.has(level.getBlockState(input),Direction.EAST),"tool installs port");
+            tool.useOn(context); h.assertTrue(!SignalPorts.has(level.getBlockState(input),Direction.EAST),"tool removes port");
+            tool.useOn(context);
+            player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND,net.minecraft.world.item.ItemStack.EMPTY);
+            level.setBlock(isolated,SignalPorts.with(ModBlocks.SIGNAL_SWITCH.get().defaultBlockState(),Direction.SOUTH,true),3);
             level.setBlock(input.below(),Blocks.REDSTONE_BLOCK.defaultBlockState(),3);
             level.setBlock(basic,ModBlocks.BASIC_WIRE.get().defaultBlockState(),3);
             level.setBlock(id,ModBlocks.ID_WIRE.get().defaultBlockState(),3);((IdWireEntity)level.getBlockEntity(id)).configure("42",0xff0000);
-            level.setBlock(lamp,ModBlocks.SIGNAL_LAMP.get().defaultBlockState(),3);
+            level.setBlock(lamp,SignalPorts.with(ModBlocks.SIGNAL_LAMP.get().defaultBlockState(),Direction.WEST,true),3);
             new Runnable(){int phase,attempts;CompiledNetwork network;
                 void toggle(){var result=level.getBlockState(input).use(level,player,net.minecraft.world.InteractionHand.MAIN_HAND,new net.minecraft.world.phys.BlockHitResult(net.minecraft.world.phys.Vec3.atCenterOf(input),Direction.UP,input,false));h.assertTrue(result.consumesAction(),"switch click accepted: "+result);}
                 boolean lit(){return level.getBlockState(lamp).getValue(BlockStateProperties.LIT);}
@@ -76,6 +117,7 @@ public class SignalBlockGameTests {
                         network=data.findNetworkContaining(level,input);
                         if(network==null||!network.getRuntimeStatus().equals("READY")){h.runAfterDelay(1,()->run());return;}
                         h.assertTrue(network.getElements().size()==4,"compiler includes switch, both wires and lamp");
+                        h.assertTrue(data.findNetworkContaining(level,isolated)==null,"adjacent switch is not selected for compilation");
                         h.assertTrue(new RuntimeSignalReader(level).readInput(input)==0&&!lit(),"redstone next to OFF switch cannot power the circuit");
                         toggle();phase=2;
                     }else if(phase==2){
