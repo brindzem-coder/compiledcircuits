@@ -40,6 +40,11 @@ public final class ClientPacketHandlers {
                 name -> ModNetworking.CHANNEL.sendToServer(new CompileNamedC2SPacket(name)), 64));
     }
 
+    public static void openRenameScreen(com.example.compiledcircuits.networking.OpenRenameS2CPacket packet,
+                                        net.minecraft.network.Connection sender) {
+        if (currentConnection(sender)) Minecraft.getInstance().setScreen(new RenameNetworkScreen(packet.id(), packet.name(), sender));
+    }
+
     private static boolean currentConnection(net.minecraft.network.Connection sender) {
         var connection = Minecraft.getInstance().getConnection();
         return connection != null && connection.getConnection() == sender;

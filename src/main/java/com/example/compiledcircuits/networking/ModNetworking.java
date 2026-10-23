@@ -8,7 +8,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 
 public final class ModNetworking {
 
-    private static final String PROTOCOL_VERSION = "21";
+    private static final String PROTOCOL_VERSION = "22";
 
     public static final SimpleChannel CHANNEL =
             NetworkRegistry.ChannelBuilder
@@ -33,6 +33,9 @@ public final class ModNetworking {
     }
 
     public static void register() {
+        CHANNEL.registerMessage(packetId++, OpenRenameS2CPacket.class, OpenRenameS2CPacket::encode,
+                OpenRenameS2CPacket::decode, OpenRenameS2CPacket::handle,
+                java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));
         CHANNEL.registerMessage(packetId++, BlueprintRequestC2SPacket.class, BlueprintRequestC2SPacket::encode, BlueprintRequestC2SPacket::decode, BlueprintRequestC2SPacket::handle, java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER));
         CHANNEL.registerMessage(packetId++, BlueprintPlaceC2SPacket.class, BlueprintPlaceC2SPacket::encode, BlueprintPlaceC2SPacket::decode, BlueprintPlaceC2SPacket::handle, java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER));
         CHANNEL.registerMessage(packetId++, BlueprintPreviewS2CPacket.class, BlueprintPreviewS2CPacket::encode, BlueprintPreviewS2CPacket::decode, BlueprintPreviewS2CPacket::handle, java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));

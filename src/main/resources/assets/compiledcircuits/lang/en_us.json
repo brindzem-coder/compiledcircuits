@@ -51,5 +51,18 @@
   "blueprint.compiledcircuits.hint": "Hold + Shift-right-click: copy. Right-click: paste.",
   "blueprint.compiledcircuits.controls": "R: rotate | F: lock/unlock | Arrows: X/Z | PgUp/PgDn: Y | RMB: paste | Esc: cancel",
   "blueprint.compiledcircuits.cancelled": "Preview cancelled. F: resume",
-  "gui.compiledcircuits.teleport": "Teleport"
+  "gui.compiledcircuits.teleport": "Teleport",
+  "key.compiledcircuits.compile": "Compile selected circuit",
+  "key.compiledcircuits.compile_named": "Compile with name",
+  "key.compiledcircuits.decompile": "Decompile selected circuit",
+  "key.compiledcircuits.gui": "Open circuit manager",
+  "key.compiledcircuits.open_selected": "Open selected circuit",
+  "key.compiledcircuits.rename": "Rename selected circuit",
+  "key.compiledcircuits.optimize": "Optimize selected circuit",
+  "key.compiledcircuits.table_create": "Create truth table",
+  "key.compiledcircuits.table_remove": "Remove truth table",
+  "key.compiledcircuits.table_status": "Truth table status",
+  "key.categories.compiledcircuits": "Compiled Circuits",
+  "screen.compiledcircuits.rename": "Rename circuit",
+  "screen.compiledcircuits.rename.submit": "Rename"
 }

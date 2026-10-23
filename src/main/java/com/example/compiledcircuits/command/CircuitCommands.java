@@ -108,6 +108,7 @@ public final class CircuitCommands {
                         )
                         .then(
                                 Commands.literal("rename")
+                                        .executes(context -> openRenameSelected(context.getSource()))
                                         .then(
                                                 Commands.argument(
                                                                 "id",
@@ -200,6 +201,19 @@ public final class CircuitCommands {
         var result = request(source,NetworkOperations.Action.SELECTED,List.of(),0,"");
         if (!result.success()) return NetworkOperations.reply(source,result);
         NetworkGuiSync.sendListAndNavigate((ServerPlayer)source.getEntity(),result.networks().get(0).getId());
+        return 1;
+    }
+    private static int openRenameSelected(CommandSourceStack source) {
+        var result = request(source, NetworkOperations.Action.SELECTED, List.of(), 0, "");
+        if (!result.success()) return NetworkOperations.reply(source, result);
+        var player = (ServerPlayer) source.getEntity();
+        if (!NetworkOperations.canModify(player)) {
+            source.sendFailure(Component.literal("Building is not allowed for this player."));
+            return 0;
+        }
+        var network = result.networks().get(0);
+        ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                new com.example.compiledcircuits.networking.OpenRenameS2CPacket(network.getId(), network.getName()));
         return 1;
     }
     private static int debugElements(CommandSourceStack source) {

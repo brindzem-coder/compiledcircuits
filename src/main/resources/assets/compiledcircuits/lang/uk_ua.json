@@ -51,5 +51,18 @@
   "blueprint.compiledcircuits.hint": "Shift + ПКМ з інструментом: копіювати. ПКМ: вставити.",
   "blueprint.compiledcircuits.controls": "R: поворот | F: фіксація | Стрілки: X/Z | PgUp/PgDn: Y | ПКМ: вставити | Esc: скасувати",
   "blueprint.compiledcircuits.cancelled": "Прев’ю скасовано. F: відновити",
-  "gui.compiledcircuits.teleport": "Телепорт"
+  "gui.compiledcircuits.teleport": "Телепорт",
+  "key.compiledcircuits.compile": "Скомпілювати вибрану мережу",
+  "key.compiledcircuits.compile_named": "Скомпілювати з назвою",
+  "key.compiledcircuits.decompile": "Декомпілювати вибрану мережу",
+  "key.compiledcircuits.gui": "Відкрити менеджер мереж",
+  "key.compiledcircuits.open_selected": "Відкрити вибрану мережу",
+  "key.compiledcircuits.rename": "Перейменувати вибрану мережу",
+  "key.compiledcircuits.optimize": "Оптимізувати вибрану мережу",
+  "key.compiledcircuits.table_create": "Створити таблицю істинності",
+  "key.compiledcircuits.table_remove": "Видалити таблицю істинності",
+  "key.compiledcircuits.table_status": "Стан таблиці істинності",
+  "key.categories.compiledcircuits": "Compiled Circuits",
+  "screen.compiledcircuits.rename": "Перейменувати мережу",
+  "screen.compiledcircuits.rename.submit": "Перейменувати"
 }
