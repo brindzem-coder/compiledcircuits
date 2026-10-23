@@ -329,10 +329,24 @@ public class CompilationGameTests {
                     h.assertTrue(metric("scan.queuePops")==100002 && metric("scan.visited")==100002,"cycle frontier deduplicated on enqueue");
                     h.assertTrue(metric("scan.job.tickWork")<=2048 && metric("scan.tickWork")<=8192
                             && metric("scan.retainedElements.peak")<=CompilationJobs.MAX_TOTAL_ELEMENTS,"maximum jobs bounded");
-                    for(var network:new ArrayList<>(f.data.getNetworks()))f.data.removeNetwork(network.getId()); f.set(origin.west(),ModBlocks.BASIC_WIRE.get().defaultBlockState());
-                    actor=f.player(origin); f.submit(actor);stage=1;f.later(this);return;
+                    for(var network:new ArrayList<>(f.data.getNetworks()))f.data.removeNetwork(network.getId());
+                    stage=1;f.later(this);return;
                 }
-                h.assertTrue(f.data.getNetworks().isEmpty() && f.data.getNextNetworkId()==3 && metric("scan.result.TOO_LARGE")==1,"50001 rejected without consuming ID");
+                if(stage==1){
+                    // Retirement refreshes boundary geometry asynchronously. This size-limit test
+                    // needs a stable world, not a scan competing with those legitimate writes.
+                    if(((Number)field(field(f.data,"runtime"),"retiredWork")).longValue()!=0){f.later(this);return;}
+                    stage=2;h.runAfterDelay(2,this);return; // drain the one-tick boundary shape updates
+                }
+                if(stage==2){
+                    f.set(origin.west(),ModBlocks.BASIC_WIRE.get().defaultBlockState());
+                    actor=f.player(origin);var submitted=f.submit(actor);
+                    h.assertTrue(submitted.code()==NetworkOperations.Code.QUEUED,"oversize scan queues: "+submitted);
+                    stage=3;f.later(this);return;
+                }
+                h.assertTrue(f.data.getNetworks().isEmpty(),"oversize scan publishes no network");
+                h.assertTrue(f.data.getNextNetworkId()==3,"oversize scan does not consume an ID");
+                h.assertTrue(metric("scan.result.TOO_LARGE")==1,"50001 rejected by size limit; changed="+metric("scan.result.CHANGED_DURING_SCAN"));
                 command(f,"ccperf stop");command(f,"ccperf export");command(f,"ccperf reset");f.close();h.succeed();
             }catch(Exception e){command(f,"ccperf reset");f.close();throw new IllegalStateException("Maximum compilation phase "+stage,e);}
         }}.run();

@@ -32,6 +32,7 @@ public final class BlueprintClient {
     private static List<Ghost> ghosts=List.of();
     private static BlockPos locked;
     private static int turns;
+    private static boolean mirrored,mirroredZ;
     private static boolean cancelled;
     private static Object connection,dimension;
     private static long lastConfirm;
@@ -53,11 +54,11 @@ public final class BlueprintClient {
         part.forEach(t->pending.add(t.copy()));
         if(pending.size()==packet.total()){
             var data=new CompoundTag();data.put("elements",pending.copy());data.putLong("origin",BlockPos.ZERO.asLong());data.putString("name",packet.name());
-            blueprint=new CircuitBlueprint(data);requested=token;turns=0;locked=null;cancelled=false;rebuild();
+            blueprint=new CircuitBlueprint(data);requested=token;turns=0;mirrored=false;mirroredZ=false;locked=null;cancelled=false;rebuild();
         }
     }
     private static void rebuild(){
-        transformed=blueprint.elements(BlockPos.ZERO,turns);var cached=new ArrayList<Ghost>();
+        transformed=blueprint.elements(BlockPos.ZERO,turns,mirrored,mirroredZ);var cached=new ArrayList<Ghost>();
         for(var e:transformed){var state=e.resolveState().state().orElseThrow();
             var boxes=new ArrayList<>(state.getShape(net.minecraft.world.level.EmptyBlockGetter.INSTANCE,BlockPos.ZERO).toAabbs());
             BundleWireEntity.decode(e.bundleFaces()).forEach((side,port)->{
@@ -74,9 +75,12 @@ public final class BlueprintClient {
         if(mc.hitResult instanceof BlockHitResult hit&&hit.getType()==HitResult.Type.BLOCK)return mc.level.getBlockState(hit.getBlockPos()).isAir()?hit.getBlockPos():hit.getBlockPos().relative(hit.getDirection());
         return BlockPos.containing(mc.player.getEyePosition().add(mc.player.getLookAngle().scale(6)));
     }
+    public static void capture(BlockPos pos){
+        ModNetworking.CHANNEL.sendToServer(new BlueprintRequestC2SPacket(0,net.minecraft.client.gui.screens.Screen.hasControlDown(),pos));
+    }
     public static void confirm(){
         if(!active()||cancelled)return;long now=System.currentTimeMillis();if(now-lastConfirm<300)return;lastConfirm=now;
-        ModNetworking.CHANNEL.sendToServer(new BlueprintPlaceC2SPacket(token,anchor(),turns));
+        ModNetworking.CHANNEL.sendToServer(new BlueprintPlaceC2SPacket(token,anchor(),turns,mirrored,mirroredZ));
     }
     @SubscribeEvent public static void key(InputEvent.Key event){
         var mc=Minecraft.getInstance();if(!active()||event.getAction()!=GLFW.GLFW_PRESS)return;
@@ -84,6 +88,7 @@ public final class BlueprintClient {
         if(key==GLFW.GLFW_KEY_ESCAPE&&(mc.screen==null||mc.screen instanceof net.minecraft.client.gui.screens.PauseScreen)){cancelled=true;locked=null;return;}
         if(mc.screen!=null)return;
         if(key==GLFW.GLFW_KEY_F){mc.options.keySwapOffhand.setDown(false);while(mc.options.keySwapOffhand.consumeClick()){}cancelled=false;locked=locked==null?anchor():null;return;}
+        if(key==GLFW.GLFW_KEY_Y){if(net.minecraft.client.gui.screens.Screen.hasControlDown())mirroredZ=!mirroredZ;else mirrored=!mirrored;rebuild();return;}
         if(key==GLFW.GLFW_KEY_R){turns=(turns+1)%4;rebuild();return;}
         Direction move=switch(key){case GLFW.GLFW_KEY_LEFT->Direction.WEST;case GLFW.GLFW_KEY_RIGHT->Direction.EAST;case GLFW.GLFW_KEY_UP->Direction.NORTH;case GLFW.GLFW_KEY_DOWN->Direction.SOUTH;case GLFW.GLFW_KEY_PAGE_UP->Direction.UP;case GLFW.GLFW_KEY_PAGE_DOWN->Direction.DOWN;default->null;};
         if(move!=null){locked=anchor().relative(move);cancelled=false;}
@@ -95,7 +100,7 @@ public final class BlueprintClient {
         float scale=Math.min(1,(mc.getWindow().getGuiScaledWidth()-12f)/Math.max(1,mc.font.width(controls)));
         g.pose().pushPose();g.pose().translate(mc.getWindow().getGuiScaledWidth()/2f,y,0);g.pose().scale(scale,scale,1);
         g.drawCenteredString(mc.font,controls,0,0,0xffffff);g.pose().popPose();
-        if(!cancelled)g.drawCenteredString(mc.font,blueprint.name()+" | "+anchor().toShortString()+" | "+turns*90+"°",mc.getWindow().getGuiScaledWidth()/2,y-11,0xffffff);
+        if(!cancelled)g.drawCenteredString(mc.font,blueprint.name()+" | "+anchor().toShortString()+" | "+turns*90+"°"+(mirrored?" | X":"")+(mirroredZ?" | Z":""),mc.getWindow().getGuiScaledWidth()/2,y-11,0xffffff);
     }
     @SubscribeEvent public static void render(RenderLevelStageEvent event){
         var mc=Minecraft.getInstance();if(event.getStage()!=RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS||!active()||cancelled||mc.screen!=null)return;

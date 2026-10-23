@@ -8,7 +8,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 
 public final class ModNetworking {
 
-    private static final String PROTOCOL_VERSION = "22";
+    private static final String PROTOCOL_VERSION = "24";
 
     public static final SimpleChannel CHANNEL =
             NetworkRegistry.ChannelBuilder

@@ -9,12 +9,11 @@ import java.util.List;
 public final class CircuitCopierItem extends Item {
     public CircuitCopierItem(Properties properties){super(properties);}
     @Override public InteractionResult useOn(UseOnContext context){
-        if(context.getPlayer() instanceof ServerPlayer player && player.isShiftKeyDown()){
-            var network=NetworkSavedData.get(player.getServer()).findNetworkContaining(player.serverLevel(),context.getClickedPos());
-            if(network!=null)BlueprintService.request(player,network.getId());
-            else player.sendSystemMessage(Component.translatable("blueprint.compiledcircuits.no_network"));
-        }else if(context.getLevel().isClientSide && context.getPlayer()!=null&&!context.getPlayer().isShiftKeyDown())
-            net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT,()->()->com.example.compiledcircuits.client.BlueprintClient.confirm());
+        if(context.getLevel().isClientSide && context.getPlayer()!=null) {
+            if(context.getPlayer().isShiftKeyDown())
+                net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT,()->()->com.example.compiledcircuits.client.BlueprintClient.capture(context.getClickedPos()));
+            else net.minecraftforge.fml.DistExecutor.unsafeRunWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT,()->()->com.example.compiledcircuits.client.BlueprintClient.confirm());
+        }
         return InteractionResult.sidedSuccess(context.getLevel().isClientSide);
     }
     @Override public InteractionResultHolder<ItemStack> use(net.minecraft.world.level.Level level,net.minecraft.world.entity.player.Player player,InteractionHand hand){
