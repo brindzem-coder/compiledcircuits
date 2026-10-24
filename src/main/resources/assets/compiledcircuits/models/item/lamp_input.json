@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "compiledcircuits:item/gate_input"
+    "layer0": "compiledcircuits:item/lamp_input"
   }
 }

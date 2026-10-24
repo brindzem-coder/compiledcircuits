@@ -1,6 +1,6 @@
 {
   "parent": "minecraft:item/generated",
   "textures": {
-    "layer0": "compiledcircuits:item/gate_output"
+    "layer0": "compiledcircuits:item/switch_output"
   }
 }
