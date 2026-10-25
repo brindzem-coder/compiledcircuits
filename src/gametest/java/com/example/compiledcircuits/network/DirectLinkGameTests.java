@@ -20,6 +20,42 @@ public class DirectLinkGameTests {
         var n=new CompiledNetwork(id,"direct-test",0,"minecraft:overworld",elements);n.restoreLogic();n.runtimeState(true,true);return n;
     }
     static void settle(DirectLinks table){for(int i=0;i<100&&table.hasWork();i++)table.step();if(table.hasWork())throw new AssertionError("direct queue failed to drain");}
+    static CompiledNetwork identifiedPortNetwork(int id,BlockPos wirePos,Direction side,int kind,String wireId,BlockPos endpoint,boolean source) {
+        var wire=NetworkWireBlock.withFace((wireId.equals("0")?ModBlocks.NETWORK_WIRE:ModBlocks.ID_WIRE).get().defaultBlockState(),side,kind);
+        var tag=new CompiledCircuitElement(1,wirePos,CircuitElementType.WIRE,CompiledBlockStateCodec.capture(wire)).save();
+        if(!wireId.equals("0")){tag.putString("wireId",wireId);tag.putInt("wireColor",0x123456);}
+        var terminal=new CompiledCircuitElement(2,endpoint,source?CircuitElementType.INPUT:CircuitElementType.OUTPUT,
+                CompiledBlockStateCodec.capture((source?ModBlocks.INPUT_ENDPOINT:ModBlocks.OUTPUT_ENDPOINT).get().defaultBlockState()));
+        var n=new CompiledNetwork(id,"port-identity-test",0,"minecraft:overworld",List.of(CompiledCircuitElement.load(tag),terminal));
+        n.restoreLogic();n.runtimeState(true,true);return n;
+    }
+    @GameTest(template="empty",batch="direct_id_ports",timeoutTicks=200)
+    public static void interNetworkPortsIgnoreWireIdentity(GameTestHelper h){
+        for(var side:Direction.values())for(var left:List.of("0","11","22"))for(var right:List.of("0","11","22")) {
+            var source=BlockPos.ZERO;var target=source.relative(side);var input=source.relative(side.getOpposite());var output=target.relative(side);
+            var a=identifiedPortNetwork(1,source,side,3,left,input,true);
+            var b=identifiedPortNetwork(2,target,side.getOpposite(),2,right,output,false);
+            h.assertTrue(!CircuitConnections.connects(a.getElementAt(source).resolveState().state().orElseThrow(),left,b.getElementAt(target).resolveState().state().orElseThrow(),right,side),"ports still separate selection and compilation for all ID pairs");
+            for(boolean reload:List.of(false,true)){
+                if(reload){a=CompiledNetwork.load(a.save());b=CompiledNetwork.load(b.save());a.restoreLogic();b.restoreLogic();a.runtimeState(true,true);b.runtimeState(true,true);}
+                var table=new DirectLinks(new NetworkSavedData(),n->{});
+                table.add(b);table.validateCompilation(a);table.add(a);
+                table.update(b,Map.of());table.update(a,Map.of(input,true));settle(table);
+                h.assertTrue(table.linkCount()==1&&b.getEffectiveSignal(output)==15,"HIGH crosses output/input ports regardless of IDs, including reload");
+                table.update(a,Map.of(input,false));settle(table);
+                h.assertTrue(b.getEffectiveSignal(output)==0,"LOW crosses ports regardless of IDs");
+                table.update(a,Map.of(input,true));settle(table);table.remove(a);settle(table);
+                h.assertTrue(b.getEffectiveSignal(output)==0,"unlink clears HIGH across different IDs");
+            }
+            var wrong=identifiedPortNetwork(3,target,side.getOpposite(),3,right,output,false);
+            var table=new DirectLinks(new NetworkSavedData(),n->{});table.add(a);table.add(wrong);
+            h.assertTrue(table.linkCount()==0,"output/output ports never connect, regardless of IDs");
+        }
+        var bare=ModBlocks.ID_WIRE.get().defaultBlockState();
+        h.assertTrue(!CircuitConnections.connects(bare,"11",bare,"22",Direction.EAST),"different IDs still isolate ordinary wire connections");
+        h.assertTrue(CircuitConnections.connects(bare,"11",bare,"11",Direction.EAST),"matching IDs still join ordinary wires");
+        h.succeed();
+    }
     @GameTest(template="empty",batch="direct_tables",timeoutTicks=100)
     public static void longChainAndUnlink(GameTestHelper h){
         var data=new NetworkSavedData();var table=new DirectLinks(data,n->{});List<CompiledNetwork> nets=new ArrayList<>();

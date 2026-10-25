@@ -35,8 +35,7 @@ final class DirectLinks {
             var key = key(network, port).opposite();
             var other = overlay.getOrDefault(key, ports.get(key));
             if (other == null || other.network == network || other.port.input() == port.input()) return null;
-            var a = network.getElementAt(port.pos()); var b = other.network.getElementAt(other.port.pos());
-            if (a.getBlockId().equals("compiledcircuits:id_wire") && b.getBlockId().equals("compiledcircuits:id_wire") && !a.wireId().equals(b.wireId())) return null;
+            // Explicit output/input ports cross network boundaries independently of local wire IDs.
             return other;
         };
         Set<CompiledNetwork> members = Collections.newSetFromMap(new IdentityHashMap<>());
@@ -74,8 +73,7 @@ final class DirectLinks {
     private Endpoint peer(CompiledNetwork n,CompiledNetwork.Port p){
         var other=ports.get(key(n,p).opposite());
         if (other == null || other.network == n || other.port.input() == p.input()) return null;
-        var left = n.getElementAt(p.pos()); var right = other.network.getElementAt(other.port.pos());
-        if (left != null && right != null && left.getBlockId().equals("compiledcircuits:id_wire") && right.getBlockId().equals("compiledcircuits:id_wire") && !left.wireId().equals(right.wireId())) return null;
+        // Wire IDs isolate passive connections inside a network, not explicit inter-network ports.
         return other;
     }
     void add(CompiledNetwork n){
