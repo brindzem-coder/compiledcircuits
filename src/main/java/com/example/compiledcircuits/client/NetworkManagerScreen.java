@@ -30,6 +30,7 @@ public class NetworkManagerScreen
     private final ManagerActions actions;
     private final Object connectionContext, levelContext;
     private ManagerRenderer renderer;
+    private Button deleteNetworkButton, brokenDeleteNetworkButton;
     private Button mainViewButton, brokenSelectAllButton, brokenOpenNetworkButton, brokenDecompileButton, brokenRepairButton;
     private Button highlightButton, renameButton, decompileButton, newFolderButton, renameFolderButton, deleteFolderButton, searchFilterButton;
     private EditBox searchBox;
@@ -148,8 +149,17 @@ public class NetworkManagerScreen
         brokenDecompileButton = addRenderableWidget(Button.builder(Component.literal("Decompile Network"),
                 button -> decompileSelectedBrokenNetworks()).bounds(12 + actionWidth, buttonY, actionWidth, 20).build());
 
+        int destructiveWidth = Math.max(40, (width - 24) / 3);
+        brokenRepairButton.setWidth(destructiveWidth);
+        brokenDecompileButton.setX(12 + destructiveWidth);
+        brokenDecompileButton.setWidth(destructiveWidth);
+        brokenDeleteNetworkButton = addRenderableWidget(Button.builder(Component.literal("Delete blocks"), button -> {
+            if (ClientDamageSync.ready()) sendBulk(NetworkBulkActionC2SPacket.BulkAction.DELETE_NETWORKS, getSelectedBrokenNetworkIds(), 0);
+        }).bounds(16 + 2 * destructiveWidth, buttonY, destructiveWidth, 20).build());
+        brokenDeleteNetworkButton.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("Decompile selected networks and remove their blocks from the world")));
+
         int x = layout.folderPanelWidth + 4;
-        int networkButtonWidth = (this.width - x - 24) / 5;
+        int networkButtonWidth = (this.width - x - 28) / 6;
 
         highlightButton =
                 addRenderableWidget(
@@ -209,6 +219,11 @@ public class NetworkManagerScreen
         teleportButton.setX(x + 2 * (networkButtonWidth + 4));
         teleportButton.setY(buttonY);
         teleportButton.setWidth(networkButtonWidth);
+
+        deleteNetworkButton = addRenderableWidget(Button.builder(Component.literal("Delete"),
+                button -> sendBulk(NetworkBulkActionC2SPacket.BulkAction.DELETE_NETWORKS, state.selectedNetworkIds, 0))
+                .bounds(x + 3 * (networkButtonWidth + 4), buttonY, networkButtonWidth, 20).build());
+        deleteNetworkButton.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal("Decompile selected networks and remove their blocks from the world")));
 
         int folderButtonY =
                 this.height - 28;
@@ -728,6 +743,7 @@ public class NetworkManagerScreen
         highlightButton.active = networks;
         renameButton.active = networks && state.selectedNetworkIds.size() == 1;
         decompileButton.active = networks;
+        deleteNetworkButton.active = networks;
         renameFolderButton.active = foldersSelected && state.selectedFolderIds.size() == 1;
         deleteFolderButton.active = foldersSelected;
     }
@@ -791,7 +807,7 @@ public class NetworkManagerScreen
         boolean networkMode = state.mainViewMode == MainViewMode.NETWORKS;
         searchBox.visible = networkMode;
         searchBox.active = networkMode;
-        for (Button button : List.of(searchFilterButton, highlightButton, renameButton, decompileButton, copyButton, teleportButton,
+        for (Button button : List.of(searchFilterButton, highlightButton, renameButton, decompileButton, deleteNetworkButton, copyButton, teleportButton,
                 newFolderButton, renameFolderButton, deleteFolderButton)) {
             button.visible = networkMode;
             button.active = networkMode;
@@ -816,7 +832,7 @@ public class NetworkManagerScreen
     }
 
     public void onDamageUnconfirmed() {
-        for (Button button : new Button[]{brokenSelectAllButton, brokenOpenNetworkButton, brokenDecompileButton, brokenRepairButton})
+        for (Button button : new Button[]{brokenSelectAllButton, brokenOpenNetworkButton, brokenDecompileButton, brokenRepairButton, brokenDeleteNetworkButton})
             if (button != null) button.active = false;
         stopBrokenPaint();
     }
@@ -881,11 +897,13 @@ public class NetworkManagerScreen
         brokenOpenNetworkButton.visible = visible;
         brokenDecompileButton.visible = visible;
         brokenRepairButton.visible = visible;
+        brokenDeleteNetworkButton.visible = visible;
         int count = getSelectedBrokenNetworkIds().size();
         boolean ready = visible && ClientDamageSync.ready();
         brokenSelectAllButton.active = ready && !model.brokenEntries.isEmpty();
         brokenOpenNetworkButton.active = ready && count == 1;
         brokenDecompileButton.active = ready && count > 0;
+        brokenDeleteNetworkButton.active = ready && count > 0;
         brokenRepairButton.active = ready && count > 0;
         brokenRepairButton.setMessage(Component.literal(count <= 1 ? "Repair Network" : "Repair Networks (" + count + ")"));
         brokenDecompileButton.setMessage(Component.literal(count <= 1 ? "Decompile Network" : "Decompile Networks (" + count + ")"));

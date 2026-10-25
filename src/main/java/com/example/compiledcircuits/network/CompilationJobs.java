@@ -77,6 +77,7 @@ public final class CompilationJobs {
         return manager!=null && manager.watchers.containsKey(new Chunk(level.dimension().location().toString(),ChunkPos.asLong(pos.getX()>>4,pos.getZ()>>4)));
     }
     public static void chunkChanged(ServerLevel level, long pos) {
+        DeletionJobs.chunkChanged(level, pos);
         var manager = MANAGERS.get(level.getServer()); if (manager == null) return;
         var jobs = manager.watchers.get(new Chunk(level.dimension().location().toString(), pos));
         if (jobs != null) for (var job : jobs) job.changed = true; // at most MAX_JOBS, no world reads

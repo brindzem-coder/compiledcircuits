@@ -67,5 +67,6 @@
   "screen.compiledcircuits.rename": "Перейменувати мережу",
   "screen.compiledcircuits.rename.submit": "Перейменувати",
   "item.compiledcircuits.switch_output": "Вихід перемикача",
-  "item.compiledcircuits.lamp_input": "Вхід сигнальної лампи"
+  "item.compiledcircuits.lamp_input": "Вхід сигнальної лампи",
+  "key.compiledcircuits.delete": "Видалити вибрану схему та її блоки"
 }

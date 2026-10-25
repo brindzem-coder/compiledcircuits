@@ -81,6 +81,7 @@ public final class NetworkIntegrityEvents {
         if (event.phase == TickEvent.Phase.END) {
             NetworkIntegrityManager.processPending(event.getServer());
             com.example.compiledcircuits.network.CompilationJobs.tick(event.getServer());
+            com.example.compiledcircuits.network.DeletionJobs.tick(event.getServer());
             com.example.compiledcircuits.network.NetworkRuntime.tick(event.getServer());
             com.example.compiledcircuits.network.DamageNotifications.flush(event.getServer());
         }
@@ -91,6 +92,7 @@ public final class NetworkIntegrityEvents {
         com.example.compiledcircuits.network.RepairJobs.stop(event.getServer());
         com.example.compiledcircuits.network.DamageNotifications.stop(event.getServer());
         com.example.compiledcircuits.network.CompilationJobs.stop(event.getServer());
+        com.example.compiledcircuits.network.DeletionJobs.stop(event.getServer());
         com.example.compiledcircuits.network.NetworkRuntime.stop(event.getServer());
         NetworkIntegrityManager.clearPending();
     }

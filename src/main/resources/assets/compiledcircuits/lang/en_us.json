@@ -67,5 +67,6 @@
   "screen.compiledcircuits.rename": "Rename circuit",
   "screen.compiledcircuits.rename.submit": "Rename",
   "item.compiledcircuits.switch_output": "Switch Output",
-  "item.compiledcircuits.lamp_input": "Signal Lamp Input"
+  "item.compiledcircuits.lamp_input": "Signal Lamp Input",
+  "key.compiledcircuits.delete": "Delete selected circuit and its blocks"
 }

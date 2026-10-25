@@ -14,7 +14,7 @@ import java.util.*;
 public final class NetworkOperations {
     public enum Action { COMPILE, OPEN_COMPILE, DECOMPILE, RENAME_NETWORK, MOVE_NETWORKS, MOVE_PATH,
         CREATE_FOLDER, RENAME_FOLDER, MOVE_FOLDERS, DELETE_FOLDERS, REPAIR, HIGHLIGHT,
-        LIST, GUI, SELECTED, DEBUG, LIST_CONFLICTS, REMOVE_CONFLICT, TELEPORT }
+        LIST, GUI, SELECTED, DEBUG, LIST_CONFLICTS, REMOVE_CONFLICT, TELEPORT, DELETE }
     public enum Code { OK, QUEUED, FORBIDDEN, NOT_FOUND, INVALID_ARGUMENT, CONFLICT, RATE_LIMITED,
         INVALID_START, INCOMPLETE_UNLOADED, TOO_LARGE, CHANGED_DURING_SCAN, BUSY, TIMEOUT, CANCELLED }
     public record Result(Code code, String message, List<CompiledNetwork> networks) {
@@ -29,7 +29,7 @@ public final class NetworkOperations {
         return player != null && !player.isRemoved() && !player.isSpectator() && player.mayBuild();
     }
     public static void forget(Object actor) {
-        if (actor instanceof ServerPlayer player) { CompilationJobs.cancel(player); RepairJobs.cancel(player); com.example.compiledcircuits.networking.DamageSync.forget(player); HighlightSync.forget(player); CompiledElementSync.forget(player); }
+        if (actor instanceof ServerPlayer player) { CompilationJobs.cancel(player); RepairJobs.cancel(player); DeletionJobs.cancel(player); com.example.compiledcircuits.networking.DamageSync.forget(player); HighlightSync.forget(player); CompiledElementSync.forget(player); }
         budgets.remove(actor);
     }
     public static void clear() { budgets.clear(); }
@@ -139,6 +139,10 @@ public final class NetworkOperations {
             long total=(action==Action.DELETE_FOLDERS?(long)data.getNetworks().size():0)+data.getFolders().size();
             if(total>OperationLimits.ELEMENTS)return result(Code.INVALID_ARGUMENT,"Too many metadata entries for this folder operation.");
             rate=charge(source,(int)total,false);if(rate!=null)return rate;
+        }
+        if (action == Action.DELETE) {
+            rate = charge(source, OperationLimits.ELEMENTS, false); if (rate != null) return rate;
+            return DeletionJobs.submit(source, player, data, ids);
         }
         if (action == Action.COMPILE) return compile(source, player, data, value);
         if (action == Action.OPEN_COMPILE) return NetworkSelectionData.get(player) == null

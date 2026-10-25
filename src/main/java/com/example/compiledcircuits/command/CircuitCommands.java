@@ -87,6 +87,12 @@ public final class CircuitCommands {
                         .then(Commands.literal("compile_named")
                                 .executes(context -> openCompileName(context.getSource())))
 
+                        .then(Commands.literal("delete")
+                                .executes(c -> NetworkOperations.reply(c.getSource(), request(c.getSource(), NetworkOperations.Action.DELETE, List.of(), 0, "")))
+                                .then(Commands.argument("id", IntegerArgumentType.integer(1))
+                                        .executes(c -> NetworkOperations.reply(c.getSource(), request(c.getSource(), NetworkOperations.Action.DELETE,
+                                                List.of(IntegerArgumentType.getInteger(c, "id")), 0, "")))))
+
                         .then(
                                 Commands.literal("decompile")
                                         .then(Commands.argument("id",IntegerArgumentType.integer(1)).executes(c->NetworkOperations.reply(c.getSource(),request(c.getSource(),NetworkOperations.Action.DECOMPILE,List.of(IntegerArgumentType.getInteger(c,"id")),0,""))))

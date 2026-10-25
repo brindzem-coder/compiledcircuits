@@ -8,7 +8,7 @@ import net.minecraftforge.network.PacketDistributor;
 import java.util.*;
 import java.util.function.Supplier;
 public class NetworkBulkActionC2SPacket {
-    public enum BulkAction { HIGHLIGHT_NETWORKS, MOVE_NETWORKS, DECOMPILE_NETWORKS, MOVE_FOLDERS, DELETE_FOLDERS, REPAIR_NETWORKS }
+    public enum BulkAction { HIGHLIGHT_NETWORKS, MOVE_NETWORKS, DECOMPILE_NETWORKS, MOVE_FOLDERS, DELETE_FOLDERS, REPAIR_NETWORKS, DELETE_NETWORKS }
     private final BulkAction action;
     private final List<Integer> ids;
     private final int targetFolderId;
@@ -36,6 +36,7 @@ public class NetworkBulkActionC2SPacket {
         var action = switch(packet.action) {
             case HIGHLIGHT_NETWORKS -> NetworkOperations.Action.HIGHLIGHT;
             case DECOMPILE_NETWORKS -> NetworkOperations.Action.DECOMPILE;
+            case DELETE_NETWORKS -> NetworkOperations.Action.DELETE;
             case REPAIR_NETWORKS -> NetworkOperations.Action.REPAIR;
             default -> NetworkOperations.Action.valueOf(packet.action.name());
         };

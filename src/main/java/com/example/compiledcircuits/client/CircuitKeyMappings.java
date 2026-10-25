@@ -26,6 +26,7 @@ public final class CircuitKeyMappings {
             binding("compile", GLFW.GLFW_KEY_N, KeyModifier.NONE),
             binding("compile_named", GLFW.GLFW_KEY_N, KeyModifier.CONTROL),
             binding("decompile", GLFW.GLFW_KEY_U, KeyModifier.CONTROL),
+            binding("delete", GLFW.GLFW_KEY_DELETE, KeyModifier.CONTROL),
             binding("gui", GLFW.GLFW_KEY_G, KeyModifier.NONE),
             binding("open_selected", GLFW.GLFW_KEY_H, KeyModifier.NONE),
             binding("rename", GLFW.GLFW_KEY_M, KeyModifier.NONE),
