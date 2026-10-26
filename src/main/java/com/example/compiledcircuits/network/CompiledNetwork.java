@@ -128,6 +128,7 @@ public class CompiledNetwork {
         var ids = new java.util.HashMap<BlockPos, String>();
         for (var e : elements.values()) if (e.getBlockId().equals("compiledcircuits:id_wire")) ids.put(e.getPos(), e.wireId());
         for (var e : elements.values()) if (e.getBlockId().startsWith("compiledcircuits:bundle_")) ids.put(e.getPos(), e.channelId());
+        for (var e : elements.values()) if(e.getBlockId().equals("compiledcircuits:crossing_wire"))ids.put(e.getPos(),Crossings.graphIds(e.crossingLanes()));
         return ids;
     }
     void setNetworkTable(NetworkTruthTable table) {
@@ -271,7 +272,7 @@ public class CompiledNetwork {
             };
             if (element.getType() != requiredRole)
                 throw new IllegalArgumentException("Block/role mismatch for element " + element.getId());
-            hasGateElements |= isLogicRole(element.getType()) || (element.getBlockId().equals("compiledcircuits:network_wire") || element.getBlockId().equals("compiledcircuits:id_wire") || element.getBlockId().startsWith("compiledcircuits:bundle"));
+            hasGateElements |= isLogicRole(element.getType()) || (element.getBlockId().equals("compiledcircuits:crossing_wire") || element.getBlockId().equals("compiledcircuits:network_wire") || element.getBlockId().equals("compiledcircuits:id_wire") || element.getBlockId().startsWith("compiledcircuits:bundle"));
             collectPorts(element,collectedPorts);
             collectWireColor(element, wirePalette);
             BlockPos pos = element.getPos().immutable();
@@ -302,7 +303,7 @@ public class CompiledNetwork {
             if (sealed || element.getId() != elements.size() + 1 || positions.containsKey(element.getPos()))
                 throw new IllegalArgumentException("Invalid staged element");
             elements.put(element.getId(), element); positions.put(element.getPos(), element);
-            hasGates |= isLogicRole(element.getType()) || (element.getBlockId().equals("compiledcircuits:network_wire") || element.getBlockId().equals("compiledcircuits:id_wire") || element.getBlockId().startsWith("compiledcircuits:bundle"));
+            hasGates |= isLogicRole(element.getType()) || (element.getBlockId().equals("compiledcircuits:crossing_wire") || element.getBlockId().equals("compiledcircuits:network_wire") || element.getBlockId().equals("compiledcircuits:id_wire") || element.getBlockId().startsWith("compiledcircuits:bundle"));
             collectPorts(element,ports);
             collectWireColor(element, wirePalette);
             switch (element.getType()) {

@@ -15,16 +15,22 @@ final class BundleTopology {
         return state.getBlock() instanceof BundledWireBlock || state.getBlock() instanceof BundlePortBlock;
     }
     static List<Route> resolve(Map<BlockPos, BlockState> states, Map<BlockPos, String> channels, Map<BlockPos, Integer> owners, Map<BundleFace, BundleWireEntity.Port> faces) {
-        Map<BlockPos, Integer> cables = new HashMap<>(); int index = 0;
-        for (var entry : states.entrySet()) if (entry.getValue().getBlock() instanceof BundledWireBlock && !cables.containsKey(entry.getKey())) {
-            var queue = new ArrayDeque<BlockPos>(); queue.add(entry.getKey()); cables.put(entry.getKey(), ++index);
-            while (!queue.isEmpty()) {
-                var pos = queue.remove();
-                for (var side : Direction.values()) {
-                    var next = pos.relative(side); var state = states.get(next);
-                    if (state != null && state.getBlock() instanceof BundledWireBlock && !cables.containsKey(next)
-                            && !faces.containsKey(new BundleFace(pos, side)) && !faces.containsKey(new BundleFace(next, side.getOpposite()))
-                            && Objects.equals(owners.get(pos), owners.get(next))) { cables.put(next, index); queue.add(next); }
+        record Cable(BlockPos pos,Direction.Axis axis){}
+        Map<Cable,Integer> cables=new HashMap<>();int index=0;
+        List<Cable> seeds=new ArrayList<>();
+        for(var e:states.entrySet()){
+            if(e.getValue().getBlock() instanceof BundledWireBlock)seeds.add(new Cable(e.getKey(),null));
+            else if(e.getValue().getBlock() instanceof CrossingWireBlock)for(var axis:Direction.Axis.values())if(CrossingWireBlock.kind(e.getValue(),axis)==3)seeds.add(new Cable(e.getKey(),axis));
+        }
+        for(var seed:seeds)if(!cables.containsKey(seed)){
+            var queue=new ArrayDeque<Cable>();queue.add(seed);cables.put(seed,++index);
+            while(!queue.isEmpty()){
+                var current=queue.remove();var pos=current.pos();
+                for(var side:Direction.values()){
+                    if(current.axis()!=null&&side.getAxis()!=current.axis()||faces.containsKey(new BundleFace(pos,side)))continue;
+                    var next=pos.relative(side);var state=states.get(next);if(state==null||faces.containsKey(new BundleFace(next,side.getOpposite())))continue;
+                    Cable key=state.getBlock() instanceof BundledWireBlock?new Cable(next,null):CrossingWireBlock.kind(state,side.getAxis())==3?new Cable(next,side.getAxis()):null;
+                    if(key!=null&&!cables.containsKey(key)&&Objects.equals(Crossings.owner(owners,pos,side),Crossings.owner(owners,next,side.getOpposite()))){cables.put(key,index);queue.add(key);}
                 }
             }
         }
@@ -47,8 +53,10 @@ final class BundleTopology {
         }
         for (var port : ports) {
             var cable = port.inline ? port.pos() : port.pos().relative(port.face.side().getOpposite());
-            Integer component = cables.get(cable);
-            if (component == null || !Objects.equals(owners.get(port.pos()), owners.get(cable))
+            var cableState=states.get(cable);
+            var keyCable=new Cable(cable,cableState!=null&&cableState.getBlock() instanceof CrossingWireBlock?port.face.side().getAxis():null);
+            Integer component = cables.get(keyCable);
+            if (component == null || !Objects.equals(Crossings.owner(owners,port.pos(),port.face.side().getOpposite()), Crossings.owner(owners,cable,port.face.side()))
                     || !port.inline && faces.containsKey(new BundleFace(cable, port.face.side())))
                 throw new IllegalArgumentException("Bundle port needs a cable connection at " + port.pos().toShortString());
             var key = new Key(component, port.config.id());

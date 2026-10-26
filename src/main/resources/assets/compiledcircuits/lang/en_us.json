@@ -68,5 +68,7 @@
   "screen.compiledcircuits.rename.submit": "Rename",
   "item.compiledcircuits.switch_output": "Switch Output",
   "item.compiledcircuits.lamp_input": "Signal Lamp Input",
-  "key.compiledcircuits.delete": "Delete selected circuit and its blocks"
+  "key.compiledcircuits.delete": "Delete selected circuit and its blocks",
+  "block.compiledcircuits.crossing_wire": "Wire crossing",
+  "wire.compiledcircuits.crossing_hint": "Ctrl + right-click a perpendicular face of a straight wire to add a second wire"
 }

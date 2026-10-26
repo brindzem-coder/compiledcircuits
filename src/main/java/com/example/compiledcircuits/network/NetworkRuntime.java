@@ -25,6 +25,7 @@ public final class NetworkRuntime {
     private final Map<CompiledNetwork, Entry> entries = new IdentityHashMap<>();
     private final Map<ChunkKey, Map<Entry, Part>> chunks = new HashMap<>();
     private final LinkedHashSet<ChunkKey> unloading = new LinkedHashSet<>();
+    private final Set<ChunkKey> statusUnloads = new HashSet<>();
     private final LinkedHashSet<ChunkKey> loading = new LinkedHashSet<>();
     private final LinkedHashSet<Entry> queue = new LinkedHashSet<>();
     private final class Retired {
@@ -170,6 +171,17 @@ public final class NetworkRuntime {
         return chunk != null && chunk.getFullStatus().isOrAfter(net.minecraft.server.level.FullChunkStatus.FULL)
                 && !runtime.unloading.contains(new ChunkKey(level.dimension().location().toString(), pos));
     }
+    /** Rapid ticket demotion/promotion may cancel the asynchronous FULL notification. */
+    public static void chunkStatusChanged(ServerLevel level, long pos, boolean loaded) {
+        if (!level.getServer().isSameThread()) {
+            level.getServer().execute(() -> chunkStatusChanged(level, pos, loaded));
+            return;
+        }
+        chunkChanged(level, pos, loaded);
+        var runtime = NetworkSavedData.get(level.getServer()).runtime();
+        var key = new ChunkKey(level.dimension().location().toString(), pos);
+        if (!loaded && runtime.unloading.contains(key)) runtime.statusUnloads.add(key);
+    }
     public static void chunkChanged(ServerLevel level, long pos, boolean loaded) {
         // Forge unload is on the server thread; load may precede FULL promotion.
         if (!level.getServer().isSameThread()) {
@@ -179,7 +191,7 @@ public final class NetworkRuntime {
         CompilationJobs.chunkChanged(level, pos);
         var runtime = NetworkSavedData.get(level.getServer()).runtime();
         var key = new ChunkKey(level.dimension().location().toString(), pos);
-        if (loaded) runtime.unloading.remove(key);
+        if (loaded) { runtime.unloading.remove(key); runtime.statusUnloads.remove(key); }
         var affected = runtime.chunks.get(key);
         if (affected == null) return;
         if (loaded) { runtime.unloading.remove(key); runtime.loading.add(key); }
@@ -235,8 +247,14 @@ public final class NetworkRuntime {
             try {
             var iterator = runtime.unloading.iterator(); var key = iterator.next(); iterator.remove();
             var level = server.getLevel(ResourceKey.create(Registries.DIMENSION, new ResourceLocation(key.dimension)));
-            if (level != null && level.getChunkSource().getChunkNow(ChunkPos.getX(key.pos), ChunkPos.getZ(key.pos)) != null)
-                runtime.unloading.add(key);
+            var chunk = level == null ? null : level.getChunkSource().getChunkNow(ChunkPos.getX(key.pos), ChunkPos.getZ(key.pos));
+            if (chunk != null) {
+                // Reconcile real status transitions after the holder has updated its ticket level.
+                // Explicit chunkChanged(false) callers still require a matching load notification.
+                if (runtime.statusUnloads.contains(key) && chunk.getFullStatus().isOrAfter(net.minecraft.server.level.FullChunkStatus.FULL))
+                    chunkChanged(level, key.pos, true);
+                else runtime.unloading.add(key);
+            } else runtime.statusUnloads.remove(key);
             }finally{ServerWorkBudget.end(server,ServerWorkBudget.Lane.RUNTIME,unit);}
         }
         runtime.drain();
@@ -369,7 +387,7 @@ public final class NetworkRuntime {
     public static void stop(MinecraftServer server) {
         var runtime = NetworkSavedData.get(server).runtime();
         for (var network : runtime.entries.keySet()) network.runtimeState(false, false);
-        runtime.queue.clear(); runtime.retired.clear(); runtime.retiredWork=0; runtime.loading.clear(); runtime.unloading.clear();
+        runtime.queue.clear(); runtime.retired.clear(); runtime.retiredWork=0; runtime.loading.clear(); runtime.unloading.clear(); runtime.statusUnloads.clear();
         runtime.entries.clear(); runtime.direct.clear(); runtime.chunks.clear(); runtime.data.integrity().dispose(); runtime.server = null;
     }
 }

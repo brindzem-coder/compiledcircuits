@@ -11,6 +11,7 @@ public final class ClientCompiledElements {
     private static boolean ready, unknownReservations;
     private static Set<BlockPos> blocked = Set.of();
     private static long revision, latestSnapshot;
+    private static Map<BlockPos,java.util.List<CompiledElementPositionsS2CPacket.Entry>> lanes=Map.of();
     private static Map<BlockPos, Integer> byPos = Map.of();
     private static Map<Integer, Set<BlockPos>> byNetwork = Map.of();
     private static Assembly staging;
@@ -22,7 +23,7 @@ public final class ClientCompiledElements {
     public static long completedSnapshot(){return staging==null&&(ready||status.equals("OVER_CAPACITY")||status.equals("UNKNOWN_STATUS"))?latestSnapshot:0;}
     public static void context(UUID token){context=token;}
 
-    private record Complete(String dimension, Map<BlockPos, Integer> positions, Map<Integer, Set<BlockPos>> networks, Set<BlockPos> blocked, boolean unknown) {}
+    private record Complete(String dimension, Map<BlockPos, Integer> positions, Map<Integer, Set<BlockPos>> networks, Set<BlockPos> blocked, boolean unknown, Map<BlockPos,java.util.List<CompiledElementPositionsS2CPacket.Entry>> lanes) {}
     private static final class Assembly {
         final String dimension,reason;
         final long id, started;
@@ -32,6 +33,7 @@ public final class ClientCompiledElements {
         int count, entries;
         long bytes,lastProgress;
         int partCursor,entryCursor,blockedCursor;
+        final Map<BlockPos,java.util.List<CompiledElementPositionsS2CPacket.Entry>> lanes=new HashMap<>();
         final Map<BlockPos,Integer> positions=new HashMap<>();
         final Map<Integer,Set<BlockPos>> networks=new HashMap<>();
         final Map<Integer,Set<BlockPos>> views=new HashMap<>();
@@ -47,7 +49,11 @@ public final class ClientCompiledElements {
     public static long getRevision() { return revision; }
     public static boolean isBlocked(BlockPos pos) { return !ready || blocked.contains(pos) || (unknownReservations && !byPos.containsKey(pos)); }
     public static boolean hasBlockedMembership() { return unknownReservations || !blocked.isEmpty(); }
-    public static Integer networkIdAt(BlockPos pos) { return ready?byPos.get(pos):null; }
+    public static Integer networkIdAt(BlockPos pos) { return networkIdAt(pos,7); }
+    public static Integer networkIdAt(BlockPos pos,int mask){if(!ready)return null;Integer result=null;for(var e:lanes.getOrDefault(pos,java.util.List.of()))if((e.lanes()&mask)!=0){if(result!=null&&result!=e.networkId())return null;result=e.networkId();}return result;}
+    public static int maskAt(BlockPos pos,int network){return ready?lanes.getOrDefault(pos,java.util.List.of()).stream().filter(e->e.networkId()==network).mapToInt(CompiledElementPositionsS2CPacket.Entry::lanes).reduce(0,(a,b)->a|b):0;}
+    public static boolean occupied(BlockPos pos,int mask){return ready&&lanes.getOrDefault(pos,java.util.List.of()).stream().anyMatch(e->(e.lanes()&mask)!=0);}
+
     public static Set<BlockPos> positionsForNetwork(int id) { return ready?byNetwork.getOrDefault(id, Set.of()):Set.of(); }
 
     public static void onLevelChanged(Object level, String id) {
@@ -103,7 +109,9 @@ public final class ClientCompiledElements {
             var entries=a.parts[a.partCursor];var reservations=a.blockedParts[a.partCursor];
             if(a.entryCursor<entries.size()){
                 var entry=entries.get(a.entryCursor++);
-                if(a.reservations.contains(entry.pos())||a.positions.putIfAbsent(entry.pos(),entry.networkId())!=null){reject("Duplicate membership");return;}
+                var previous=a.lanes.getOrDefault(entry.pos(),java.util.List.of());
+                if(a.reservations.contains(entry.pos())||previous.stream().anyMatch(e->(e.lanes()&entry.lanes())!=0)){reject("Duplicate membership");return;}
+                var next=new java.util.ArrayList<>(previous);next.add(entry);a.lanes.put(entry.pos(),java.util.List.copyOf(next));a.positions.putIfAbsent(entry.pos(),entry.networkId());
                 a.networks.computeIfAbsent(entry.networkId(),k->{var set=new HashSet<BlockPos>();a.views.put(k,Collections.unmodifiableSet(set));return set;}).add(entry.pos());
             }else if(a.blockedCursor<reservations.size()){
                 var pos=reservations.get(a.blockedCursor++);
@@ -111,12 +119,12 @@ public final class ClientCompiledElements {
             }else {a.partCursor++;a.entryCursor=a.blockedCursor=0;}
         }
         if(a.partCursor!=a.parts.length)return;
-        complete=new Complete(a.dimension,Collections.unmodifiableMap(a.positions),Collections.unmodifiableMap(a.views),Collections.unmodifiableSet(a.reservations),a.unknown);
+        complete=new Complete(a.dimension,Collections.unmodifiableMap(a.positions),Collections.unmodifiableMap(a.views),Collections.unmodifiableSet(a.reservations),a.unknown,Collections.unmodifiableMap(a.lanes));
         staging=null;commitIfActive();
     }
     private static void commitIfActive() {
         if (levelIdentity == null || complete == null || !complete.dimension.equals(dimension)) return;
-        byPos = complete.positions; byNetwork = complete.networks; blocked = complete.blocked; unknownReservations = complete.unknown;
+        lanes=complete.lanes; byPos = complete.positions; byNetwork = complete.networks; blocked = complete.blocked; unknownReservations = complete.unknown;
         ready = true;status="READY"; revision++;
     }
 }

@@ -10,6 +10,7 @@ import net.minecraftforge.common.util.BlockSnapshot;
 
 public final class BundlePortPlacement {
     public static InteractionResult apply(UseOnContext context, int kind, String id) {
+        if(context.getLevel().getBlockState(context.getClickedPos()).getBlock() instanceof CrossingWireBlock){var conversion=CrossingPlacement.convertSingle(context,true);if(conversion!=InteractionResult.CONSUME)return conversion;}
         var level = context.getLevel(); var pos = context.getClickedPos(); var state = level.getBlockState(pos);
         if (!(state.getBlock() instanceof BundledWireBlock)) return InteractionResult.PASS;
         var player = context.getPlayer(); var side = context.getClickedFace();

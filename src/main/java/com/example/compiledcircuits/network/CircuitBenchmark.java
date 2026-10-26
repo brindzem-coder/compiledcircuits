@@ -196,7 +196,7 @@ public final class CircuitBenchmark {
         if (!(source.getEntity() instanceof ServerPlayer player)) return 0;
         var server = source.getServer(); var data = NetworkSavedData.get(server);
         var pos = NetworkSelectionData.get(player);
-        var n = pos == null ? null : data.findNetworkContaining(player.serverLevel(), pos);
+        var n = pos == null ? null : NetworkSelectionData.network(player);
         if (n == null) { source.sendFailure(Component.literal("Select a compiled network with the selector first.")); return 0; }
         if (n.getElements().size() > LogicProgram.MAX_ELEMENTS) { source.sendFailure(Component.literal("Benchmark limit: 8192 elements.")); return 0; }
         var session = sessions.computeIfAbsent(server, k -> new Session());

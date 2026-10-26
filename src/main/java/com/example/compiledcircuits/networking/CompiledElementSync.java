@@ -55,7 +55,7 @@ public final class CompiledElementSync {
         public void step(){
             if(done)return;long start=System.nanoTime();
             try{
-                if(elements.hasNext()){var e=elements.next();entries.add(new CompiledElementPositionsS2CPacket.Entry(networkId,e.getPos()));}
+                if(elements.hasNext()){var e=elements.next();entries.add(new CompiledElementPositionsS2CPacket.Entry(networkId,e.getPos(),com.example.compiledcircuits.network.Crossings.mask(e)));}
                 else if(networks.hasNext()){var n=networks.next();networkId=n.getId();elements=n.getElements().iterator();return;}
                 else if(blocked.hasNext())reservations.add(blocked.next());
                 else {if(!entries.isEmpty()||!reservations.isEmpty()||parts.isEmpty())flush();done=true;return;}

@@ -68,6 +68,16 @@ public class ClientCompiledElementsTest {
   ClientCompiledElements.accept(new CompiledElementPositionsS2CPacket(new ResourceLocation("minecraft:overworld"),14,0,1,List.of(),List.of(),true,token,CompiledElementPositionsS2CPacket.State.OVER_CAPACITY),28);
   check(ClientCompiledElements.status().equals("STALE"));
   CompiledElementPositionsPacketTest.run();
+  ClientCompiledElements.clear();ClientCompiledElements.onLevelChanged(level,"minecraft:overworld");
+  var crossing=new CompiledElementPositionsS2CPacket(new ResourceLocation("minecraft:overworld"),1,0,1,List.of(
+      new CompiledElementPositionsS2CPacket.Entry(11,a,1),new CompiledElementPositionsS2CPacket.Entry(22,a,4)));
+  ClientCompiledElements.accept(crossing,0);
+  check(ClientCompiledElements.isReadyFor("minecraft:overworld"));
+  check(ClientCompiledElements.networkIdAt(a,1)==11&&ClientCompiledElements.networkIdAt(a,4)==22);
+  check(ClientCompiledElements.networkIdAt(a)==null&&!ClientCompiledElements.occupied(a,2));
+  check(ClientCompiledElements.positionsForNetwork(11).equals(Set.of(a))&&ClientCompiledElements.positionsForNetwork(22).equals(Set.of(a)));
+  check(ClientCompiledElements.maskAt(a,11)==1&&ClientCompiledElements.maskAt(a,22)==4);
+  ClientCompiledElements.clear();
   System.out.println("Compiled membership cache checks passed: " + checks);
  }
 }

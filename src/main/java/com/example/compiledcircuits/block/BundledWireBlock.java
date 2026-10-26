@@ -41,6 +41,6 @@ public final class BundledWireBlock extends BasicWireBlock implements net.minecr
                 && !com.example.compiledcircuits.network.CircuitBoundary.allows(server, pos, pos.relative(side))) return false;
         if (BundleConnections.port(level, pos, side) != null) return true;
         var neighbor = level.getBlockState(pos.relative(side));
-        return BundleConnections.connects(level, pos, defaultBlockState(), neighbor, side);
+        return CircuitConnections.connects(level, pos, defaultBlockState(), neighbor, side);
     }
 }

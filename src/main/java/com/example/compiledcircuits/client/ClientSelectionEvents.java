@@ -79,7 +79,8 @@ public class ClientSelectionEvents {
         boolean success =
                 ClientNetworkSelection.selectNetwork(
                         clientLevel,
-                        clickedPos
+                        clickedPos,
+                        clickedState.getBlock() instanceof com.example.compiledcircuits.block.CrossingWireBlock ? 1 << com.example.compiledcircuits.block.CrossingWireBlock.hit(clickedState,clickedPos,event.getHitVec().getLocation()).ordinal() : 7
                 );
 
         if (minecraft.player != null) {

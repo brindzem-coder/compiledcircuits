@@ -26,9 +26,9 @@ public final class NetworkIntegrityManager {
         if(level.captureBlockSnapshots || level.restoringBlockSnapshots)return;
         PerformanceDiagnostics.add("pending.scheduleCalls", 1);
         var data=NetworkSavedData.get(level.getServer());
-        var location=data.findElementLocation(level.dimension().location().toString(),pos);
-        if(location==null){PerformanceDiagnostics.add("pending.unownedSkipped",1);return;}
-        data.integrity().schedule(level,location);
+        var owners=data.findElementLocations(level.dimension().location().toString(),pos);
+        if(owners.isEmpty()){PerformanceDiagnostics.add("pending.unownedSkipped",1);return;}
+        for(var owner:owners)data.integrity().schedule(level,owner);
     }
     public static void invalidateDimension(ServerLevel level) { NetworkSavedData.get(level.getServer()).integrity().invalidateDimension(level); }
     public static void clearPending() {
@@ -43,11 +43,9 @@ public final class NetworkIntegrityManager {
     }
     public static void checkPosition(ServerLevel level, BlockPos pos) {
         NetworkSavedData data = NetworkSavedData.get(level.getServer());
-        NetworkSavedData.ElementLocation location =
-                data.findElementLocation(level.dimension().location().toString(), pos);
-        if (location == null || !NetworkRuntime.isChunkAvailable(level, RuntimeSignalReader.chunk(pos))) return;
-
-        checkElement(level, data, location.network(), location.element());
+        if(!NetworkRuntime.isChunkAvailable(level,RuntimeSignalReader.chunk(pos)))return;
+        for(var location:data.findElementLocations(level.dimension().location().toString(),pos))
+            checkElement(level,data,location.network(),location.element());
     }
 
     static boolean checkElement(ServerLevel level, NetworkSavedData data, CompiledNetwork network, CompiledCircuitElement element) {

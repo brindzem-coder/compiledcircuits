@@ -52,11 +52,11 @@ final class DirectLinks {
         // Preserve existing feedback semantics when the linked graph has no bundled channels.
         if (members.stream().noneMatch(n -> n.getElements().stream().anyMatch(e -> e.getBlockId().startsWith("compiledcircuits:bundle")))) return revision;
         Map<BlockPos, BlockState> states = new HashMap<>(); Map<BlockPos, String> ids = new HashMap<>();
-        Map<BlockPos, Integer> owners = new HashMap<>(); List<BundleFace.Link> faceLinks = new ArrayList<>();
+        Crossings.Owners owners = new Crossings.Owners(); List<BundleFace.Link> faceLinks = new ArrayList<>();
         Map<BundleFace, com.example.compiledcircuits.block.BundleWireEntity.Port> faces = new HashMap<>(); int owner = 0;
         for (var network : members) {
-            owner++; ids.putAll(network.wireIds()); faces.putAll(network.bundleFaces());
-            for (var e : network.getElements()) { states.put(e.getPos(), e.resolveState().state().orElseThrow()); owners.put(e.getPos(), owner); }
+            owner++; Crossings.mergeGraph(states,ids,network); faces.putAll(network.bundleFaces());
+            for (var e : network.getElements()) { owners.add(e, owner); }
             for (var port : network.directPorts()) if (!port.input()) {
                 var other = lookup.apply(network, port);
                 if (other != null) faceLinks.add(new BundleFace.Link(new BundleFace(port.pos(), port.side()), new BundleFace(other.port.pos(), other.port.side())));
@@ -129,14 +129,14 @@ final class DirectLinks {
         var result=new Group(members);
         try {
             Map<BlockPos,String> wireIds=new HashMap<>();
-            Map<BlockPos,BlockState> states=new HashMap<>();Map<BlockPos,Integer> owners=new HashMap<>();
+            Map<BlockPos,BlockState> states=new HashMap<>();Crossings.Owners owners=new Crossings.Owners();
             List<BundleFace.Link> faceLinks=new ArrayList<>();Map<String,Boolean> memory=new HashMap<>();
             Map<BundleFace, com.example.compiledcircuits.block.BundleWireEntity.Port> faces=new HashMap<>();
             for(var n:members){
-                wireIds.putAll(n.wireIds()); faces.putAll(n.bundleFaces());
+                Crossings.mergeGraph(states,wireIds,n); faces.putAll(n.bundleFaces());
                 for(var e:n.getElements()){
                     if(states.size()>=LogicProgram.MAX_ELEMENTS)throw new IllegalArgumentException("Linked circuits exceed "+LogicProgram.MAX_ELEMENTS+" elements");
-                    states.put(e.getPos(),e.resolveState().state().orElseThrow());owners.put(e.getPos(),n.getId());
+                    owners.add(e,n.getId());
                 }
                 memory.putAll(n.nodeMemory());
                 for(var p:n.directPorts())if(!p.input()){

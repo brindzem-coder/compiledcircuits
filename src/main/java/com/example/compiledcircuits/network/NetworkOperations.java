@@ -37,6 +37,9 @@ public final class NetworkOperations {
         if(player==null || player.isRemoved() || !player.getServer().isSameThread())return false;
         return charge(player.createCommandSourceStack(),1,true)==null;
     }
+    public static boolean authorizeWorldInteraction(ServerPlayer player) {
+        return canModify(player)&&player.getServer().isSameThread()&&charge(player.createCommandSourceStack(),1,true)==null;
+    }
     private static Object actor(CommandSourceStack source) {
         return source.getEntity() instanceof ServerPlayer p ? p : source.getServer();
     }
@@ -160,7 +163,7 @@ public final class NetworkOperations {
         if (action == Action.LIST || action == Action.GUI) return ok("");
         if (action == Action.SELECTED || action == Action.DEBUG) {
             var pos = NetworkSelectionData.get(player);
-            var n = pos == null ? null : data.findNetworkContaining(player.serverLevel(), pos);
+            var n = pos == null ? null : NetworkSelectionData.network(player);
             return n == null ? result(Code.NOT_FOUND, "No compiled network selected.") : new Result(Code.OK, "", List.of(n));
         }
         boolean folders = action == Action.CREATE_FOLDER || action == Action.RENAME_FOLDER || action == Action.MOVE_FOLDERS || action == Action.DELETE_FOLDERS;

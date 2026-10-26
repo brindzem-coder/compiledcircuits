@@ -68,5 +68,7 @@
   "screen.compiledcircuits.rename.submit": "Перейменувати",
   "item.compiledcircuits.switch_output": "Вихід перемикача",
   "item.compiledcircuits.lamp_input": "Вхід сигнальної лампи",
-  "key.compiledcircuits.delete": "Видалити вибрану схему та її блоки"
+  "key.compiledcircuits.delete": "Видалити вибрану схему та її блоки",
+  "block.compiledcircuits.crossing_wire": "Перетин дротів",
+  "wire.compiledcircuits.crossing_hint": "Ctrl + ПКМ по поперечній грані прямого дроту: додати другий дріт"
 }

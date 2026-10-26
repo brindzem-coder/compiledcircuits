@@ -24,7 +24,7 @@ final class IntegrityScheduler {
         State(CompiledNetwork n, Dimension d) { network=n; dimension=d; validatedDimension=d.generation; }
         boolean pending() { return points>0 || checking>0 || full || validatedDimension!=dimension.generation; }
     }
-    private record Key(String dimension, BlockPos pos) {}
+    private record Key(String dimension, BlockPos pos, int network) {}
     private record Point(State owner, CompiledCircuitElement element, int enqueuedTick) {}
     private final NetworkSavedData data;
     private final NavigableMap<Integer, State> states = new TreeMap<>();
@@ -64,7 +64,7 @@ final class IntegrityScheduler {
             if(!s.full)NetworkRuntime.pendingChanged(level,s.network);
             full(s);changedGate(level,s,was);return;
         }
-        Key key=new Key(s.network.getDimension(),location.element().getPos());
+        Key key=new Key(s.network.getDimension(),location.element().getPos(),s.network.getId());
         var previous=points.get(key);
         if(previous!=null && previous.owner==s) {PerformanceDiagnostics.add("pending.deduplicated",1);return;}
         if(points.size()>=ServerConfig.MAX_PENDING.get()) {
@@ -93,8 +93,7 @@ final class IntegrityScheduler {
         s.checking++;
         var level=level(server,s);
         try {
-            var actual=data.findIndexedElementLocation(item.getKey().dimension,item.getKey().pos);
-            if(actual==null || actual.network()!=s.network || actual.element()!=p.element)return;
+            if(data.getMembershipOwners(item.getKey().dimension,item.getKey().pos).stream().noneMatch(o->o.network()==s.network&&o.element()==p.element))return;
             if(level==null || !NetworkRuntime.isChunkAvailable(level,RuntimeSignalReader.chunk(p.element.getPos()))) {
                 full(s);s.parked=true;parked++;rechecks.remove(s);PerformanceDiagnostics.add("pending.unavailable",1);return;
             }

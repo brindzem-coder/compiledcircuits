@@ -71,11 +71,14 @@ public class CompiledCircuitElement {
         this(id, pos, type, blockId, legacyData(), false);
     }
 
+    public CompoundTag crossingLanes() { return stateData.getCompound("crossingLanes").copy(); }
     public CompoundTag bundleFaces() { return stateData.getCompound("bundleFaces").copy(); }
     public String channelId() { return stateData.getString("channelId"); }
     public String wireId() { return stateData.getString("wireId"); }
     public int wireColor() { return stateData.getInt("wireColor"); }
     public CompiledCircuitElement captureWire(net.minecraft.world.level.BlockGetter level) {
+        if (level.getBlockEntity(pos) instanceof com.example.compiledcircuits.block.CrossingWireEntity wire)
+            stateData.put("crossingLanes", wire.snapshot(Crossings.mask(this)));
         if (level.getBlockEntity(pos) instanceof com.example.compiledcircuits.block.IdWireEntity wire) {
             String id = com.example.compiledcircuits.network.WireIds.normalize(wire.wireId());
             if (id.equals("0")) throw new IllegalArgumentException("Unconfigured wire");
@@ -128,7 +131,7 @@ public class CompiledCircuitElement {
         }
 
         CompoundTag data = new CompoundTag();
-        for (String key : new String[]{"stateDataVersion", "stateOrigin", "compiledBlockState", "wireId", "wireColor", "channelId", "bundleFaces"}) {
+        for (String key : new String[]{"stateDataVersion", "stateOrigin", "compiledBlockState", "wireId", "wireColor", "channelId", "bundleFaces", "crossingLanes"}) {
             if (tag.contains(key)) data.put(key, tag.get(key).copy());
         }
         boolean upgrade = data.isEmpty();
@@ -147,6 +150,15 @@ public class CompiledCircuitElement {
         if (element.blockId.equals("compiledcircuits:bundled_wire")) {
             try { com.example.compiledcircuits.block.BundleWireEntity.decode(element.bundleFaces()); }
             catch (IllegalArgumentException invalid) { element.decoded = CompiledBlockStateCodec.invalid("Invalid bundle face data"); }
+        }
+        if(element.blockId.equals("compiledcircuits:crossing_wire")){
+            var state=element.resolveState().state().orElse(null);
+            int mask=state==null?0:com.example.compiledcircuits.block.CrossingWireBlock.mask(state);
+            boolean valid=mask!=0&&Integer.bitCount(mask)<=2&&element.type==CircuitElementType.WIRE;
+            if(state!=null)for(var axis:net.minecraft.core.Direction.Axis.values())if(com.example.compiledcircuits.block.CrossingWireBlock.kind(state,axis)==2){
+                String laneId=element.crossingLanes().getCompound(axis.getName()).getString("id");try{valid&=!laneId.equals("0")&&WireIds.normalize(laneId).equals(laneId);}catch(IllegalArgumentException error){valid=false;}
+            }
+            if(!valid)element.decoded=CompiledBlockStateCodec.invalid("Invalid crossing lane data");
         }
         return element;
     }

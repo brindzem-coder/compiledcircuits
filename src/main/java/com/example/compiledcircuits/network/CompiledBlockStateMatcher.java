@@ -22,6 +22,7 @@ public final class CompiledBlockStateMatcher {
         return false;
     }
     public static Match match(CompiledCircuitElement element, net.minecraft.world.level.BlockGetter level, BlockState actual, boolean exact) {
+        if(element.getBlockId().equals("compiledcircuits:crossing_wire"))return Crossings.matches(element,level,actual)?Match.MATCH:Match.STATE_MISMATCH;
         var result = match(element, actual, exact);
         if (result == Match.MATCH && actual.getBlock() instanceof com.example.compiledcircuits.block.IdWireBlock
                 && !element.wireId().equals(com.example.compiledcircuits.block.IdWireBlock.id(level, element.getPos(), actual))) return Match.STATE_MISMATCH;

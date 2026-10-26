@@ -9,7 +9,8 @@ import static com.example.compiledcircuits.networking.HighlightProtocol.*;
 /** Atomic selection staging; safe to exercise without loading Minecraft client classes. */
 public final class HighlightReplica {
     public enum Status { EMPTY, WAITING, READY, ERROR }
-    public record Selection(Set<BlockPos> wires,Set<BlockPos> inputs,Set<BlockPos> outputs) {
+    public record Selection(Set<BlockPos> wires,Set<BlockPos> inputs,Set<BlockPos> outputs,Map<BlockPos,Integer> lanes) {
+        public Selection(Set<BlockPos>w,Set<BlockPos>i,Set<BlockPos>o){this(w,i,o,Map.of());}
         public static final Selection EMPTY=new Selection(Set.of(),Set.of(),Set.of());
     }
     private Request expected;private long started,lastBatch;private boolean terminal;
@@ -18,7 +19,8 @@ public final class HighlightReplica {
     private static final class Assembly {
         final NetworkHighlightS2CPacket h;final byte[][] parts;
         final Set<BlockPos> all=new HashSet<>(),wires=new HashSet<>(),inputs=new HashSet<>(),outputs=new HashSet<>();
-        int receivedBytes,next,offset;long progress;
+        final Map<BlockPos,Integer> lanes=new HashMap<>();
+        int records;int receivedBytes,next,offset;long progress;
         Assembly(NetworkHighlightS2CPacket h,long tick){this.h=h;parts=new byte[h.parts()][];progress=tick;}
     }
     public void reset(){expected=null;assembly=null;selection=Selection.EMPTY;status=Status.EMPTY;message="";lastBatch=0;terminal=false;}
@@ -49,16 +51,18 @@ public final class HighlightReplica {
         try{
             while(steps-->0){
                 if(a.next==a.parts.length){
-                    if(a.all.size()!=a.h.positions()||a.receivedBytes!=a.h.bytes())throw new IllegalArgumentException();
-                    selection=new Selection(Collections.unmodifiableSet(a.wires),Collections.unmodifiableSet(a.inputs),Collections.unmodifiableSet(a.outputs));
+                    if(a.records!=a.h.positions()||a.receivedBytes!=a.h.bytes())throw new IllegalArgumentException();
+                    selection=new Selection(Collections.unmodifiableSet(a.wires),Collections.unmodifiableSet(a.inputs),Collections.unmodifiableSet(a.outputs),Collections.unmodifiableMap(a.lanes));
                     status=Status.READY;message=a.h.message();assembly=null;return;
                 }
                 byte[] part=a.parts[a.next];if(part==null)return;
                 if(a.offset==part.length){a.offset=0;a.next++;continue;}
                 var b=new FriendlyByteBuf(Unpooled.wrappedBuffer(part,a.offset,9));
                 try{
-                    int role=b.readUnsignedByte();BlockPos pos=b.readBlockPos();
-                    if(role>2||!a.all.add(pos)||a.all.size()>a.h.positions())throw new IllegalArgumentException();
+                    int raw=b.readUnsignedByte(),role=raw&3,mask=raw>>2;if(mask==0)mask=7;BlockPos pos=b.readBlockPos();
+                    int used=a.lanes.getOrDefault(pos,0);
+                    if(role>2||mask>7||(used&mask)!=0||++a.records>a.h.positions())throw new IllegalArgumentException();
+                    a.all.add(pos);a.lanes.put(pos,used|mask);
                     switch(role){case 0->a.wires.add(pos);case 1->a.inputs.add(pos);case 2->a.outputs.add(pos);}
                 }finally{b.release();}
                 a.offset+=9;a.progress=now;

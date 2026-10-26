@@ -48,6 +48,6 @@ public class ServerSelectionEvents {
             return;
         }
 
-        NetworkSelectionData.set(player, pos);
+        NetworkSelectionData.set(player, pos, event.getHitVec().getLocation());
     }
 }

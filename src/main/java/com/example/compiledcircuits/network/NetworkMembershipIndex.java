@@ -45,13 +45,14 @@ final class NetworkMembershipIndex {
             for (var element : elements) {
                 Key key = new Key(network.getDimension(), element.getPos());
                 var owners = updates.getOrDefault(key, claims.getOrDefault(key, List.of())).stream().filter(c -> !c.network().isRetired()).toList();
-                if (!owners.isEmpty()) {
+                if (owners.stream().anyMatch(o -> Crossings.overlaps(o.element(),element))) {
                     var owner = owners.get(0).network();
                     throw new NetworkSavedData.AdmissionException("Position " + element.getPos().toShortString()
                             + " in " + network.getDimension() + " already belongs to "
                             + owner.getName() + " (#" + owner.getId() + ").");
                 }
-                updates.put(key, List.of(new NetworkSavedData.ElementLocation(network, element)));
+                var updated=new ArrayList<>(owners);updated.add(new NetworkSavedData.ElementLocation(network,element));
+                updates.put(key,List.copyOf(updated));
             }
         }
         return () -> updates.forEach((key, owners) -> {
@@ -73,17 +74,18 @@ final class NetworkMembershipIndex {
     void stage(CompiledNetwork network, CompiledCircuitElement element) {
         Key key = new Key(network.getDimension(), element.getPos());
         var previous = claims.get(key);
-        if (previous != null && previous.stream().anyMatch(c -> !c.network().isRetired())) throw new NetworkSavedData.AdmissionException("Position already claimed: " + element.getPos());
-        claims.put(key, List.of(new NetworkSavedData.ElementLocation(network, element)));
+        if (previous != null && previous.stream().anyMatch(c -> !c.network().isRetired() && Crossings.overlaps(c.element(),element))) throw new NetworkSavedData.AdmissionException("Position already claimed: " + element.getPos());
+        var updated=new ArrayList<NetworkSavedData.ElementLocation>();if(previous!=null)previous.stream().filter(c->!c.network().isRetired()).forEach(updated::add);
+        updated.add(new NetworkSavedData.ElementLocation(network,element));claims.put(key,List.copyOf(updated));
     }
     void unstage(CompiledNetwork network, CompiledCircuitElement element) {
         Key key = new Key(network.getDimension(), element.getPos());
         var value = claims.get(key);
-        if (value != null && value.size() == 1 && value.get(0).network() == network) claims.remove(key);
+        if(value!=null){var remaining=value.stream().filter(c->c.network()!=network).toList();if(remaining.isEmpty())claims.remove(key);else claims.put(key,remaining);}
     }
 
     List<NetworkSavedData.ElementLocation> owners(String dimension, BlockPos position) {
         var owners = claims.getOrDefault(new Key(dimension, position), List.of());
-        return owners.isEmpty() || owners.get(0).network().isPublished() ? owners : List.of();
+        return owners.stream().filter(o->o.network().isPublished()).toList();
     }
 }

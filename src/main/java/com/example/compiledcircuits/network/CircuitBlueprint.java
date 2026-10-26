@@ -17,10 +17,10 @@ public final class CircuitBlueprint {
         this.data = data.copy(); this.data.remove("blueprintId");
         var entries = data.getList("elements", Tag.TAG_COMPOUND);
         if (entries.isEmpty() || entries.size() > MAX_ELEMENTS) throw new IllegalArgumentException("Blueprint limit: 1–4096 blocks");
-        Set<BlockPos> positions=new HashSet<>();
+        Map<BlockPos,Integer> positions=new HashMap<>();
         for (var tag : entries) {
             var e = CompiledCircuitElement.load((CompoundTag)tag);
-            if(!positions.add(e.getPos()))throw new IllegalArgumentException("Duplicate blueprint position");
+            int used=positions.getOrDefault(e.getPos(),0),mask=Crossings.mask(e);if((used&mask)!=0)throw new IllegalArgumentException("Duplicate blueprint position");positions.put(e.getPos(),used|mask);
             var relative=e.getPos().subtract(origin());
             if(Math.abs((long)relative.getX())>256||Math.abs((long)relative.getY())>256||Math.abs((long)relative.getZ())>256)throw new IllegalArgumentException("Blueprint size limit: 256 blocks per axis");
             if (e.resolveState().status() != CompiledBlockStateCodec.Status.EXACT) throw new IllegalArgumentException("Blueprint contains an unresolved block");
@@ -139,6 +139,11 @@ public final class CircuitBlueprint {
                 Map<Direction,BundleWireEntity.Port> faces=new EnumMap<>(Direction.class);
                 BundleWireEntity.decode(old.bundleFaces()).forEach((side,port)->faces.put(transformSide(side,turns,mirrored,mirroredZ),port));
                 tag.put("bundleFaces",BundleWireEntity.encode(faces));
+            }
+            if(!old.crossingLanes().isEmpty()){
+                var lanes=new CompoundTag();for(var axis:Direction.Axis.values())if(old.crossingLanes().contains(axis.getName()))
+                    lanes.put(transformSide(Direction.get(Direction.AxisDirection.POSITIVE,axis),turns,mirrored,mirroredZ).getAxis().getName(),old.crossingLanes().getCompound(axis.getName()));
+                tag.put("crossingLanes",lanes);
             }
             result.add(CompiledCircuitElement.load(tag));
         }

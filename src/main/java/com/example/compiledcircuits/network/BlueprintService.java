@@ -23,7 +23,12 @@ public final class BlueprintService {
     public static void request(ServerPlayer player,int networkId){ request(player,networkId,false); }
     public static void captureAt(ServerPlayer player,BlockPos pos,boolean append) {
         if(!player.isShiftKeyDown() || tool(player).isEmpty() || pos.distSqr(player.blockPosition())>64 || !player.serverLevel().hasChunkAt(pos)) return;
-        var source=NetworkSavedData.get(player.getServer()).findNetworkContaining(player.serverLevel(),pos);
+        var state=player.serverLevel().getBlockState(pos);int mask=7;
+        if(state.getBlock() instanceof CrossingWireBlock){var hit=player.pick(8,1,false);if(!(hit instanceof net.minecraft.world.phys.BlockHitResult blockHit)||!blockHit.getBlockPos().equals(pos))return;
+            var axis=CrossingWireBlock.hit(state,pos,hit.getLocation());if(axis==null)return;mask=1<<axis.ordinal();}
+        final int selected=mask;
+        var source=NetworkSavedData.get(player.getServer()).getMembershipOwners(player.serverLevel().dimension().location().toString(),pos).stream()
+                .filter(o->(Crossings.mask(o.element())&selected)!=0).map(NetworkSavedData.ElementLocation::network).findFirst().orElse(null);
         if(source==null)player.sendSystemMessage(Component.translatable("blueprint.compiledcircuits.no_network"));
         else request(player,source.getId(),append);
     }
@@ -85,8 +90,11 @@ public final class BlueprintService {
             level.captureBlockSnapshots=true;
             try{
                 for(var e:elements){
-                    var pos=e.getPos();if(!level.setBlock(pos,e.resolveState().state().orElseThrow(),Block.UPDATE_CLIENTS|Block.UPDATE_KNOWN_SHAPE))throw new IllegalArgumentException("Could not place "+pos.toShortString());
+                    var pos=e.getPos();var placed=e.resolveState().state().orElseThrow();
+                    if(placed.getBlock() instanceof CrossingWireBlock&&level.getBlockState(pos).getBlock() instanceof CrossingWireBlock)placed=CrossingWireBlock.merge(level.getBlockState(pos),placed);
+                    if(!level.setBlock(pos,placed,Block.UPDATE_CLIENTS|Block.UPDATE_KNOWN_SHAPE))throw new IllegalArgumentException("Could not place "+pos.toShortString());
                     var entity=level.getBlockEntity(pos);
+                    if(entity instanceof CrossingWireEntity wire){var lanes=wire.snapshot(7);lanes.merge(e.crossingLanes());wire.restore(lanes);}
                     if(entity instanceof IdWireEntity wire)wire.configure(e.wireId(),e.wireColor());
                     if(entity instanceof BundlePortEntity port)port.configure(e.channelId());
                     if(entity instanceof BundleWireEntity wire)wire.restorePorts(e.bundleFaces());

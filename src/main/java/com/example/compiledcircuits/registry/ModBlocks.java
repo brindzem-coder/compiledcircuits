@@ -44,6 +44,7 @@ public class ModBlocks {
     public static final RegistryObject<Block> D_LATCH = BLOCKS.register("d_latch",
             () -> new com.example.compiledcircuits.block.DLatchBlock(BlockBehaviour.Properties.of().strength(1).noOcclusion()));
 
+    public static final RegistryObject<Block> CROSSING_WIRE = BLOCKS.register("crossing_wire", () -> new com.example.compiledcircuits.block.CrossingWireBlock(BlockBehaviour.Properties.of().strength(1).noOcclusion()));
     public static final RegistryObject<Block> BASIC_WIRE =
             BLOCKS.register("basic_wire",
                     () -> new BasicWireBlock(

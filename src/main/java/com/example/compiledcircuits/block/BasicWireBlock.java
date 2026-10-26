@@ -195,12 +195,15 @@ public class BasicWireBlock extends Block implements IWireConnectable {
                 && !com.example.compiledcircuits.network.CircuitBoundary.allows(server,currentPos,neighborPos)) return false;
         BlockState neighborState = level.getBlockState(neighborPos);
         BlockState ownState = level.getBlockState(currentPos);
+        // Placement computes the arms before this block replaces air (or another replaceable block).
+        if (!ownState.is(this)) ownState = defaultBlockState();
         if (neighborState.getBlock() instanceof BundledWireBlock) {
             var port = BundleConnections.port(level, neighborPos, direction.getOpposite());
             return port != null && !port.external();
         }
         if (neighborState.getBlock() instanceof BundlePortBlock port)
             return !port.isExternal() && neighborState.getValue(EndpointBlock.FACING) == direction.getOpposite();
+        if(neighborState.getBlock() instanceof CrossingWireBlock)return com.example.compiledcircuits.network.Crossings.connects(level,currentPos,ownState,neighborState,direction);
         if (!IdWireBlock.compatible(ownState, IdWireBlock.id(level, currentPos, ownState), neighborState, IdWireBlock.id(level, neighborPos, neighborState))) return false;
 
         if (neighborState.getBlock() instanceof IWireConnectable connectable) {

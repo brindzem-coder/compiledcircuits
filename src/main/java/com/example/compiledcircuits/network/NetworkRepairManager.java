@@ -12,7 +12,7 @@ public final class NetworkRepairManager {
     public enum Outcome { PLACED, OCCUPIED, UNSUPPORTED, FAILED, CORRECT, UNLOADED, INVALID, PROTECTED, CHANGED }
     /** Explicitly supported placements; arbitrary saved block IDs must not bypass repair policy. */
     private static boolean supports(Block block) {
-        return block instanceof com.example.compiledcircuits.block.BundledWireBlock || block instanceof com.example.compiledcircuits.block.BundlePortBlock || block == ModBlocks.ID_WIRE.get() || block == ModBlocks.NETWORK_WIRE.get() || block == ModBlocks.BASIC_WIRE.get()
+        return block instanceof com.example.compiledcircuits.block.CrossingWireBlock || block instanceof com.example.compiledcircuits.block.BundledWireBlock || block instanceof com.example.compiledcircuits.block.BundlePortBlock || block == ModBlocks.ID_WIRE.get() || block == ModBlocks.NETWORK_WIRE.get() || block == ModBlocks.BASIC_WIRE.get()
                 || block == ModBlocks.INPUT_ENDPOINT.get() || block == ModBlocks.OUTPUT_ENDPOINT.get()
                 || block == ModBlocks.SIGNAL_SWITCH.get() || block == ModBlocks.SIGNAL_LAMP.get()
                 || block == ModBlocks.AND_GATE.get() || block == ModBlocks.OR_GATE.get()
@@ -45,6 +45,22 @@ public final class NetworkRepairManager {
         for(long chunk:RuntimeSignalReader.dependencyChunks(pos)) if(!NetworkRuntime.isChunkAvailable(level,chunk))return Outcome.UNLOADED;
         if(!level.mayInteract(player,pos))return Outcome.PROTECTED;
         var actual=level.getChunkSource().getChunkNow(pos.getX()>>4,pos.getZ()>>4).getBlockState(pos);
+        if(expected instanceof com.example.compiledcircuits.block.CrossingWireBlock){
+            if(Crossings.matches(element,level,actual))return Outcome.CORRECT;
+            if(!actual.isAir()&&!(actual.getBlock() instanceof com.example.compiledcircuits.block.CrossingWireBlock))return Outcome.OCCUPIED;
+            var desired=decoded.state().orElseThrow();var lanes=element.crossingLanes();
+            if(actual.getBlock() instanceof com.example.compiledcircuits.block.CrossingWireBlock){
+                var keep=com.example.compiledcircuits.block.CrossingWireBlock.only(actual,7&~Crossings.mask(element));
+                desired=com.example.compiledcircuits.block.CrossingWireBlock.merge(keep,desired);
+                if(level.getBlockEntity(pos) instanceof com.example.compiledcircuits.block.CrossingWireEntity wire){var other=wire.snapshot(7&~Crossings.mask(element));other.merge(lanes);lanes=other;}
+            }
+            var saved=lanes;
+            boolean restored=ProtectedRepairPlacement.place(level,pos,desired,player,()->NetworkOperations.canModify(player)&&NetworkSavedData.get(level.getServer()).getNetwork(network.getId())==network,
+                    ()->((com.example.compiledcircuits.block.CrossingWireEntity)level.getBlockEntity(pos)).restore(saved));
+            if(restored)NetworkIntegrityManager.scheduleCheck(level,pos);
+            return restored?Outcome.PLACED:Outcome.PROTECTED;
+        }
+
         var match=CompiledBlockStateMatcher.match(element,level,actual,NetworkIntegrityManager.exactIntegrityEnabled());
         if(match==CompiledBlockStateMatcher.Match.MATCH){NetworkIntegrityManager.scheduleCheck(level,pos);return Outcome.CORRECT;}
         if(current==null)return Outcome.CHANGED;

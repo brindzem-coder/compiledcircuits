@@ -658,6 +658,11 @@ public class NetworkSavedData extends SavedData {
         } finally { PerformanceDiagnostics.elapsed(metric, started); }
     }
 
+    public List<ElementLocation> findElementLocations(String dimension,BlockPos pos){
+        String metric="lookup.findElementLocation";long started=PerformanceDiagnostics.begin();PerformanceDiagnostics.add(metric+".calls",1);
+        try{PerformanceDiagnostics.add(metric+".indexProbes",1);var owners=membership.owners(dimension,pos);PerformanceDiagnostics.add(metric+(owners.isEmpty()?".misses":".hits"),1);return owners;}
+        finally{PerformanceDiagnostics.elapsed(metric,started);}
+    }
     public ElementLocation findElementLocation(String dimension, BlockPos pos) {
         return lookup("lookup.findElementLocation", dimension, pos, null);
     }
@@ -887,7 +892,9 @@ public class NetworkSavedData extends SavedData {
                 .thenComparing(e -> e.getKey().pos())).forEach(entry -> {
             var key = entry.getKey();
             var networksAtPosition = entry.getValue();
-            if (networksAtPosition.size() > 1 || !data.reservations.at(key.dimension(), key.pos()).isEmpty()) {
+            boolean overlap=false;int used=0;
+            for(var n:networksAtPosition){int mask=Crossings.mask(n.getElementAt(key.pos()));if((used&mask)!=0)overlap=true;used|=mask;}
+            if (overlap || !data.reservations.at(key.dimension(), key.pos()).isEmpty()) {
                 String reason = "Conflicting membership at " + key.pos().toShortString() + " in " + key.dimension()
                         + "; network IDs " + networksAtPosition.stream().map(CompiledNetwork::getId).sorted().toList();
                 for (var network : networksAtPosition) reasons.putIfAbsent(network.getId(), reason);

@@ -22,6 +22,6 @@ abstract class ChunkMapRuntimeMixin {
         boolean changed = loaded ? compiledcircuits$fullChunks.add(pos.toLong()) : true;
         if (!loaded) compiledcircuits$fullChunks.remove(pos.toLong());
         if (changed && level.getServer().overworld() != null)
-            NetworkRuntime.chunkChanged(level, pos.toLong(), loaded);
+            NetworkRuntime.chunkStatusChanged(level, pos.toLong(), loaded);
     }
 }

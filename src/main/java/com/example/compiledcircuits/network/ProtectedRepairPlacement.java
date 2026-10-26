@@ -30,7 +30,7 @@ final class ProtectedRepairPlacement {
             try {
                 // A changed wire ID may leave the BlockState identical. Capture its BE NBT too,
                 // so claim-protection cancellation restores identity as well as geometry.
-                if (state == level.getBlockState(pos) && (state.getBlock() instanceof com.example.compiledcircuits.block.IdWireBlock || state.getBlock() instanceof com.example.compiledcircuits.block.BundlePortBlock || state.getBlock() instanceof com.example.compiledcircuits.block.BundledWireBlock)) {
+                if (state == level.getBlockState(pos) && (state.getBlock() instanceof com.example.compiledcircuits.block.CrossingWireBlock || state.getBlock() instanceof com.example.compiledcircuits.block.IdWireBlock || state.getBlock() instanceof com.example.compiledcircuits.block.BundlePortBlock || state.getBlock() instanceof com.example.compiledcircuits.block.BundledWireBlock)) {
                     snapshots.add(BlockSnapshot.create(level.dimension(), level, pos, Block.UPDATE_ALL));
                     placed = true;
                 } else placed = level.setBlock(pos, state, Block.UPDATE_ALL);

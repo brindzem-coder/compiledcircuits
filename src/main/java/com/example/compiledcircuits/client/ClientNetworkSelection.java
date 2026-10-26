@@ -23,10 +23,12 @@ public final class ClientNetworkSelection {
     private static Set<BlockPos> INPUTS = new HashSet<>();
     private static Set<BlockPos> OUTPUTS = new HashSet<>();
 
+    private static java.util.Map<BlockPos,Integer> laneMasks=java.util.Map.of();
+    public static int laneMask(BlockPos pos){return laneMasks.getOrDefault(pos,7);}
     private static Object selectionLevel;
     public static boolean isForLevel(Object level){return selectionLevel==level;}
     public static void publish(Object level,com.example.compiledcircuits.networking.HighlightReplica.Selection selected){
-        selectionLevel=level;WIRES=selected.wires();INPUTS=selected.inputs();OUTPUTS=selected.outputs();
+        selectionLevel=level;laneMasks=selected.lanes();WIRES=selected.wires();INPUTS=selected.inputs();OUTPUTS=selected.outputs();
     }
     private ClientNetworkSelection() {
     }
@@ -36,80 +38,16 @@ public final class ClientNetworkSelection {
             BlockPos startPos
     ) {
 
-        BlockState startState = level.getBlockState(startPos);
-
-        if (!(startState.getBlock() instanceof IWireConnectable)) {
-            return false;
-        }
-
-        clear();
-        selectionLevel=level;
-        if (!ClientCompiledElements.isReadyFor(level.dimension().location().toString()) || ClientCompiledElements.isBlocked(startPos)) return false;
-        Integer owner=ClientCompiledElements.networkIdAt(startPos);
-        if (owner!=null) {
-            for (BlockPos pos:ClientCompiledElements.positionsForNetwork(owner)) {
-                if (level.hasChunkAt(pos)) classify(pos,level.getBlockState(pos));
-                else WIRES.add(pos);
-            }
-            return getTotalSize()>0;
-        }
-
-        Queue<BlockPos> queue = new ArrayDeque<>();
-        Set<BlockPos> visited = new HashSet<>();
-
-        queue.add(startPos.immutable());
-
-        while (!queue.isEmpty()) {
-
-            BlockPos currentPos = queue.remove();
-
-            if (!visited.add(currentPos)) {
-                continue;
-            }
-
-            if (visited.size() > MAX_SCAN_SIZE) {
-                clear();
-                return false;
-            }
-
-            BlockState currentState =
-                    level.getBlockState(currentPos);
-
-            if (!(currentState.getBlock()
-                    instanceof IWireConnectable currentConnectable)) {
-                continue;
-            }
-
-            classify(currentPos, currentState);
-
-            for (Direction direction : Direction.values()) {
-
-                BlockPos neighborPos =
-                        currentPos.relative(direction);
-
-                // Не змушуємо client підвантажувати нові chunks
-                // тільки через selection.
-                if (!level.hasChunkAt(neighborPos)) {
-                    continue;
-                }
-                if (ClientCompiledElements.isBlocked(neighborPos) || ClientCompiledElements.networkIdAt(neighborPos)!=null) continue;
-
-                BlockState neighborState =
-                        level.getBlockState(neighborPos);
-
-                if (!(neighborState.getBlock()
-                        instanceof IWireConnectable neighborConnectable)) {
-                    continue;
-                }
-
-                // Read wire IDs from block entities, just like hover and server compilation.
-                if (com.example.compiledcircuits.block.CircuitConnections.connects(level, currentPos, currentState, neighborState, direction)) {
-                    queue.add(neighborPos.immutable());
-                }
-            }
-        }
-
-        return !visited.isEmpty();
+        return selectNetwork(level,startPos,7);
+    }
+    public static boolean selectNetwork(ClientLevel level,BlockPos startPos,int mask){
+        clear();selectionLevel=level;
+        if(!(level.getBlockState(startPos).getBlock() instanceof IWireConnectable)||!ClientCompiledElements.isReadyFor(level.dimension().location().toString())||ClientCompiledElements.isBlocked(startPos))return false;
+        var job=new ClientLaneTraversal(level,startPos,mask);while(!job.done())job.step(1024);
+        if(job.failed){clear();return false;}
+        laneMasks=java.util.Map.copyOf(job.masks);
+        for(var pos:job.masks.keySet())if(level.hasChunkAt(pos))classify(pos,level.getBlockState(pos));else WIRES.add(pos);
+        return getTotalSize()>0;
     }
 
     private static void classify(
@@ -134,7 +72,7 @@ public final class ClientNetworkSelection {
     }
 
     public static void clear() {
-        WIRES=new HashSet<>();INPUTS=new HashSet<>();OUTPUTS=new HashSet<>();selectionLevel=null;
+        laneMasks=java.util.Map.of();WIRES=new HashSet<>();INPUTS=new HashSet<>();OUTPUTS=new HashSet<>();selectionLevel=null;
     }
 
     public static Set<BlockPos> getWires() {

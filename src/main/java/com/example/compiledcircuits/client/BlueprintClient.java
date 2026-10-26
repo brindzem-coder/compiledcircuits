@@ -59,8 +59,11 @@ public final class BlueprintClient {
     }
     private static void rebuild(){
         transformed=blueprint.elements(BlockPos.ZERO,turns,mirrored,mirroredZ);var cached=new ArrayList<Ghost>();
+        var crossingStates=new java.util.HashMap<BlockPos,net.minecraft.world.level.block.state.BlockState>();
+        for(var e:transformed){var state=e.resolveState().state().orElseThrow();if(state.getBlock() instanceof com.example.compiledcircuits.block.CrossingWireBlock)crossingStates.merge(e.getPos(),state,com.example.compiledcircuits.block.CrossingWireBlock::merge);}
         for(var e:transformed){var state=e.resolveState().state().orElseThrow();
             var boxes=new ArrayList<>(state.getShape(net.minecraft.world.level.EmptyBlockGetter.INSTANCE,BlockPos.ZERO).toAabbs());
+            if(state.getBlock() instanceof com.example.compiledcircuits.block.CrossingWireBlock){boxes.clear();var full=crossingStates.get(e.getPos());for(var axis:Direction.Axis.values())if(com.example.compiledcircuits.block.CrossingWireBlock.kind(state,axis)!=0)boxes.addAll(com.example.compiledcircuits.block.CrossingWireBlock.laneShape(full,axis).toAabbs());}
             BundleWireEntity.decode(e.bundleFaces()).forEach((side,port)->{
                 double[] low={.15625,.15625,.15625},high={.84375,.84375,.84375};int axis=side.getAxis()==Direction.Axis.X?0:side.getAxis()==Direction.Axis.Y?1:2;
                 low[axis]=side.getAxisDirection()==Direction.AxisDirection.POSITIVE?.6875:0;high[axis]=side.getAxisDirection()==Direction.AxisDirection.POSITIVE?1:.3125;

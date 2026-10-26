@@ -10,8 +10,10 @@ public final class CircuitBoundary {
         var data = NetworkSavedData.get(level.getServer());
         String dimension = level.dimension().location().toString();
         if (!data.getBlockingRecords(dimension,a).isEmpty() || !data.getBlockingRecords(dimension,b).isEmpty()) return false;
-        var left = data.getMembershipOwners(dimension,a);
-        var right = data.getMembershipOwners(dimension,b);
+        var direction=net.minecraft.core.Direction.fromDelta(b.getX()-a.getX(),b.getY()-a.getY(),b.getZ()-a.getZ());
+        int mask=direction==null?7:1<<direction.getAxis().ordinal();
+        var left = data.getMembershipOwners(dimension,a).stream().filter(o->(Crossings.mask(o.element())&mask)!=0).toList();
+        var right = data.getMembershipOwners(dimension,b).stream().filter(o->(Crossings.mask(o.element())&mask)!=0).toList();
         if (left.isEmpty() && right.isEmpty()) return !data.hasUnknownMembershipReservations();
         return left.size()==1 && right.size()==1 && left.get(0).network()==right.get(0).network();
     }

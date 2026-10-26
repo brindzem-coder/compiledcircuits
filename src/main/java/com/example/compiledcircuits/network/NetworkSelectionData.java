@@ -20,6 +20,7 @@ public final class NetworkSelectionData {
             ServerPlayer player,
             BlockPos pos
     ) {
+        player.getPersistentData().remove("compiledcircuits_selected_lane");
         CompilationJobs.cancel(player);
         CompoundTag data = player.getPersistentData();
 
@@ -28,6 +29,21 @@ public final class NetworkSelectionData {
         data.putInt(KEY_X, pos.getX());
         data.putInt(KEY_Y, pos.getY());
         data.putInt(KEY_Z, pos.getZ());
+    }
+
+    public static void set(net.minecraft.server.level.ServerPlayer player, BlockPos pos, net.minecraft.world.phys.Vec3 hit) {
+        set(player,pos);var state=player.serverLevel().getBlockState(pos);
+        if(state.getBlock() instanceof com.example.compiledcircuits.block.CrossingWireBlock){
+            var axis=com.example.compiledcircuits.block.CrossingWireBlock.hit(state,pos,hit);
+            if(axis!=null)player.getPersistentData().putInt("compiledcircuits_selected_lane",1<<axis.ordinal());
+        }
+    }
+    public static int mask(ServerPlayer player){return player.getPersistentData().contains("compiledcircuits_selected_lane")?player.getPersistentData().getInt("compiledcircuits_selected_lane"):7;}
+    public static CompiledNetwork network(ServerPlayer player){
+        var pos=get(player);if(pos==null)return null;var data=NetworkSavedData.get(player.getServer());
+        var matches=data.getMembershipOwners(player.serverLevel().dimension().location().toString(),pos).stream()
+                .filter(o->(Crossings.mask(o.element())&mask(player))!=0).map(NetworkSavedData.ElementLocation::network).distinct().toList();
+        return matches.size()==1?matches.get(0):null;
     }
 
     public static BlockPos get(ServerPlayer player) {

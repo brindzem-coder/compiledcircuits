@@ -7,6 +7,8 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class CircuitConnections {
     private CircuitConnections() {}
     public static boolean connects(net.minecraft.world.level.BlockGetter level, net.minecraft.core.BlockPos pos, BlockState a, BlockState b, Direction side) {
+        if (a.getBlock() instanceof CrossingWireBlock || b.getBlock() instanceof CrossingWireBlock)
+            return com.example.compiledcircuits.network.Crossings.connects(level,pos,a,b,side);
         if (a.getBlock() instanceof BundledWireBlock || b.getBlock() instanceof BundledWireBlock)
             return BundleConnections.connects(level, pos, a, b, side);
         return connects(a, IdWireBlock.id(level, pos, a), b, IdWireBlock.id(level, pos.relative(side), b), side);

@@ -237,52 +237,17 @@ public class NetworkSelectionRenderer {
         poseStack.popPose();
     }
 
-    private static void addBox(
-            BufferBuilder buffer,
-            Matrix4f matrix,
-            BlockPos pos,
-            float red,
-            float green,
-            float blue,
-            float alpha
-    ) {
-
-        float x1 =
-                (float) (
-                        pos.getX()
-                                + MIN_OFFSET
-                );
-
-        float y1 =
-                (float) (
-                        pos.getY()
-                                + MIN_OFFSET
-                );
-
-        float z1 =
-                (float) (
-                        pos.getZ()
-                                + MIN_OFFSET
-                );
-
-        float x2 =
-                (float) (
-                        pos.getX()
-                                + MAX_OFFSET
-                );
-
-        float y2 =
-                (float) (
-                        pos.getY()
-                                + MAX_OFFSET
-                );
-
-        float z2 =
-                (float) (
-                        pos.getZ()
-                                + MAX_OFFSET
-                );
-
+    private static void addBox(BufferBuilder buffer,Matrix4f matrix,BlockPos pos,float red,float green,float blue,float alpha) {
+        var level=Minecraft.getInstance().level;
+        var state=level.getBlockState(pos);
+        if(state.getBlock() instanceof com.example.compiledcircuits.block.CrossingWireBlock){
+            int mask=ClientNetworkSelection.laneMask(pos);
+            for(var axis:net.minecraft.core.Direction.Axis.values())if((mask&(1<<axis.ordinal()))!=0)
+                for(var box:com.example.compiledcircuits.block.CrossingWireBlock.laneShape(state,axis).toAabbs())addBounds(buffer,matrix,box.move(pos).inflate(.005),red,green,blue,alpha);
+        }else addBounds(buffer,matrix,new net.minecraft.world.phys.AABB(pos).deflate(.03),red,green,blue,alpha);
+    }
+    private static void addBounds(BufferBuilder buffer,Matrix4f matrix,net.minecraft.world.phys.AABB box,float red,float green,float blue,float alpha) {
+        float x1=(float)box.minX,y1=(float)box.minY,z1=(float)box.minZ,x2=(float)box.maxX,y2=(float)box.maxY,z2=(float)box.maxZ;
         int r =
                 toColor(red);
 

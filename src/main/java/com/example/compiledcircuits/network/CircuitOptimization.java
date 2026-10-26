@@ -11,7 +11,7 @@ public final class CircuitOptimization {
             source.sendFailure(Component.literal("You cannot modify circuits.")); return 0;
         }
         var data = NetworkSavedData.get(source.getServer()); var pos = NetworkSelectionData.get(player);
-        var network = pos == null ? null : data.findNetworkContaining(player.serverLevel(), pos);
+        var network = pos == null ? null : NetworkSelectionData.network(player);
         if (network == null) { source.sendFailure(Component.literal("Select a compiled network first.")); return 0; }
         try {
             String result = network.enableOptimization(); data.setDirty(); data.runtime().optimizationChanged(network);

@@ -20,6 +20,10 @@ public final class ClientHoveredCircuit {
     @FunctionalInterface
     interface Edges { boolean connects(BlockPos from, Direction direction); }
     private record Key(Object level, String dimension, BlockPos target, long membership, long topology) {}
+    private static ClientLaneTraversal laneJob;
+    private static int laneMask;
+    private static java.util.Map<BlockPos,Integer> laneMasks=java.util.Map.of();
+    public static int laneMask(BlockPos pos){return laneMasks.getOrDefault(pos,7);}
     private static Key key;
     private static Set<BlockPos> positions = Set.of();
     private static Status status = Status.EMPTY;
@@ -38,7 +42,7 @@ public final class ClientHoveredCircuit {
     public static Status getStatus() { return status; }
     public static long getBfsStarted() { return bfsStarted; }
     public static int getBfsNodesThisTick() { return bfsNodesThisTick; }
-    public static void clear() { key = null; positions = Set.of(); job = null; status = Status.EMPTY; bfsNodesThisTick = 0; }
+    public static void clear() { laneJob=null;laneMasks=java.util.Map.of();key = null; positions = Set.of(); job = null; status = Status.EMPTY; bfsNodesThisTick = 0; }
     public static void reset() { clear(); bfsStarted = 0; }
 
     public static void tick() {
@@ -62,10 +66,13 @@ public final class ClientHoveredCircuit {
         if (state == null || !CircuitElementPredicates.isCircuit(state) || !ClientCompiledElements.isReadyFor(dimension)) {
             clear(); return;
         }
-        Integer network = ClientCompiledElements.networkIdAt(target);
-        update(level, dimension, target, ClientCompiledElements.getRevision(), ClientCircuitBlockIndex.getTopologyRevision(),
-                network == null ? null : ClientCompiledElements.positionsForNetwork(network),
-                (from, direction) -> connects(level, from, direction));
+        int mask=state.getBlock() instanceof com.example.compiledcircuits.block.CrossingWireBlock?1<<com.example.compiledcircuits.block.CrossingWireBlock.hit(state,target,hit.getLocation()).ordinal():7;
+        var next=new Key(level,dimension,target,ClientCompiledElements.getRevision(),ClientCircuitBlockIndex.getTopologyRevision());
+        if(!next.equals(key)||laneMask!=mask){key=next;laneMask=mask;laneJob=new ClientLaneTraversal(level,target,mask);positions=Set.of();laneMasks=java.util.Map.of();status=Status.PENDING;bfsStarted++;}
+        bfsNodesThisTick=0;
+        if(laneJob!=null){laneJob.step(NODES_PER_TICK);bfsNodesThisTick=NODES_PER_TICK;
+            if(laneJob.done()){status=laneJob.failed?Status.TOO_LARGE:Status.READY;if(!laneJob.failed){laneMasks=java.util.Map.copyOf(laneJob.masks);positions=laneMasks.keySet();}laneJob=null;}}
+
     }
 
     // The graph boundary keeps bounded collection testable without a Minecraft client world.

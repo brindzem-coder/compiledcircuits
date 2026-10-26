@@ -21,7 +21,7 @@ public final class CircuitTables {
             source.sendFailure(Component.literal("You cannot modify circuits.")); return 0;
         }
         var data = NetworkSavedData.get(source.getServer()); var pos = NetworkSelectionData.get(player);
-        var n = pos == null ? null : data.findNetworkContaining(player.serverLevel(), pos);
+        var n = pos == null ? null : NetworkSelectionData.network(player);
         if (n == null) { source.sendFailure(Component.literal("Select a compiled network first.")); return 0; }
         if (action.equals("status")) {
             var job = jobs.get(source.getServer());

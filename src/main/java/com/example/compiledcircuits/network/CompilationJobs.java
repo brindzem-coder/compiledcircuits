@@ -50,8 +50,10 @@ public final class CompilationJobs {
             return result(Code.INCOMPLETE_UNLOADED, "The selected chunk is not fully loaded. Visit the area normally, then retry.");
         if (!(level.getChunkSource().getChunkNow(start.getX() >> 4, start.getZ() >> 4).getBlockState(start).getBlock() instanceof IWireConnectable))
             return result(Code.INVALID_START, "Selection is not a circuit element.");
-        if (!data.getMembershipOwners(level.dimension().location().toString(), start).isEmpty()
-                || !data.getBlockingRecords(level.dimension().location().toString(), start).isEmpty())
+        var selectedState=level.getChunkSource().getChunkNow(start.getX()>>4,start.getZ()>>4).getBlockState(start);
+        if(selectedState.getBlock() instanceof CrossingWireBlock&&Integer.bitCount(CrossingWireBlock.mask(selectedState)&NetworkSelectionData.mask(player))!=1)
+            return result(Code.INVALID_START,"Select one wire of the crossing first.");
+        if (!Crossings.free(data, level.dimension().location().toString(), start, NetworkSelectionData.mask(player)))
             return result(Code.CONFLICT, "The selected position is already reserved.");
         Job job = new Job(manager, source, player, data, start, name);
         manager.actors.put(player, job); manager.jobs.addLast(job);
@@ -181,7 +183,7 @@ public final class CompilationJobs {
                 case VALIDATING -> {
                     if (validation.hasNext()) {
                         var item = validation.next(); var state = read(item.getKey()); if (state == null) return;
-                        if (state != item.getValue()) { fail(Code.CHANGED_DURING_SCAN, "Element state changed."); return; }
+                        if (state != item.getValue() && !(state.getBlock() instanceof CrossingWireBlock && CrossingWireBlock.only(state,CrossingWireBlock.mask(item.getValue())) == item.getValue())) { fail(Code.CHANGED_DURING_SCAN, "Element state changed."); return; }
                     } else { validation = snapshots.entrySet().iterator(); phase = Phase.ASSEMBLING; }
                 }
                 case ASSEMBLING -> {
@@ -245,8 +247,13 @@ public final class CompilationJobs {
             return level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4).getBlockState(pos);
         }
         void enqueue(BlockPos pos, BlockState state) {
-            if (snapshots.containsKey(pos)) return;
-            hasLogic |= BundleTopology.element(state) || state.getBlock() instanceof com.example.compiledcircuits.block.NetworkWireBlock || state.getBlock() instanceof GateBodyBlock || CircuitConnections.isTerminal(state);
+            var old=snapshots.get(pos);
+            if(old!=null){
+                if(!(state.getBlock() instanceof CrossingWireBlock))return;
+                int fresh=CrossingWireBlock.mask(state)&~CrossingWireBlock.mask(old);if(fresh==0)return;
+                state=CrossingWireBlock.only(state,fresh);snapshots.put(pos,CrossingWireBlock.merge(old,state));frontier.addLast(new Node(pos.immutable(),state));return;
+            }
+            hasLogic |= state.getBlock() instanceof CrossingWireBlock || BundleTopology.element(state) || state.getBlock() instanceof com.example.compiledcircuits.block.NetworkWireBlock || state.getBlock() instanceof GateBodyBlock || CircuitConnections.isTerminal(state);
             if (hasLogic && snapshots.size() >= LogicProgram.MAX_ELEMENTS) {
                 fail(Code.TOO_LARGE, "Logic circuits support at most " + LogicProgram.MAX_ELEMENTS + " elements."); return;
             }
@@ -264,6 +271,8 @@ public final class CompilationJobs {
             if (!initialized) {
                 initialized = true; var state = read(start); if (state == null) return;
                 if (!(state.getBlock() instanceof IWireConnectable)) { fail(Code.INVALID_START, "Selection is no longer a circuit element."); return; }
+                state=CrossingWireBlock.only(state,NetworkSelectionData.mask(player));
+                if(state.getBlock() instanceof CrossingWireBlock && CrossingWireBlock.mask(state)==0){fail(Code.INVALID_START,"Selected wire lane no longer exists.");return;}
                 enqueue(start, state); return;
             }
             if (current == null) {
@@ -276,10 +285,12 @@ public final class CompilationJobs {
             if (current.state.getBlock() instanceof GateBodyBlock
                     || ((IWireConnectable) current.state.getBlock()).canWireConnect(current.state, dir)) {
                 BlockPos next = current.pos.relative(dir);
-                if (!level.isOutsideBuildHeight(next) && !snapshots.containsKey(next)
-                        && CircuitBoundary.uncompiled(data,dimension,next)) {
+                if (!level.isOutsideBuildHeight(next)) {
                     BlockState state = read(next); if (state == null) return;
-                    if (CircuitConnections.connects(level, current.pos, current.state, state, dir)) enqueue(next, state);
+                    state=Crossings.project(state,dir.getAxis());
+                    int mask=state.getBlock() instanceof CrossingWireBlock?CrossingWireBlock.mask(state):7;
+                    if(mask!=0 && Crossings.free(data,dimension,next,mask)
+                            && CircuitConnections.connects(level, current.pos, current.state, state, dir)) enqueue(next, state);
                 }
             }
             if (direction == DIRECTIONS.length) current = null;

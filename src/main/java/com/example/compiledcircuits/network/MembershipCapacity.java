@@ -7,7 +7,7 @@ import java.util.*;
 /** Derived counts, independent of physical state/chunk loading. Limits are captured for this data session. */
 public final class MembershipCapacity {
     public static final int NETWORK_HARD=OperationLimits.ELEMENTS, DIMENSION_HARD=CompiledElementPositionsS2CPacket.MAX_ENTRIES;
-    public static final long HEADER_BOUND=1024, RECORD_BOUND=13;
+    public static final long HEADER_BOUND=1024, RECORD_BOUND=14;
     public enum State { READY, OVER_CAPACITY, UNKNOWN }
     public record Usage(State state,long records,long limit,long encodedUpperBound,long parts,String reason) {}
     private final NetworkSavedData data;

@@ -20,6 +20,13 @@ import static com.example.compiledcircuits.network.NetworkOperations.Code;
  */
 public final class DeletionJobs {
     private static final Map<MinecraftServer, Job> JOBS = new IdentityHashMap<>();
+    private static BlockEvent.BreakEvent activeBreakEvent;
+    public static boolean isDeletionEvent(BlockEvent.BreakEvent event) { return event == activeBreakEvent; }
+    private static boolean deniedBreak(ServerLevel level, BlockPos pos, BlockState state, ServerPlayer player) {
+        var previous = activeBreakEvent;
+        try { activeBreakEvent = new BlockEvent.BreakEvent(level, pos, state, player); return MinecraftForge.EVENT_BUS.post(activeBreakEvent); }
+        finally { activeBreakEvent = previous; }
+    }
     private record Target(BlockPos pos, BlockState state, CompiledNetwork network) {}
     private DeletionJobs() {}
     private static NetworkOperations.Result result(Code code, String message) {
@@ -35,7 +42,12 @@ public final class DeletionJobs {
         if (ids.isEmpty()) {
             start = NetworkSelectionData.get(player);
             if (start == null) return result(Code.NOT_FOUND, "No circuit selected.");
-            var network = data.findNetworkContaining(player.serverLevel(), start);
+            if(player.serverLevel().hasChunkAt(start)){
+                var selected=player.serverLevel().getBlockState(start);
+                if(selected.getBlock() instanceof CrossingWireBlock&&Integer.bitCount(CrossingWireBlock.mask(selected)&NetworkSelectionData.mask(player))!=1)
+                    return result(Code.INVALID_START,"Select one wire of the crossing first.");
+            }
+            var network = NetworkSelectionData.network(player);
             if (network != null) networks.add(network);
         } else for (int id : ids) {
             var network = data.getNetwork(id);
@@ -83,8 +95,9 @@ public final class DeletionJobs {
         final String dimension;
         final int started;
         final BlockPos start;
+        final int startMask;
         final List<Target> targets = new ArrayList<>();
-        final Set<BlockPos> seen = new HashSet<>();
+        final Map<BlockPos,Integer> seen = new HashMap<>();
         final Set<Long> watched = new HashSet<>();
         final ArrayDeque<Target> frontier = new ArrayDeque<>();
         Iterator<CompiledCircuitElement> elements = Collections.emptyIterator();
@@ -93,6 +106,7 @@ public final class DeletionJobs {
         Job(CommandSourceStack source, ServerPlayer player, NetworkSavedData data, List<CompiledNetwork> networks, BlockPos start) {
             this.source = source; this.player = player; this.level = player.serverLevel(); this.data = data;
             this.networks = List.copyOf(networks); this.start = start;
+            this.startMask = NetworkSelectionData.mask(player);
             dimension = level.dimension().location().toString(); started = level.getServer().getTickCount();
         }
         void fail(String reason) {
@@ -115,10 +129,10 @@ public final class DeletionJobs {
         }
         BlockState read(BlockPos pos) { return level.getChunkSource().getChunkNow(pos.getX() >> 4, pos.getZ() >> 4).getBlockState(pos); }
         boolean owned(Target target) {
-            if (target.network == null) return CircuitBoundary.uncompiled(data, dimension, target.pos);
+            int mask=target.state.getBlock() instanceof CrossingWireBlock?CrossingWireBlock.mask(target.state):7;
+            if (target.network == null) return Crossings.free(data, dimension, target.pos,mask);
             var owners = data.getMembershipOwners(dimension, target.pos);
-            return data.getNetwork(target.network.getId()) == target.network && owners.size() == 1
-                    && owners.get(0).network() == target.network && data.getBlockingRecords(dimension, target.pos).isEmpty();
+            return data.getNetwork(target.network.getId()) == target.network && owners.stream().anyMatch(o->o.network()==target.network&&(Crossings.mask(o.element())&mask)==mask) && data.getBlockingRecords(dimension, target.pos).isEmpty();
         }
         void step() {
             if (!NetworkOperations.canModify(player) || player.serverLevel() != level) { fail("Player context changed."); return; }
@@ -138,13 +152,13 @@ public final class DeletionJobs {
                 if (!level.mayInteract(player, target.pos) || !player.mayUseItemAt(target.pos, Direction.UP, player.getMainHandItem())
                         || state.getDestroySpeed(level, target.pos) < 0) { fail("A block is protected."); return; }
                 if (phase == 1) return;
-                if (MinecraftForge.EVENT_BUS.post(new BlockEvent.BreakEvent(level, target.pos, state, player))) {
+                if (deniedBreak(level, target.pos, state, player)) {
                     fail("A block break was denied."); return;
                 }
                 // A protection callback may mutate the world or membership itself.
                 if (!available(target.pos)) return;
                 if (!owned(target) || read(target.pos).getBlock() != state.getBlock()) { fail("Block changed during break event."); return; }
-                if (!level.setBlock(target.pos, Blocks.AIR.defaultBlockState(), 3)) { fail("Block removal failed."); return; }
+                if (!(state.getBlock() instanceof CrossingWireBlock?Crossings.remove(level,target.pos,CrossingWireBlock.mask(target.state)):level.setBlock(target.pos, Blocks.AIR.defaultBlockState(), 3))) { fail("Block removal failed."); return; }
                 deleted++; return;
             }
             if (phase == 1) { phase = 2; index = 0; return; }
@@ -169,16 +183,16 @@ public final class DeletionJobs {
                 if (!available(pos)) return;
                 var state = read(pos);
                 if (!BuiltInRegistries.BLOCK.getKey(state.getBlock()).toString().equals(element.getBlockId())) { skipped++; return; }
-                targets.add(new Target(pos, state, networks.get(networkIndex - 1))); return;
+                targets.add(new Target(pos, CrossingWireBlock.only(state,Crossings.mask(element)), networks.get(networkIndex - 1))); return;
             }
             if (!initialized) {
                 initialized = true;
                 if (!available(start)) return;
                 var state = read(start);
-                if (!(state.getBlock() instanceof IWireConnectable) || !CircuitBoundary.uncompiled(data, dimension, start)) {
+                if (!(state.getBlock() instanceof IWireConnectable) || !Crossings.free(data, dimension, start,startMask)) {
                     fail("Selection is not an available circuit element."); return;
                 }
-                enqueue(start, state); return;
+                enqueue(start, CrossingWireBlock.only(state,startMask)); return;
             }
             var current = frontier.pollFirst();
             if (current == null) { phase = 1; return; }
@@ -186,17 +200,21 @@ public final class DeletionJobs {
                 if (!(current.state.getBlock() instanceof GateBodyBlock)
                         && !((IWireConnectable) current.state.getBlock()).canWireConnect(current.state, side)) continue;
                 var next = current.pos.relative(side);
-                if (seen.contains(next) || level.isOutsideBuildHeight(next) || !CircuitBoundary.uncompiled(data, dimension, next)) continue;
+                if (level.isOutsideBuildHeight(next)) continue;
                 if (!available(next)) return;
-                var state = read(next);
+                var state = Crossings.project(read(next),side.getAxis());
+                int mask=state.getBlock() instanceof CrossingWireBlock?CrossingWireBlock.mask(state):7;
+                if(mask==0||!Crossings.free(data,dimension,next,mask))continue;
                 if (CircuitConnections.connects(level, current.pos, current.state, state, side)) enqueue(next, state);
                 if (done) return;
             }
         }
         void enqueue(BlockPos pos, BlockState state) {
+            int mask=state.getBlock() instanceof CrossingWireBlock?CrossingWireBlock.mask(state):7;
+            int fresh=mask&~seen.getOrDefault(pos,0);if(fresh==0)return;state=CrossingWireBlock.only(state,fresh);
             if (targets.size() >= OperationLimits.ELEMENTS) { fail("Circuit exceeds 50000 elements."); return; }
             var target = new Target(pos.immutable(), state, null);
-            seen.add(target.pos); targets.add(target); frontier.addLast(target);
+            seen.merge(target.pos,mask,(a,b)->a|b); targets.add(target); frontier.addLast(target);
         }
     }
 }

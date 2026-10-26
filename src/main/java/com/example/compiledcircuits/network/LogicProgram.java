@@ -446,7 +446,7 @@ public final class LogicProgram {
         return bits;
     }
     public static boolean hasLogic(Collection<BlockState> states) {
-        return states.stream().anyMatch(s -> BundleTopology.element(s) || s.getBlock() instanceof GateBodyBlock || s.getBlock() instanceof NetworkWireBlock || CircuitConnections.isTerminal(s));
+        return states.stream().anyMatch(s -> s.getBlock() instanceof CrossingWireBlock || BundleTopology.element(s) || s.getBlock() instanceof GateBodyBlock || s.getBlock() instanceof NetworkWireBlock || CircuitConnections.isTerminal(s));
     }
     public static LogicProgram compile(Map<BlockPos, BlockState> states) {return compile(states,java.util.Map.of(),java.util.Map.of());}
     static LogicProgram compile(Map<BlockPos,BlockState> states,Map<BlockPos,Set<BlockPos>> links,Map<BlockPos,Integer> ownership) {
@@ -482,6 +482,7 @@ public final class LogicProgram {
         // Flood-fill only homogeneous bodies or passive bus elements.
         for (var item : states.entrySet()) {
             BlockPos pos = item.getKey(); BlockState state = item.getValue();
+            if(state.getBlock() instanceof CrossingWireBlock)continue;
             if (component.containsKey(pos) || CircuitConnections.isTerminal(state) || BundleTopology.element(state)) continue;
             boolean body = state.getBlock() instanceof GateBodyBlock;
             if (!body && !(state.getBlock() instanceof IWireConnectable))
@@ -501,16 +502,18 @@ public final class LogicProgram {
             while (!queue.isEmpty()) {
                 BlockPos current = queue.removeFirst(); BlockState currentState = states.get(current);
                 for (Direction direction : Direction.values()) {
-                    BlockPos next = current.relative(direction); BlockState other = states.get(next);
+                    BlockPos next = Crossings.next(states,current,direction); BlockState other = states.get(next);
                     if (other == null || component.containsKey(next) || CircuitConnections.isTerminal(other) || BundleTopology.element(other)) continue;
                     boolean otherBody = other.getBlock() instanceof GateBodyBlock;
-                    if (body != otherBody || !java.util.Objects.equals(ownership.get(current),ownership.get(next)) || !CircuitConnections.connects(currentState, wireIds.getOrDefault(current, "0"), other, wireIds.getOrDefault(next, "0"), direction)) continue;
+                    if(body&&!next.equals(current.relative(direction)))continue;
+                    if (body != otherBody || !java.util.Objects.equals(ownership.get(current),ownership.get(next)) || !Crossings.graphConnects(states,wireIds,current,next,direction)) continue;
                     component.put(next, id); queue.add(next);
                 }
             }
         }
         for (var item : states.entrySet()) {
             BlockPos pos = item.getKey(); BlockState state = item.getValue();
+            if(state.getBlock() instanceof CrossingWireBlock)continue;
             if (BundleTopology.element(state)) {
                 if (state.getBlock() instanceof BundledWireBlock) for (var side : Direction.values()) {
                     var face = new BundleFace(pos, side); var config = faces.get(face);
@@ -558,27 +561,37 @@ public final class LogicProgram {
                 }
             }
         }
+        Map<BundleFace,Integer> crossingGateFaces=new HashMap<>();
         // Each surface input is independent, even when several faces share one body block.
         for (var item : states.entrySet()) {
             BlockPos pos = item.getKey(); BlockState state = item.getValue();
+            if(state.getBlock() instanceof CrossingWireBlock)continue;
             if (!(state.getBlock() instanceof GateBodyBlock)) continue;
             int owner = component.get(pos);
             for (Direction side : Direction.values()) {
                 int port = GateBodyBlock.port(state, side);
                 if (port == 0 || port == 3) continue;
-                BlockPos next = pos.relative(side); BlockState neighbor = states.get(next);
-                if (neighbor != null && neighbor.getBlock() instanceof GateBodyBlock) continue;
+                BlockPos next = Crossings.next(states,pos,side); BlockState neighbor = states.get(next);
+                if (neighbor != null && neighbor.getBlock() instanceof GateBodyBlock && next.equals(pos.relative(side))) continue;
                 int node = add(nodes, Op.OR, pos);
+                crossingGateFaces.put(new BundleFace(pos,side),node);
                 if (port == 1) {
                     edge(nodes, node, owner);
-                    if (neighbor != null && neighbor.getBlock() instanceof BasicWireBlock && java.util.Objects.equals(ownership.get(pos),ownership.get(next)) && CircuitConnections.connects(state, wireIds.getOrDefault(pos, "0"), neighbor, wireIds.getOrDefault(next, "0"), side))
+                    if (neighbor != null && neighbor.getBlock() instanceof BasicWireBlock && java.util.Objects.equals(ownership.get(pos),ownership.get(next)) && Crossings.graphConnects(states,wireIds,pos,next,side))
                         edge(nodes, component.get(next), node);
                 } else {
                     edge(nodes, owner, node); bodiesWithOutputs.add(owner);
-                    if (neighbor != null && neighbor.getBlock() instanceof BasicWireBlock && java.util.Objects.equals(ownership.get(pos),ownership.get(next)) && CircuitConnections.connects(state, wireIds.getOrDefault(pos, "0"), neighbor, wireIds.getOrDefault(next, "0"), side))
+                    if (neighbor != null && neighbor.getBlock() instanceof BasicWireBlock && java.util.Objects.equals(ownership.get(pos),ownership.get(next)) && Crossings.graphConnects(states,wireIds,pos,next,side))
                         edge(nodes, node, component.get(next));
                 }
             }
+        }
+        for(var entry:crossingGateFaces.entrySet()){
+            var face=entry.getKey();var state=states.get(face.pos());if(GateBodyBlock.port(state,face.side())!=2)continue;
+            var next=Crossings.next(states,face.pos(),face.side());if(next.equals(face.pos().relative(face.side())))continue;
+            var other=states.get(next);if(other==null||!(other.getBlock() instanceof GateBodyBlock)||GateBodyBlock.port(other,face.side().getOpposite())!=1)continue;
+            var target=crossingGateFaces.get(new BundleFace(next,face.side().getOpposite()));
+            if(target!=null&&Objects.equals(ownership.get(face.pos()),ownership.get(next))&&Crossings.graphConnects(states,wireIds,face.pos(),next,face.side()))edge(nodes,entry.getValue(),target);
         }
         for (int body : bodies) {
             if (nodes.get(body).parents.isEmpty() || !bodiesWithOutputs.contains(body))
@@ -586,16 +599,17 @@ public final class LogicProgram {
         }
         for (var item : states.entrySet()) {
             BlockPos pos = item.getKey(); BlockState state = item.getValue();
+            if(state.getBlock() instanceof CrossingWireBlock)continue;
             Integer from = source.get(pos);
             if (from == null) continue;
             for (Direction direction : Direction.values()) {
-                BlockPos next = pos.relative(direction); BlockState other = states.get(next);
+                BlockPos next = Crossings.next(states,pos,direction); BlockState other = states.get(next);
                 Integer to = sink.get(next);
                 if (other != null && other.getBlock() instanceof DLatchBlock
                         && DLatchBlock.enableSide(other) == direction.getOpposite()) to = enableSink.get(next);
                 if (other == null || to == null || from.equals(to)
                         || !java.util.Objects.equals(ownership.get(pos),ownership.get(next))
-                        || !CircuitConnections.connects(state, wireIds.getOrDefault(pos, "0"), other, wireIds.getOrDefault(next, "0"), direction)) continue;
+                        || !Crossings.graphConnects(states,wireIds,pos,next,direction)) continue;
                 if (CircuitConnections.isTerminal(state) && !CircuitConnections.sends(state, direction)) continue;
                 if (CircuitConnections.isTerminal(other) && !CircuitConnections.receives(other, direction.getOpposite())) continue;
                 edge(nodes, from, to);
@@ -642,7 +656,7 @@ public final class LogicProgram {
                                   Map<BlockPos, Integer> ownership, Map<BundleFace, Integer> faceNodes) {
         var pos = port.pos(); var side = port.face().side();
         if (port.config().external()) return port.inline() ? faceNodes.get(port.face()) : (input ? sources : sinks).get(pos);
-        var next = pos.relative(side); var neighbor = states.get(next);
+        var next = Crossings.next(states,pos,side); var neighbor = states.get(next);
         Integer node = (input ? sources : sinks).get(next);
         if (!input && neighbor != null && neighbor.getBlock() instanceof DLatchBlock && DLatchBlock.enableSide(neighbor) == side.getOpposite()) node = enable.get(next);
         if (neighbor == null || node == null || BundleTopology.element(neighbor) || !Objects.equals(ownership.get(pos), ownership.get(next))

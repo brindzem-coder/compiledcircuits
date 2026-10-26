@@ -77,7 +77,18 @@ public final class CircuitStateOutlineRenderer {
                         if (exclusions.suppressesOutline(pos)) continue;
                         boolean blocked = ClientCompiledElements.isBlocked(pos);
                         boolean hovered = ClientHoveredCircuit.contains(pos);
-                        if (!hovered && ClientCompiledElements.networkIdAt(pos) != null) continue;
+                        if (!hovered && ClientCompiledElements.networkIdAt(pos) != null && !(chunk.getBlockState(pos).getBlock() instanceof com.example.compiledcircuits.block.CrossingWireBlock)) continue;
+                        var state=chunk.getBlockState(pos);
+                        if(state.getBlock() instanceof com.example.compiledcircuits.block.CrossingWireBlock){
+                            int mask=hovered?ClientHoveredCircuit.laneMask(pos):7;
+                            for(var axis:net.minecraft.core.Direction.Axis.values())if((mask&(1<<axis.ordinal()))!=0){
+                                boolean compiled=ClientCompiledElements.occupied(pos,1<<axis.ordinal());
+                                if(!hovered&&compiled)continue;
+                                for(var box:com.example.compiledcircuits.block.CrossingWireBlock.laneShape(state,axis).toAabbs())
+                                    LevelRenderer.renderLineBox(poses,lines,box.move(pos).inflate(.002),hovered?.15F:1F,hovered?.85F:.3F,hovered?1F:.72F,hovered?.85F:.7F);
+                            }
+                            outlinedPositions++;continue;
+                        }
                         LevelRenderer.renderLineBox(poses, lines,
                                 pos.getX() + 0.002, pos.getY() + 0.002, pos.getZ() + 0.002,
                                 pos.getX() + 0.998, pos.getY() + 0.998, pos.getZ() + 0.998,

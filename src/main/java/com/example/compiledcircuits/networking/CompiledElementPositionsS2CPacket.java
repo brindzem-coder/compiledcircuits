@@ -31,9 +31,10 @@ public record CompiledElementPositionsS2CPacket(ResourceLocation dimension, long
     public static final long MAX_BYTES = 64L * 1024 * 1024;
     public static final long STAGING_TIMEOUT_NANOS = 30_000_000_000L;
     public static final long STAGING_LIFETIME_NANOS=180_000_000_000L;
-    public record Entry(int networkId, BlockPos pos) {
+    public record Entry(int networkId, BlockPos pos, int lanes) {
+        public Entry(int networkId,BlockPos pos){this(networkId,pos,7);}
         public Entry {
-            if (networkId <= 0) throw new IllegalArgumentException("Invalid network ID");
+            if (networkId <= 0 || lanes < 1 || lanes > 7) throw new IllegalArgumentException("Invalid network ID");
             pos = pos.immutable();
         }
     }
@@ -48,9 +49,9 @@ public record CompiledElementPositionsS2CPacket(ResourceLocation dimension, long
         }
         entries = List.copyOf(entries);
         blocked = blocked.stream().map(BlockPos::immutable).toList();
-        var seen = new HashSet<BlockPos>();
-        for (Entry entry : entries) if (!seen.add(entry.pos())) throw new IllegalArgumentException("Duplicate compiled position");
-        for (BlockPos pos : blocked) if (!seen.add(pos)) throw new IllegalArgumentException("Duplicate blocked position");
+        var seen=new java.util.HashMap<BlockPos,Integer>();
+        for(var entry:entries){int old=seen.getOrDefault(entry.pos(),0);if((old&entry.lanes())!=0)throw new IllegalArgumentException("Duplicate compiled position");seen.put(entry.pos(),old|entry.lanes());}
+        for(var pos:blocked)if(seen.putIfAbsent(pos,7)!=null)throw new IllegalArgumentException("Duplicate blocked position");
     }
     /** Encoded payload bytes, excluding the channel discriminator and transport framing. */
     public long encodedBytes() {
@@ -58,16 +59,16 @@ public record CompiledElementPositionsS2CPacket(ResourceLocation dimension, long
         long bytes = FriendlyByteBuf.getVarIntSize(dimensionBytes) + dimensionBytes + 8
                 + FriendlyByteBuf.getVarIntSize(partIndex) + FriendlyByteBuf.getVarIntSize(partCount)
                 + FriendlyByteBuf.getVarIntSize(entries.size());
-        for (Entry entry : entries) bytes += FriendlyByteBuf.getVarIntSize(entry.networkId()) + 8;
+        for (Entry entry : entries) bytes += FriendlyByteBuf.getVarIntSize(entry.networkId()) + 9;
         int reasonBytes=reason.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
         return bytes + 18 + FriendlyByteBuf.getVarIntSize(reasonBytes)+reasonBytes + FriendlyByteBuf.getVarIntSize(blocked.size()) + 8L * blocked.size();
     }
-    public long estimatedBytes() { return 1024L + 13L * (entries.size() + blocked.size()); }
+    public long estimatedBytes() { return 1024L + 14L * (entries.size() + blocked.size()); }
     public static void encode(CompiledElementPositionsS2CPacket packet, FriendlyByteBuf buf) {
         buf.writeUUID(packet.context); buf.writeByte(packet.state.ordinal());buf.writeUtf(packet.reason,128);
         buf.writeResourceLocation(packet.dimension); buf.writeLong(packet.snapshotId);
         buf.writeVarInt(packet.partIndex); buf.writeVarInt(packet.partCount); buf.writeVarInt(packet.entries.size());
-        for (Entry entry : packet.entries) { buf.writeVarInt(entry.networkId()); buf.writeBlockPos(entry.pos()); }
+        for (Entry entry : packet.entries) { buf.writeVarInt(entry.networkId()); buf.writeBlockPos(entry.pos()); buf.writeByte(entry.lanes()); }
         buf.writeBoolean(packet.unknownReservations); buf.writeVarInt(packet.blocked.size());
         for (BlockPos pos : packet.blocked) buf.writeBlockPos(pos);
     }
@@ -80,7 +81,7 @@ public record CompiledElementPositionsS2CPacket(ResourceLocation dimension, long
         long id = buf.readLong(); int index = buf.readVarInt(), count = buf.readVarInt(), size = buf.readVarInt();
         if (dimension == null || id <= 0 || count < 1 || count > MAX_PARTS || index < 0 || index >= count || size < 0 || size > ENTRIES_PER_PART || size > buf.readableBytes() / 9) throw new IllegalArgumentException("Invalid entry count");
         var entries = new java.util.ArrayList<Entry>(size);
-        for (int i = 0; i < size; i++) entries.add(new Entry(buf.readVarInt(), buf.readBlockPos()));
+        for (int i = 0; i < size; i++) entries.add(new Entry(buf.readVarInt(), buf.readBlockPos(),buf.readUnsignedByte()));
         boolean unknown = buf.readBoolean();
         int blockedSize = buf.readVarInt();
         if (blockedSize < 0 || blockedSize > ENTRIES_PER_PART - size || blockedSize > buf.readableBytes() / 8)

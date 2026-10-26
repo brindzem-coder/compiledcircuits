@@ -249,7 +249,7 @@ public final class CircuitCommands {
         if (!(source.getEntity() instanceof ServerPlayer player))
             return NetworkOperations.reply(source,request(source,NetworkOperations.Action.DECOMPILE,List.of(),0,""));
         var pos=NetworkSelectionData.get(player);
-        var network=pos==null?null:NetworkSavedData.get(source.getServer()).findNetworkContaining(player.serverLevel(),pos);
+        var network=pos==null?null:NetworkSelectionData.network(player);
         return NetworkOperations.reply(source,request(source,NetworkOperations.Action.DECOMPILE,
                 network==null?List.of():List.of(network.getId()),0,""));
     }

@@ -56,7 +56,7 @@ public class ModItems {
 
     public static final RegistryObject<Item> BASIC_WIRE =
             ITEMS.register("basic_wire",
-                    () -> new BlockItem(
+                    () -> new com.example.compiledcircuits.item.CrossableWireItem(
                             ModBlocks.BASIC_WIRE.get(),
                             new Item.Properties()
                     ));
@@ -101,7 +101,7 @@ public class ModItems {
             () -> new com.example.compiledcircuits.item.BundlePortItem(ModBlocks.BUNDLE_NETWORK_OUTPUT.get(), new Item.Properties()));
 
     public static final RegistryObject<Item> BUNDLED_WIRE = ITEMS.register("bundled_wire",
-            () -> new BlockItem(ModBlocks.BUNDLED_WIRE.get(), new Item.Properties()));
+            () -> new com.example.compiledcircuits.item.CrossableWireItem(ModBlocks.BUNDLED_WIRE.get(), new Item.Properties()));
 
     public static void register(IEventBus eventBus) {
         ITEMS.register(eventBus);

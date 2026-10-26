@@ -51,5 +51,6 @@ public final class IdWireItem extends BlockItem {
     @Override public void appendHoverText(ItemStack stack, Level level, List<Component> lines, TooltipFlag flag) {
         lines.add(Component.literal("ID " + id(stack)));
         lines.add(Component.translatable("wire.compiledcircuits.hint"));
+        lines.add(Component.translatable("wire.compiledcircuits.crossing_hint"));
     }
 }

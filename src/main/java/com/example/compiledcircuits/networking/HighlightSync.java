@@ -126,7 +126,7 @@ public final class HighlightSync {
             try{
                 if(p.elements.hasNext()){
                     var e=p.elements.next();int role=switch(e.getType()){case INPUT->1;case OUTPUT->2;default->0;};
-                    var b=new FriendlyByteBuf(Unpooled.buffer(9));try{b.writeByte(role);b.writeBlockPos(e.getPos());byte[] record=new byte[9];b.readBytes(record);p.buffer.writeBytes(record);}finally{b.release();}
+                    var b=new FriendlyByteBuf(Unpooled.buffer(9));try{b.writeByte(role | (Crossings.mask(e)==7?0:Crossings.mask(e)<<2));b.writeBlockPos(e.getPos());byte[] record=new byte[9];b.readBytes(record);p.buffer.writeBytes(record);}finally{b.release();}
                     if(p.buffer.size()==PART_POSITIONS*9){p.parts.add(p.buffer.toByteArray());p.buffer.reset();}
                 }else if(p.networks.hasNext()){
                     var n=p.networks.next();if(data.getNetwork(n.getId())!=n){error(p,"Selection changed; select again.",State.INVALIDATED);return;}
