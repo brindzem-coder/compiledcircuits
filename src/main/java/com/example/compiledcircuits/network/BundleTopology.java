@@ -7,15 +7,18 @@ import java.util.*;
 
 /** Compile-time routing, scoped by cable component and compilation ownership. */
 final class BundleTopology {
-    record Port(BundleFace face, BundleWireEntity.Port config, boolean inline, int bit) {
-        Port(BundleFace face, BundleWireEntity.Port config, boolean inline) { this(face,config,inline,-1); }
+    record Port(BundleFace face, BundleWireEntity.Port config, boolean inline, int bit, boolean gate) {
+        Port(BundleFace face, BundleWireEntity.Port config, boolean inline,int bit) { this(face,config,inline,bit,false); }
+        Port(BundleFace face, BundleWireEntity.Port config, boolean inline) { this(face,config,inline,-1,false); }
         BlockPos pos() { return face.pos(); }
     }
     record Route(Port input, Port output, String channel) {}
     static boolean element(BlockState state) {
         return state.getBlock() instanceof BundledWireBlock || state.getBlock() instanceof BundlePortBlock;
     }
-    static List<Route> resolve(Map<BlockPos, BlockState> states, Map<BlockPos, String> channels, Map<BlockPos, Integer> owners, Map<BundleFace, BundleWireEntity.Port> faces) {
+    record Result(List<Route> routes, BundledGates.Plan gates) {}
+    static List<Route> resolve(Map<BlockPos, BlockState> states, Map<BlockPos, String> channels, Map<BlockPos, Integer> owners, Map<BundleFace, BundleWireEntity.Port> faces) {return resolveGates(states,channels,owners,faces).routes();}
+    static Result resolveGates(Map<BlockPos, BlockState> states, Map<BlockPos, String> channels, Map<BlockPos, Integer> owners, Map<BundleFace, BundleWireEntity.Port> faces) {
         record Cable(BlockPos pos,Direction.Axis axis){}
         Map<Cable,Integer> cables=new HashMap<>();int index=0;
         List<Cable> seeds=new ArrayList<>();
@@ -54,6 +57,9 @@ final class BundleTopology {
                         new BundleWireEntity.Port((port.isExternal() ? 3 : 1) + (port.isInput() ? 0 : 1), channel), false));
             }
         }
+        Map<BundleFace,Integer> cableFaces=new HashMap<>();
+        cables.forEach((cable,id)->{for(var side:Direction.values())if(cable.axis()==null||cable.axis()==side.getAxis())cableFaces.put(new BundleFace(cable.pos(),side),id);});
+        var gates=BundledGates.plan(states,faces,cableFaces,ports,owners);ports.addAll(gates.ports());
         for (var port : ports) {
             var cable = port.inline ? port.pos() : port.pos().relative(port.face.side().getOpposite());
             var cableState=states.get(cable);
@@ -72,9 +78,10 @@ final class BundleTopology {
         var routes = new ArrayList<Route>();
         for (var entry : outputs.entrySet()) {
             var input = inputs.get(entry.getKey());
+            if (input == null && entry.getValue().stream().allMatch(Port::gate)) continue;
             if (input == null) throw new IllegalArgumentException("Bundle channel " + entry.getKey().channel + " has no input at " + entry.getValue().get(0).pos().toShortString());
             for (var output : entry.getValue()) routes.add(new Route(input, output, entry.getKey().channel));
         }
-        return routes;
+        return new Result(routes,gates);
     }
 }

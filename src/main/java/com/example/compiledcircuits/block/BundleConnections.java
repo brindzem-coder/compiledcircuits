@@ -17,6 +17,7 @@ public final class BundleConnections {
         if (b.getBlock() instanceof ColorScreenBlock) return port != null && port.screen() && side == b.getValue(EndpointBlock.FACING);
         if (port != null && port.screen()) return false;
         if (b.getBlock() instanceof KeyboardBlock) return port == null;
+        if (port == null && com.example.compiledcircuits.network.BundledGates.gate(b)) return com.example.compiledcircuits.network.BundledGates.role(b,side.getOpposite())!=0;
         if (port == null) return b.getBlock() instanceof BundlePortBlock && BundlePortBlock.cableSide(b) == side.getOpposite();
         if (port.external() || b.getBlock() instanceof BundlePortBlock || b.getBlock() instanceof GateBodyBlock) return false;
         if (!(b.getBlock() instanceof IWireConnectable wire) || !wire.canWireConnect(b, side.getOpposite())) return false;

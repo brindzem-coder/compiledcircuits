@@ -480,7 +480,10 @@ public final class LogicProgram {
         Map<BlockPos, BlockState> sorted = new TreeMap<>(Comparator.comparingInt((BlockPos p) -> p.getX())
                 .thenComparingInt(BlockPos::getY).thenComparingInt(BlockPos::getZ));
         sorted.putAll(states); states = sorted;
-        var bundleRoutes = BundleTopology.resolve(states, wireIds, ownership, faces);
+        var bundleTopology = BundleTopology.resolveGates(states, wireIds, ownership, faces);
+        var bundleRoutes = bundleTopology.routes();
+        Set<BundleFace> busPins = new HashSet<>();
+        for(var group:bundleTopology.gates().groups()) busPins.addAll(group.pins());
         var keyboardPorts = KeyboardTopology.resolve(states, faces, ownership);
         List<Node> nodes = new ArrayList<>();
         Map<BundleFace, Integer> faceNodes = new HashMap<>(), faceOutputs = new HashMap<>();
@@ -587,17 +590,17 @@ public final class LogicProgram {
                 crossingGateFaces.put(new BundleFace(pos,side),node);
                 if (port == 1) {
                     edge(nodes, node, owner);
-                    if (neighbor != null && neighbor.getBlock() instanceof BasicWireBlock && java.util.Objects.equals(ownership.get(pos),ownership.get(next)) && Crossings.graphConnects(states,wireIds,pos,next,side))
+                    if (!busPins.contains(new BundleFace(pos,side)) && neighbor != null && neighbor.getBlock() instanceof BasicWireBlock && component.containsKey(next) && java.util.Objects.equals(ownership.get(pos),ownership.get(next)) && Crossings.graphConnects(states,wireIds,pos,next,side))
                         edge(nodes, component.get(next), node);
                 } else {
                     edge(nodes, owner, node); bodiesWithOutputs.add(owner);
-                    if (neighbor != null && neighbor.getBlock() instanceof BasicWireBlock && java.util.Objects.equals(ownership.get(pos),ownership.get(next)) && Crossings.graphConnects(states,wireIds,pos,next,side))
+                    if (!busPins.contains(new BundleFace(pos,side)) && neighbor != null && neighbor.getBlock() instanceof BasicWireBlock && component.containsKey(next) && java.util.Objects.equals(ownership.get(pos),ownership.get(next)) && Crossings.graphConnects(states,wireIds,pos,next,side))
                         edge(nodes, node, component.get(next));
                 }
             }
         }
         for(var entry:crossingGateFaces.entrySet()){
-            var face=entry.getKey();var state=states.get(face.pos());if(GateBodyBlock.port(state,face.side())!=2)continue;
+            var face=entry.getKey();if(busPins.contains(face))continue;var state=states.get(face.pos());if(GateBodyBlock.port(state,face.side())!=2)continue;
             var next=Crossings.next(states,face.pos(),face.side());if(next.equals(face.pos().relative(face.side())))continue;
             var other=states.get(next);if(other==null||!(other.getBlock() instanceof GateBodyBlock)||GateBodyBlock.port(other,face.side().getOpposite())!=1)continue;
             var target=crossingGateFaces.get(new BundleFace(next,face.side().getOpposite()));
@@ -617,7 +620,7 @@ public final class LogicProgram {
                 Integer to = sink.get(next);
                 if (other != null && other.getBlock() instanceof DLatchBlock
                         && DLatchBlock.enableSide(other) == direction.getOpposite()) to = enableSink.get(next);
-                if (other == null || to == null || from.equals(to)
+                if (busPins.contains(new BundleFace(pos,direction)) || busPins.contains(new BundleFace(next,direction.getOpposite())) || other == null || to == null || from.equals(to)
                         || !java.util.Objects.equals(ownership.get(pos),ownership.get(next))
                         || !Crossings.graphConnects(states,wireIds,pos,next,direction)) continue;
                 if (CircuitConnections.isTerminal(state) && !CircuitConnections.sends(state, direction)) continue;
@@ -655,10 +658,27 @@ public final class LogicProgram {
                 throw error("Screen port must connect to the back of one screen",face.pos());
             int[] bits=new int[8];for(int i=0;i<8;i++){bits[i]=add(nodes,Op.OR,pos);edge(nodes,bits[i],outputs.get(pos));}screenBits.put(pos,bits);
         }
+        Map<BundledGates.Key,Integer> busNodes = new HashMap<>();
+        for(var group:bundleTopology.gates().groups()) for(var channel:group.channels()) {
+            Op op = group.state().getBlock() instanceof GateBodyBlock body ? switch(body.kind()) {
+                case AND -> Op.AND; case OR -> Op.OR; case NAND -> Op.NAND;
+                case NOR -> Op.NOR; case XOR -> Op.XOR; case XNOR -> Op.XNOR;
+            } : group.state().getBlock() instanceof DLatchBlock ? Op.LATCH : Op.NOT;
+            int output = add(nodes,op,group.root());
+            for(var pin:group.pins()) {
+                int role=BundledGates.role(states.get(pin.pos()),pin.side());
+                int node=output;
+                if(role!=2) {
+                    node=add(nodes,Op.OR,pin.pos()); edge(nodes,node,output);
+                    if(op==Op.LATCH) { if(role==3)nodes.get(output).enable=node;else nodes.get(output).data=node; }
+                }
+                busNodes.put(new BundledGates.Key(pin,channel),node);
+            }
+        }
         List<int[]> bundleEdges = new ArrayList<>();
         for (var route : bundleRoutes) {
-            int from = bundleNode(states, route.input(), true, source, sink, enableSink, ownership, faceNodes);
-            int to = route.output().bit() >= 0 ? screenBits.get(route.output().pos().relative(route.output().face().side()))[route.output().bit()] : bundleNode(states, route.output(), false, source, sink, enableSink, ownership, faceNodes);
+            int from = route.input().gate() ? busNode(busNodes,route.input()) : bundleNode(states, route.input(), true, source, sink, enableSink, ownership, faceNodes);
+            int to = route.output().gate() ? busNode(busNodes,route.output()) : route.output().bit() >= 0 ? screenBits.get(route.output().pos().relative(route.output().face().side()))[route.output().bit()] : bundleNode(states, route.output(), false, source, sink, enableSink, ownership, faceNodes);
             if (from == to) throw error("Bundle channel " + route.channel() + " forms a cycle", route.input().pos());
             edge(nodes, from, to); bundleEdges.add(new int[]{from, to});
         }
@@ -682,6 +702,9 @@ public final class LogicProgram {
         var program = new LogicProgram(nodes, groups, inputs, outputs, faceOutputs, faceInputNodes);
         program.screenNodes=Map.copyOf(screenBits);
         return program;
+    }
+    private static int busNode(Map<BundledGates.Key,Integer> nodes,BundleTopology.Port port) {
+        return nodes.get(new BundledGates.Key(new BundleFace(port.pos().relative(port.face().side()),port.face().side().getOpposite()),port.config().id()));
     }
     private static int bundleNode(Map<BlockPos, BlockState> states, BundleTopology.Port port, boolean input,
                                   Map<BlockPos, Integer> sources, Map<BlockPos, Integer> sinks, Map<BlockPos, Integer> enable,
