@@ -70,5 +70,21 @@
   "item.compiledcircuits.lamp_input": "Вхід сигнальної лампи",
   "key.compiledcircuits.delete": "Видалити вибрану схему та її блоки",
   "block.compiledcircuits.crossing_wire": "Перетин дротів",
-  "wire.compiledcircuits.crossing_hint": "Ctrl + ПКМ по поперечній грані прямого дроту: додати другий дріт"
+  "wire.compiledcircuits.crossing_hint": "Ctrl + ПКМ по поперечній грані прямого дроту: додати другий дріт",
+  "block.compiledcircuits.keyboard": "Клавіатура",
+  "item.compiledcircuits.keyboard_port": "Порт клавіатури",
+  "keyboard.compiledcircuits.title": "Керування клавіатурою",
+  "keyboard.compiledcircuits.bind": "Прив’язка порта клавіатури",
+  "keyboard.compiledcircuits.record": "Записати ввід",
+  "keyboard.compiledcircuits.recording": "Натисніть комбінацію та відпустіть. Esc скасовує запис.",
+  "keyboard.compiledcircuits.bind_hint": "Клавіші, кнопки, колесо та напрямки руху миші",
+  "keyboard.compiledcircuits.port_hint": "ПКМ: прив’язка. Клік по грані кабелю: встановити. Shift+ПКМ: прив’язка.",
+  "keyboard.compiledcircuits.controls": "Esc: вийти | Утримуйте Ctrl+F1: озиратися",
+  "keyboard.compiledcircuits.looking": "Вільний огляд — сигнали вводу вимкнені",
+  "keyboard.compiledcircuits.camera_set": "Позицію камери збережено. Ще раз Shift+ПКМ — очистити.",
+  "keyboard.compiledcircuits.camera_clear": "Позицію камери очищено.",
+  "keyboard.compiledcircuits.compile": "Спочатку скомпілюйте справну схему з цією клавіатурою.",
+  "keyboard.compiledcircuits.busy": "Інший гравець уже використовує цю клавіатуру.",
+  "keyboard.compiledcircuits.no_ports": "До клавіатури не під’єднано її портів.",
+  "keyboard.compiledcircuits.unsafe_camera": "Збережена позиція камери зайнята або не має безпечної підлоги."
 }

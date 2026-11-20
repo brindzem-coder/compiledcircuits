@@ -103,6 +103,8 @@ public class ModBlocks {
             () -> new com.example.compiledcircuits.block.SignalLampBlock(BlockBehaviour.Properties.of().strength(1).mapColor(MapColor.COLOR_YELLOW)
                     .lightLevel(state -> state.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.LIT) ? 15 : 0)));
 
+    public static final RegistryObject<Block> KEYBOARD = BLOCKS.register("keyboard", () -> new com.example.compiledcircuits.block.KeyboardBlock(BlockBehaviour.Properties.of().strength(1).noOcclusion()));
+
     public static void register(IEventBus eventBus) {
         BLOCKS.register(eventBus);
     }

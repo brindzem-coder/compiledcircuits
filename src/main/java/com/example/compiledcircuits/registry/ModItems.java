@@ -103,6 +103,9 @@ public class ModItems {
     public static final RegistryObject<Item> BUNDLED_WIRE = ITEMS.register("bundled_wire",
             () -> new com.example.compiledcircuits.item.CrossableWireItem(ModBlocks.BUNDLED_WIRE.get(), new Item.Properties()));
 
+    public static final RegistryObject<Item> KEYBOARD = ITEMS.register("keyboard", () -> new BlockItem(ModBlocks.KEYBOARD.get(), new Item.Properties()));
+    public static final RegistryObject<Item> KEYBOARD_PORT = ITEMS.register("keyboard_port", () -> new com.example.compiledcircuits.item.KeyboardPortItem(new Item.Properties()));
+
     public static void register(IEventBus eventBus) {
         ITEMS.register(eventBus);
     }

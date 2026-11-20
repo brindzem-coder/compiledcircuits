@@ -31,7 +31,7 @@ public final class Crossings {
             if(!left&&x.getBlock() instanceof BundledWireBlock)return BundleConnections.connects(level,pos,x,y,side);
             if(!right&&y.getBlock() instanceof BundledWireBlock)return BundleConnections.connects(level,pos.relative(side),y,x,side.getOpposite());
             var peer=x.getBlock() instanceof BundledWireBlock?y:x;var face=x.getBlock() instanceof BundledWireBlock?side.getOpposite():side;
-            return peer.getBlock() instanceof BundlePortBlock&&BundlePortBlock.cableSide(peer)==face;
+            return peer.getBlock() instanceof KeyboardBlock || peer.getBlock() instanceof BundlePortBlock&&BundlePortBlock.cableSide(peer)==face;
         }
         return CircuitConnections.connects(x,id(level,pos,a,side.getAxis()),y,id(level,pos.relative(side),b,side.getAxis()),side);
     }

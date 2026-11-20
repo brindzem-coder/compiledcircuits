@@ -18,7 +18,7 @@ public final class BundlePortLabel {
         if (client.level == null || client.screen != null || client.options.hideGui || !(client.hitResult instanceof BlockHitResult hit)) return;
         String id = null;
         var entity = client.level.getBlockEntity(hit.getBlockPos());
-        if (entity instanceof BundleWireEntity wire && wire.port(hit.getDirection()) != null) id = wire.port(hit.getDirection()).id();
+        if (entity instanceof BundleWireEntity wire && wire.port(hit.getDirection()) != null) id = wire.port(hit.getDirection()).label();
         else if (entity instanceof BundlePortEntity port) id = port.channel();
         if (id == null || id.isEmpty()) return;
         var label = Component.translatable("bundle.compiledcircuits.channel", id);

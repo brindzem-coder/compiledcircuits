@@ -97,6 +97,7 @@ public final class BlueprintService {
                     if(entity instanceof CrossingWireEntity wire){var lanes=wire.snapshot(7);lanes.merge(e.crossingLanes());wire.restore(lanes);}
                     if(entity instanceof IdWireEntity wire)wire.configure(e.wireId(),e.wireColor());
                     if(entity instanceof BundlePortEntity port)port.configure(e.channelId());
+                    if(entity instanceof KeyboardEntity keyboard)keyboard.restoreCamera(e.keyboardCamera());
                     if(entity instanceof BundleWireEntity wire)wire.restorePorts(e.bundleFaces());
                 }
             }finally{level.captureBlockSnapshots=false;snapshots.addAll(level.capturedBlockSnapshots);level.capturedBlockSnapshots.clear();}

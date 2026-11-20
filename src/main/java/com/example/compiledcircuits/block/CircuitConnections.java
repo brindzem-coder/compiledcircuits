@@ -21,8 +21,9 @@ public final class CircuitConnections {
     }
     private static boolean structural(BlockState a, BlockState b, Direction side) {
         if (a.getBlock() instanceof BundledWireBlock)
-            return b.getBlock() instanceof BundledWireBlock || b.getBlock() instanceof BundlePortBlock && BundlePortBlock.cableSide(b) == side.getOpposite();
+            return b.getBlock() instanceof BundledWireBlock || b.getBlock() instanceof KeyboardBlock || b.getBlock() instanceof BundlePortBlock && BundlePortBlock.cableSide(b) == side.getOpposite();
         if (b.getBlock() instanceof BundledWireBlock) return structural(b, a, side.getOpposite());
+        if (a.getBlock() instanceof KeyboardBlock || b.getBlock() instanceof KeyboardBlock) return false;
         if (a.getBlock() instanceof BundlePortBlock port) {
             if (b.getBlock() instanceof NetworkWireBlock && NetworkWireBlock.face(b, side.getOpposite()) >= 2) return false;
             if (b.getBlock() instanceof BundlePortBlock || port.isExternal() || side != a.getValue(EndpointBlock.FACING)) return false;

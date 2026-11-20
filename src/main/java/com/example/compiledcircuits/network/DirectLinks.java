@@ -11,7 +11,7 @@ final class DirectLinks {
         Key opposite(){return new Key(dimension,pos.relative(side),side.getOpposite());}
     }
     private record Endpoint(CompiledNetwork network, CompiledNetwork.Port port) {}
-    private record Sample(Map<BlockPos,Boolean> values,boolean ready) {}
+    private record Sample(Map<BlockPos,Boolean> values,Map<BundleFace,Boolean> faces,boolean ready) {}
     private static final class Group {
         final Set<CompiledNetwork> members;
         LogicProgram program;
@@ -79,7 +79,7 @@ final class DirectLinks {
     void add(CompiledNetwork n){
         if(n.directPorts().isEmpty())return;
         revision++;
-        samples.put(n,new Sample(Map.of(),false));n.directAvailability(false);
+        samples.put(n,new Sample(Map.of(),Map.of(),false));n.directAvailability(false);
         for(var p:n.directPorts())ports.put(key(n,p),new Endpoint(n,p));
         var affected=new HashSet<CompiledNetwork>();affected.add(n);
         for(var p:n.directPorts()){var other=peer(n,p);if(other!=null)affected.add(other.network);}
@@ -107,13 +107,13 @@ final class DirectLinks {
     }
     void invalidate(CompiledNetwork n){
         var sample=samples.get(n);if(sample==null)return;
-        samples.put(n,new Sample(sample.values,false));dirty.add(n);
+        samples.put(n,new Sample(sample.values,sample.faces,false));dirty.add(n);
         var group=groups.get(n);
         if(group!=null)for(var member:group.members){member.directAvailability(false);if(member.applyDirect(Map.of(),null,""))changed.accept(member);}
     }
     void update(CompiledNetwork n,Map<BlockPos,Boolean> values){
         var old=samples.get(n);if(old==null)return;
-        var next=new Sample(Map.copyOf(values),n.directReady());samples.put(n,next);
+        var next=new Sample(Map.copyOf(values),Map.copyOf(KeyboardSessions.values(n)),n.directReady());samples.put(n,next);
         if(!next.equals(old))dirty.add(n);
     }
     boolean hasWork(){return !dirty.isEmpty();}
@@ -178,7 +178,8 @@ final class DirectLinks {
         Map<BlockPos,Boolean> result=Map.of();Map<String,Boolean> memory=null;String error=group.error;
         if(ready&&error.isEmpty())try{
             Map<BlockPos,Boolean> inputs=new HashMap<>();for(var n:group.members)inputs.putAll(samples.get(n).values);
-            result=group.program.evaluate(inputs);
+            Map<BundleFace,Boolean> faces=new HashMap<>();for(var n:group.members)faces.putAll(samples.get(n).faces);
+            result=group.program.evaluate(inputs,faces);
             if(group.program.hasStatefulMemory())memory=group.program.nodeMemory();
         }catch(LogicProgram.UnstableFeedback failure){error="Direct links: "+failure.getMessage();}
         List<CompiledNetwork> notifications=new ArrayList<>();

@@ -17,6 +17,7 @@ import net.minecraftforge.fml.common.Mod;
 @Mod.EventBusSubscriber(modid = CompiledCircuits.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public final class ItemIdDecorations {
     @SubscribeEvent public static void register(RegisterItemDecorationsEvent event) {
+        event.register(ModItems.KEYBOARD_PORT.get(), ItemIdDecorations::render);
         event.register(ModItems.ID_WIRE.get(), ItemIdDecorations::render);
         event.register(ModItems.BUNDLE_INPUT.get(), ItemIdDecorations::render);
         event.register(ModItems.BUNDLE_OUTPUT.get(), ItemIdDecorations::render);
@@ -30,6 +31,7 @@ public final class ItemIdDecorations {
             try { id = WireIds.normalize(stack.getTag().getString(stack.getItem() instanceof IdWireItem ? "WireId" : "ChannelId")); }
             catch (IllegalArgumentException ignored) { }
         }
+        if (stack.getItem() instanceof com.example.compiledcircuits.item.KeyboardPortItem) id = com.example.compiledcircuits.item.KeyboardPortItem.binding(stack).label();
         boolean wire = stack.getItem() instanceof IdWireItem;
         boolean network = stack.is(ModItems.BUNDLE_NETWORK_INPUT.get()) || stack.is(ModItems.BUNDLE_NETWORK_OUTPUT.get());
         // Coordinates are in the 16x16 inventory slot, matched to the 128px item textures.

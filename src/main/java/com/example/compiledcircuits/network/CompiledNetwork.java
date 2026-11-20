@@ -189,7 +189,7 @@ public class CompiledNetwork {
         boolean hadError = feedbackError != null;
         Map<BlockPos, Boolean> next;
         try {
-            next = logic == null || logicInvalid ? Map.of() : logic.evaluate(values);
+            next = logic == null || logicInvalid ? Map.of() : logic.evaluate(values, KeyboardSessions.values(this));
             feedbackError = null;
         } catch (LogicProgram.UnstableFeedback unstable) {
             feedbackError = unstable;
@@ -262,7 +262,7 @@ public class CompiledNetwork {
                 case "compiledcircuits:basic_wire", "compiledcircuits:network_wire", "compiledcircuits:id_wire",
                     "compiledcircuits:bundled_wire", "compiledcircuits:bundle_input", "compiledcircuits:bundle_output",
                     "compiledcircuits:bundle_network_input", "compiledcircuits:bundle_network_output" -> CircuitElementType.WIRE;
-                case "compiledcircuits:input_endpoint", "compiledcircuits:signal_switch" -> CircuitElementType.INPUT;
+                case "compiledcircuits:input_endpoint", "compiledcircuits:signal_switch", "compiledcircuits:keyboard" -> CircuitElementType.INPUT;
                 case "compiledcircuits:output_endpoint", "compiledcircuits:signal_lamp" -> CircuitElementType.OUTPUT;
                 case "compiledcircuits:and_gate", "compiledcircuits:or_gate", "compiledcircuits:not_gate", "compiledcircuits:d_latch",
                         "compiledcircuits:nand_gate", "compiledcircuits:nor_gate", "compiledcircuits:xor_gate", "compiledcircuits:xnor_gate" -> CircuitElementType.GATE;

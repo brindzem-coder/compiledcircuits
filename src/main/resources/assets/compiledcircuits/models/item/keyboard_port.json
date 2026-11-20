@@ -1,0 +1,189 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "particle": "minecraft:block/red_concrete",
+    "red": "minecraft:block/red_concrete",
+    "label": "minecraft:block/white_concrete"
+  },
+  "elements": [
+    {
+      "from": [
+        2.5,
+        2.5,
+        8
+      ],
+      "to": [
+        13.5,
+        5,
+        13
+      ],
+      "faces": {
+        "up": {
+          "texture": "#red"
+        },
+        "down": {
+          "texture": "#red"
+        },
+        "north": {
+          "texture": "#red"
+        },
+        "south": {
+          "texture": "#red"
+        },
+        "east": {
+          "texture": "#red"
+        },
+        "west": {
+          "texture": "#red"
+        }
+      }
+    },
+    {
+      "from": [
+        2.5,
+        11,
+        8
+      ],
+      "to": [
+        13.5,
+        13.5,
+        13
+      ],
+      "faces": {
+        "up": {
+          "texture": "#red"
+        },
+        "down": {
+          "texture": "#red"
+        },
+        "north": {
+          "texture": "#red"
+        },
+        "south": {
+          "texture": "#red"
+        },
+        "east": {
+          "texture": "#red"
+        },
+        "west": {
+          "texture": "#red"
+        }
+      }
+    },
+    {
+      "from": [
+        2.5,
+        5,
+        8
+      ],
+      "to": [
+        5,
+        11,
+        13
+      ],
+      "faces": {
+        "up": {
+          "texture": "#red"
+        },
+        "down": {
+          "texture": "#red"
+        },
+        "north": {
+          "texture": "#red"
+        },
+        "south": {
+          "texture": "#red"
+        },
+        "east": {
+          "texture": "#red"
+        },
+        "west": {
+          "texture": "#red"
+        }
+      }
+    },
+    {
+      "from": [
+        11,
+        5,
+        8
+      ],
+      "to": [
+        13.5,
+        11,
+        13
+      ],
+      "faces": {
+        "up": {
+          "texture": "#red"
+        },
+        "down": {
+          "texture": "#red"
+        },
+        "north": {
+          "texture": "#red"
+        },
+        "south": {
+          "texture": "#red"
+        },
+        "east": {
+          "texture": "#red"
+        },
+        "west": {
+          "texture": "#red"
+        }
+      }
+    },
+    {
+      "from": [
+        2.6,
+        8.1,
+        13
+      ],
+      "to": [
+        13.4,
+        10.5,
+        13.1
+      ],
+      "faces": {
+        "up": {
+          "texture": "#label"
+        },
+        "down": {
+          "texture": "#label"
+        },
+        "north": {
+          "texture": "#label"
+        },
+        "south": {
+          "texture": "#label"
+        },
+        "east": {
+          "texture": "#label"
+        },
+        "west": {
+          "texture": "#label"
+        }
+      }
+    }
+  ],
+  "display": {
+    "gui": {
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "translation": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    }
+  }
+}

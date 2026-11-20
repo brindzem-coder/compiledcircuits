@@ -84,6 +84,7 @@ public final class NetworkRepairManager {
         if(!ProtectedRepairPlacement.place(level,pos,restored,player,()->NetworkOperations.canModify(player)
                 && NetworkSavedData.get(level.getServer()).getNetwork(network.getId())==network
                 && target.sameOccurrence(network.getBrokenElement(target.getElementId())), () -> {
+                    if (level.getBlockEntity(pos) instanceof com.example.compiledcircuits.block.KeyboardEntity keyboard) keyboard.restoreCamera(element.keyboardCamera());
                     if (level.getBlockEntity(pos) instanceof com.example.compiledcircuits.block.BundleWireEntity wire) wire.restorePorts(element.bundleFaces());
                     if (level.getBlockEntity(pos) instanceof com.example.compiledcircuits.block.BundlePortEntity port) port.configure(element.channelId());
                     if (level.getBlockEntity(pos) instanceof com.example.compiledcircuits.block.IdWireEntity wire)

@@ -12,11 +12,11 @@ public final class BundleToolService {
     private static final Map<UUID, Session> sessions = new HashMap<>();
     public static int open(ServerPlayer player, InteractionHand hand) {
         var stack = player.getItemInHand(hand);
-        if (!(stack.getItem() instanceof BundlePortItem)) {
+        if (!(stack.getItem() instanceof BundlePortItem) && !(stack.getItem() instanceof com.example.compiledcircuits.item.KeyboardPortItem)) {
             player.sendSystemMessage(net.minecraft.network.chat.Component.translatable("bundle.compiledcircuits.hold")); return 0;
         }
         var session = new Session(hand, stack, UUID.randomUUID()); sessions.put(player.getUUID(), session);
-        ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new BundleEditorS2CPacket(session.token, BundlePortItem.channel(stack)));
+        ModNetworking.CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new BundleEditorS2CPacket(session.token, stack.getItem() instanceof com.example.compiledcircuits.item.KeyboardPortItem ? com.example.compiledcircuits.item.KeyboardPortItem.binding(stack).encode() : BundlePortItem.channel(stack), stack.getItem() instanceof com.example.compiledcircuits.item.KeyboardPortItem));
         return 1;
     }
     public static void finish(ServerPlayer player, UUID token, String id, boolean cancel) {
@@ -24,8 +24,9 @@ public final class BundleToolService {
         if (session == null || !session.token.equals(token)) return;
         sessions.remove(player.getUUID());
         if (cancel || !NetworkOperations.canModify(player) || player.getItemInHand(session.hand) != session.stack) return;
-        try { id = WireIds.normalize(id); } catch (IllegalArgumentException invalid) { return; }
-        session.stack.getOrCreateTag().putString("ChannelId", id); player.containerMenu.broadcastChanges();
+        boolean keyboard = session.stack.getItem() instanceof com.example.compiledcircuits.item.KeyboardPortItem;
+        try { id = keyboard ? KeyboardBinding.parse(id).encode() : WireIds.normalize(id); } catch (IllegalArgumentException invalid) { return; }
+        session.stack.getOrCreateTag().putString(keyboard ? "KeyboardBinding" : "ChannelId", id); player.containerMenu.broadcastChanges();
     }
     public static void forget(ServerPlayer player) { sessions.remove(player.getUUID()); }
     public static void clear() { sessions.clear(); }

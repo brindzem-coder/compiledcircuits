@@ -17,7 +17,7 @@ public final class BundleChannelScreen extends Screen {
     private BundleChannelScreen(BundleEditorS2CPacket packet) {
         super(Component.translatable("bundle.compiledcircuits.editor")); token = packet.token(); value = packet.id();
     }
-    public static void open(BundleEditorS2CPacket packet) { Minecraft.getInstance().setScreen(new BundleChannelScreen(packet)); }
+    public static void open(BundleEditorS2CPacket packet) { Minecraft.getInstance().setScreen(packet.keyboard() ? new KeyboardBindingScreen(packet) : new BundleChannelScreen(packet)); }
     @Override protected void init() {
         if (field != null) value = field.getValue();
         field = new EditBox(font, width / 2 - 120, height / 2 - 10, 240, 20, title);

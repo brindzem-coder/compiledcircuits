@@ -14,6 +14,7 @@ public final class BundleConnections {
         var port = port(level, pos, side);
         if (b.getBlock() instanceof BundledWireBlock)
             return port == null && port(level, pos.relative(side), side.getOpposite()) == null;
+        if (b.getBlock() instanceof KeyboardBlock) return port == null;
         if (port == null) return b.getBlock() instanceof BundlePortBlock && BundlePortBlock.cableSide(b) == side.getOpposite();
         if (port.external() || b.getBlock() instanceof BundlePortBlock || b.getBlock() instanceof GateBodyBlock) return false;
         if (!(b.getBlock() instanceof IWireConnectable wire) || !wire.canWireConnect(b, side.getOpposite())) return false;

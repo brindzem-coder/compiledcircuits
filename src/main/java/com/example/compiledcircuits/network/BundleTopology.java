@@ -42,7 +42,7 @@ final class BundleTopology {
             if (entry.getValue().getBlock() instanceof BundledWireBlock) {
                 for (var side : Direction.values()) {
                     var face = new BundleFace(pos, side); var config = faces.get(face);
-                    if (config != null) ports.add(new Port(face, config, true));
+                    if (config != null && !config.keyboard()) ports.add(new Port(face, config, true));
                 }
             } else if (entry.getValue().getBlock() instanceof BundlePortBlock port) {
                 String channel = channels.get(pos);

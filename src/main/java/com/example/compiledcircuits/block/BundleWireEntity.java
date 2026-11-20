@@ -12,11 +12,13 @@ import java.util.*;
 public final class BundleWireEntity extends BlockEntity {
     public record Port(int kind, String id) {
         public Port {
-            if (kind < 1 || kind > 4) throw new IllegalArgumentException("Invalid bundle port kind");
-            id = WireIds.normalize(id);
+            if (kind < 1 || kind > 5) throw new IllegalArgumentException("Invalid bundle port kind");
+            id = kind == 5 ? KeyboardBinding.parse(id).encode() : WireIds.normalize(id);
         }
         public boolean input() { return kind == 1 || kind == 3; }
-        public boolean external() { return kind >= 3; }
+        public boolean external() { return kind == 3 || kind == 4; }
+        public boolean keyboard() { return kind == 5; }
+        public String label() { return keyboard() ? KeyboardBinding.parse(id).label() : id; }
     }
     private final EnumMap<Direction, Port> ports = new EnumMap<>(Direction.class);
     public BundleWireEntity(BlockPos pos, BlockState state) { super(ModBlockEntities.BUNDLE_WIRE.get(), pos, state); }

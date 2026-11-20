@@ -8,7 +8,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 
 public final class ModNetworking {
 
-    private static final String PROTOCOL_VERSION = "26";
+    private static final String PROTOCOL_VERSION = "27";
 
     public static final SimpleChannel CHANNEL =
             NetworkRegistry.ChannelBuilder
@@ -33,6 +33,8 @@ public final class ModNetworking {
     }
 
     public static void register() {
+        CHANNEL.registerMessage(packetId++, KeyboardInputC2SPacket.class, KeyboardInputC2SPacket::encode, KeyboardInputC2SPacket::decode, KeyboardInputC2SPacket::handle, java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER));
+        CHANNEL.registerMessage(packetId++, KeyboardSessionS2CPacket.class, KeyboardSessionS2CPacket::encode, KeyboardSessionS2CPacket::decode, KeyboardSessionS2CPacket::handle, java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));
         CHANNEL.registerMessage(packetId++, OpenRenameS2CPacket.class, OpenRenameS2CPacket::encode,
                 OpenRenameS2CPacket::decode, OpenRenameS2CPacket::handle,
                 java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));

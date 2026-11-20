@@ -70,5 +70,21 @@
   "item.compiledcircuits.lamp_input": "Signal Lamp Input",
   "key.compiledcircuits.delete": "Delete selected circuit and its blocks",
   "block.compiledcircuits.crossing_wire": "Wire crossing",
-  "wire.compiledcircuits.crossing_hint": "Ctrl + right-click a perpendicular face of a straight wire to add a second wire"
+  "wire.compiledcircuits.crossing_hint": "Ctrl + right-click a perpendicular face of a straight wire to add a second wire",
+  "block.compiledcircuits.keyboard": "Keyboard",
+  "item.compiledcircuits.keyboard_port": "Keyboard port",
+  "keyboard.compiledcircuits.title": "Keyboard control",
+  "keyboard.compiledcircuits.bind": "Keyboard port binding",
+  "keyboard.compiledcircuits.record": "Record input",
+  "keyboard.compiledcircuits.recording": "Press a combination, then release. Esc cancels recording.",
+  "keyboard.compiledcircuits.bind_hint": "Keys, mouse buttons, wheel and mouse directions",
+  "keyboard.compiledcircuits.port_hint": "Right-click: binding. Click cable face: install. Shift-click: binding.",
+  "keyboard.compiledcircuits.controls": "Esc: exit | Hold Ctrl+F1: look around",
+  "keyboard.compiledcircuits.looking": "Free look — circuit input suspended",
+  "keyboard.compiledcircuits.camera_set": "Camera position saved. Shift-right-click again to clear.",
+  "keyboard.compiledcircuits.camera_clear": "Camera position cleared.",
+  "keyboard.compiledcircuits.compile": "Compile a healthy circuit containing this keyboard first.",
+  "keyboard.compiledcircuits.busy": "Another player is using this keyboard.",
+  "keyboard.compiledcircuits.no_ports": "No keyboard ports connected to this keyboard.",
+  "keyboard.compiledcircuits.unsafe_camera": "Saved camera position is obstructed or has no safe floor."
 }

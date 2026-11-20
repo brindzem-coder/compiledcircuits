@@ -6,7 +6,9 @@
   "refmap": "compiledcircuits.visual.refmap.json",
   "client": [
     "LevelChunkVisualIndexMixin",
-    "CreativeTabOrderMixin"
+    "CreativeTabOrderMixin",
+    "KeyboardCaptureMixin",
+    "KeyboardMouseMixin"
   ],
   "injectors": {
     "defaultRequire": 1

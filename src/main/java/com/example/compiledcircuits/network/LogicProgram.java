@@ -472,6 +472,7 @@ public final class LogicProgram {
                 .thenComparingInt(BlockPos::getY).thenComparingInt(BlockPos::getZ));
         sorted.putAll(states); states = sorted;
         var bundleRoutes = BundleTopology.resolve(states, wireIds, ownership, faces);
+        var keyboardPorts = KeyboardTopology.resolve(states, faces, ownership);
         List<Node> nodes = new ArrayList<>();
         Map<BundleFace, Integer> faceNodes = new HashMap<>(), faceOutputs = new HashMap<>();
         Map<BundleFace, Integer> faceInputNodes = new HashMap<>();
@@ -517,9 +518,9 @@ public final class LogicProgram {
             if (BundleTopology.element(state)) {
                 if (state.getBlock() instanceof BundledWireBlock) for (var side : Direction.values()) {
                     var face = new BundleFace(pos, side); var config = faces.get(face);
-                    if (config != null && config.external()) {
+                    if (config != null && (config.external() || config.keyboard())) {
                         int id = add(nodes, Op.OR, pos); faceNodes.put(face, id);
-                        if (config.input()) faceInputNodes.put(face, id); else faceOutputs.put(face, id);
+                        if (config.input() || config.keyboard()) faceInputNodes.put(face, id); else faceOutputs.put(face, id);
                     }
                 }
                 if (state.getBlock() instanceof BundlePortBlock port && port.isExternal()) {
@@ -624,6 +625,17 @@ public final class LogicProgram {
             Integer to = faceNodes.containsKey(link.to()) ? faceNodes.get(link.to()) : sink.get(link.to().pos());
             if (from == null || to == null) throw error("Invalid direct face link", link.from().pos());
             edge(nodes, from, to);
+        }
+        for (var face : keyboardPorts.keySet()) {
+            var next = Crossings.next(states,face.pos(),face.side()); var neighbor = states.get(next);
+            Integer target = sink.get(next);
+            if (neighbor != null && neighbor.getBlock() instanceof DLatchBlock && DLatchBlock.enableSide(neighbor) == face.side().getOpposite()) target = enableSink.get(next);
+            if (neighbor == null || target == null || BundleTopology.element(neighbor) || neighbor.getBlock() instanceof KeyboardBlock
+                    || !Objects.equals(ownership.get(face.pos()),ownership.get(next))
+                    || !(neighbor.getBlock() instanceof IWireConnectable wire) || !wire.canWireConnect(neighbor,face.side().getOpposite())
+                    || CircuitConnections.isTerminal(neighbor) && !CircuitConnections.receives(neighbor,face.side().getOpposite()))
+                throw error("Keyboard port needs a compatible signal connection",face.pos());
+            edge(nodes,faceInputNodes.get(face),target);
         }
         List<int[]> bundleEdges = new ArrayList<>();
         for (var route : bundleRoutes) {

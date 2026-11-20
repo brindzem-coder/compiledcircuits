@@ -67,6 +67,7 @@ public final class CircuitBlueprint {
             // Capture live switches when available; missing blocks use the saved structure.
             if (level.hasChunkAt(e.getPos())) {
                 var actual = level.getBlockState(e.getPos());
+                if (level.getBlockEntity(e.getPos()) instanceof KeyboardEntity keyboard) tag.put("keyboardCamera",keyboard.cameraData());
                 if (actual.getBlock() instanceof SignalSwitchBlock && actual.is(e.resolveState().state().orElseThrow().getBlock()))
                     tag.merge(CompiledBlockStateCodec.write(CompiledBlockStateCodec.capture(actual)));
             }
@@ -139,6 +140,12 @@ public final class CircuitBlueprint {
                 Map<Direction,BundleWireEntity.Port> faces=new EnumMap<>(Direction.class);
                 BundleWireEntity.decode(old.bundleFaces()).forEach((side,port)->faces.put(transformSide(side,turns,mirrored,mirroredZ),port));
                 tag.put("bundleFaces",BundleWireEntity.encode(faces));
+            }
+            if(!old.keyboardCamera().isEmpty()) {
+                var camera=old.keyboardCamera();double x=camera.getDouble("x"),z=camera.getDouble("z");float yaw=camera.getFloat("yaw");
+                if(mirrored){x=1-x;yaw=-yaw;}if(mirroredZ){z=1-z;yaw=180-yaw;}
+                for(int i=0;i<Math.floorMod(turns,4);i++){double nx=1-z;z=x;x=nx;yaw+=90;}
+                camera.putDouble("x",x);camera.putDouble("z",z);camera.putFloat("yaw",yaw);tag.put("keyboardCamera",camera);
             }
             if(!old.crossingLanes().isEmpty()){
                 var lanes=new CompoundTag();for(var axis:Direction.Axis.values())if(old.crossingLanes().contains(axis.getName()))

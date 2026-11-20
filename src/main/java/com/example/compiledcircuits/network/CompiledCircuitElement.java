@@ -16,7 +16,7 @@ public class CompiledCircuitElement {
             decoded = CompiledBlockStateCodec.readAndResolve(stateData, blockId);
             if (decoded.status() == CompiledBlockStateCodec.Status.EXACT) {
                 String required = switch (blockId) {
-                    case "compiledcircuits:input_endpoint", "compiledcircuits:signal_switch" -> "INPUT";
+                    case "compiledcircuits:input_endpoint", "compiledcircuits:signal_switch", "compiledcircuits:keyboard" -> "INPUT";
                     case "compiledcircuits:output_endpoint", "compiledcircuits:signal_lamp" -> "OUTPUT";
                     case "compiledcircuits:basic_wire", "compiledcircuits:network_wire", "compiledcircuits:id_wire",
                     "compiledcircuits:bundled_wire", "compiledcircuits:bundle_input", "compiledcircuits:bundle_output",
@@ -72,11 +72,13 @@ public class CompiledCircuitElement {
     }
 
     public CompoundTag crossingLanes() { return stateData.getCompound("crossingLanes").copy(); }
+    public CompoundTag keyboardCamera() { return stateData.getCompound("keyboardCamera").copy(); }
     public CompoundTag bundleFaces() { return stateData.getCompound("bundleFaces").copy(); }
     public String channelId() { return stateData.getString("channelId"); }
     public String wireId() { return stateData.getString("wireId"); }
     public int wireColor() { return stateData.getInt("wireColor"); }
     public CompiledCircuitElement captureWire(net.minecraft.world.level.BlockGetter level) {
+        if (level.getBlockEntity(pos) instanceof com.example.compiledcircuits.block.KeyboardEntity keyboard) stateData.put("keyboardCamera", keyboard.cameraData());
         if (level.getBlockEntity(pos) instanceof com.example.compiledcircuits.block.CrossingWireEntity wire)
             stateData.put("crossingLanes", wire.snapshot(Crossings.mask(this)));
         if (level.getBlockEntity(pos) instanceof com.example.compiledcircuits.block.IdWireEntity wire) {
@@ -131,7 +133,7 @@ public class CompiledCircuitElement {
         }
 
         CompoundTag data = new CompoundTag();
-        for (String key : new String[]{"stateDataVersion", "stateOrigin", "compiledBlockState", "wireId", "wireColor", "channelId", "bundleFaces", "crossingLanes"}) {
+        for (String key : new String[]{"stateDataVersion", "stateOrigin", "compiledBlockState", "wireId", "wireColor", "channelId", "bundleFaces", "crossingLanes", "keyboardCamera"}) {
             if (tag.contains(key)) data.put(key, tag.get(key).copy());
         }
         boolean upgrade = data.isEmpty();
