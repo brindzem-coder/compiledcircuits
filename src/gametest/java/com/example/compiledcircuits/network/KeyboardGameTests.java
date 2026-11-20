@@ -138,5 +138,28 @@ public class KeyboardGameTests {
         }catch(Throwable failure){cleanup.run();throw failure;}
     }
 
+    @GameTest(template="empty",batch="keyboard_camera")
+    public static void cameraSetupSavesLaterPoseAndSupportsCancel(GameTestHelper h) throws Exception {
+        var level=h.getLevel();var pos=h.absolutePos(new BlockPos(2,3,2));
+        level.setBlock(pos,ModBlocks.KEYBOARD.get().defaultBlockState(),3);
+        var entity=(KeyboardEntity)level.getBlockEntity(pos);
+        var player=new net.minecraftforge.common.util.FakePlayer(level,new com.mojang.authlib.GameProfile(UUID.randomUUID(),"camera-test"));player.getAbilities().mayBuild=true;
+        player.setPos(pos.getX()+1,pos.getY()+1,pos.getZ());
+        KeyboardCameraSessions.open(player,pos);
+        var field=KeyboardCameraSessions.class.getDeclaredField("sessions");field.setAccessible(true);
+        var sessions=(Map<?,?>)field.get(null);var session=sessions.get(player.getUUID());
+        h.assertTrue(session!=null&&entity.camera()==null,"opening does not save the click pose");
+        var method=session.getClass().getDeclaredMethod("token");method.setAccessible(true);var token=(UUID)method.invoke(session);
+        player.setPos(pos.getX()+4,pos.getY()+1,pos.getZ()+3);player.setYRot(123);player.setXRot(-27);
+        KeyboardCameraSessions.finish(player,UUID.randomUUID(),1);h.assertTrue(entity.camera()==null,"wrong token rejected");
+        KeyboardCameraSessions.finish(player,token,1);
+        h.assertTrue(entity.camera().equals(player.position())&&entity.yaw()==123&&entity.pitch()==-27,"Enter saves the later position and direction");
+        var saved=entity.cameraData();KeyboardCameraSessions.open(player,pos);session=sessions.get(player.getUUID());token=(UUID)method.invoke(session);
+        player.setYRot(50);KeyboardCameraSessions.finish(player,token,0);h.assertTrue(entity.cameraData().equals(saved),"cancel preserves previous pose");
+        KeyboardCameraSessions.open(player,pos);session=sessions.get(player.getUUID());token=(UUID)method.invoke(session);
+        KeyboardCameraSessions.finish(player,token,2);h.assertTrue(entity.camera()==null,"clear removes camera");
+        level.removeBlock(pos,false);h.succeed();
+    }
+
 }
 

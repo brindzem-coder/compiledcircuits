@@ -24,7 +24,7 @@ public final class KeyboardBlock extends InputEndpointBlock implements EntityBlo
             if (player.isSpectator() || !level.mayInteract(player,pos)) return InteractionResult.FAIL;
             if (player.isShiftKeyDown()) {
                 if (player.mayBuild() && com.example.compiledcircuits.network.NetworkOperations.canModify(server)
-                        && level.getBlockEntity(pos) instanceof KeyboardEntity keyboard) keyboard.configureCamera(server);
+                        && level.getBlockEntity(pos) instanceof KeyboardEntity keyboard) com.example.compiledcircuits.network.KeyboardCameraSessions.open(server,pos);
             } else KeyboardSessions.open(server,pos);
         }
         return InteractionResult.sidedSuccess(level.isClientSide);

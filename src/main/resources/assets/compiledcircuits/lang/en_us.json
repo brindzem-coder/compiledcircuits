@@ -81,10 +81,12 @@
   "keyboard.compiledcircuits.port_hint": "Right-click: binding. Click cable face: install. Shift-click: binding.",
   "keyboard.compiledcircuits.controls": "Esc: exit | Hold Ctrl+F1: look around",
   "keyboard.compiledcircuits.looking": "Free look — circuit input suspended",
-  "keyboard.compiledcircuits.camera_set": "Camera position saved. Shift-right-click again to clear.",
+  "keyboard.compiledcircuits.camera_set": "Camera position saved. Shift-right-click the keyboard to reposition.",
   "keyboard.compiledcircuits.camera_clear": "Camera position cleared.",
   "keyboard.compiledcircuits.compile": "Compile a healthy circuit containing this keyboard first.",
   "keyboard.compiledcircuits.busy": "Another player is using this keyboard.",
   "keyboard.compiledcircuits.no_ports": "No keyboard ports connected to this keyboard.",
-  "keyboard.compiledcircuits.unsafe_camera": "Saved camera position is obstructed or has no safe floor."
+  "keyboard.compiledcircuits.unsafe_camera": "Saved camera position is obstructed or has no safe floor.",
+  "keyboard.compiledcircuits.camera_setup": "Camera setup: move and look | Enter: save | Esc: cancel | Delete: clear",
+  "keyboard.compiledcircuits.camera_range": "Stay within 16 blocks of the keyboard to save."
 }

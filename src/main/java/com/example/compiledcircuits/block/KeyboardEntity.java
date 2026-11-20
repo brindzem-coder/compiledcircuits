@@ -16,11 +16,10 @@ public final class KeyboardEntity extends BlockEntity {
     public Vec3 camera() { return offset == null ? null : Vec3.atLowerCornerOf(worldPosition).add(offset); }
     public float yaw() { return yaw; }
     public float pitch() { return pitch; }
-    public void configureCamera(ServerPlayer player) {
-        if (offset == null) {
-            offset = player.position().subtract(Vec3.atLowerCornerOf(worldPosition)); yaw=player.getYRot(); pitch=player.getXRot();
-            player.sendSystemMessage(Component.translatable("keyboard.compiledcircuits.camera_set"));
-        } else { offset=null; player.sendSystemMessage(Component.translatable("keyboard.compiledcircuits.camera_clear")); }
+    public void configureCamera(ServerPlayer player, boolean clear) {
+        offset = clear ? null : player.position().subtract(Vec3.atLowerCornerOf(worldPosition));
+        yaw=player.getYRot(); pitch=player.getXRot();
+        player.sendSystemMessage(Component.translatable("keyboard.compiledcircuits." + (clear ? "camera_clear" : "camera_set")));
         setChanged();
         var data=com.example.compiledcircuits.network.NetworkSavedData.get(player.getServer());
         var network=data.findNetworkByInput(player.serverLevel(),worldPosition);
