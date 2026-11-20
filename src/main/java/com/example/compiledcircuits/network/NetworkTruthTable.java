@@ -71,6 +71,7 @@ final class NetworkTruthTable {
         long work;
         Builder(LogicProgram program) {
             this.program = program;
+            if(program.hasScreens())throw new IllegalArgumentException("Whole-network tables do not yet support RGB screens; use graph optimization");
             if (program.hasStatefulMemory()) throw new IllegalArgumentException("Whole-network tables require no latches or feedback cycles");
             inputs = program.benchmarkInputs(); outputs = program.tableOutputs();
             faceInputs = program.tableFaceInputs(); faceOutputs = program.tableFaceOutputs();

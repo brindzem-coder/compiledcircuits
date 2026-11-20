@@ -376,6 +376,7 @@ public final class NetworkRuntime {
     }
     public static void notifyOutput(ServerLevel level, BlockPos pos) {
         if (!isChunkAvailable(level, RuntimeSignalReader.chunk(pos))) return;
+        if (level.getBlockState(pos).getBlock() instanceof com.example.compiledcircuits.block.ColorScreenBlock) { com.example.compiledcircuits.block.ColorScreenBlock.refresh(level,pos); return; }
         com.example.compiledcircuits.block.SignalLampBlock.refresh(level, pos);
         for (Direction direction : Direction.values()) {
             BlockPos neighbor = pos.relative(direction);

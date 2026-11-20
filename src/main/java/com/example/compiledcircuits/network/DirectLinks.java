@@ -182,6 +182,7 @@ final class DirectLinks {
             result=group.program.evaluate(inputs,faces);
             if(group.program.hasStatefulMemory())memory=group.program.nodeMemory();
         }catch(LogicProgram.UnstableFeedback failure){error="Direct links: "+failure.getMessage();}
+        var colors=ready&&error.isEmpty()?group.program.screenColors():Map.<BlockPos,Integer>of();
         List<CompiledNetwork> notifications=new ArrayList<>();
         for(var n:group.members){
             n.directAvailability(ready);
@@ -189,7 +190,8 @@ final class DirectLinks {
             for(var p:n.getOutputs())if(result.containsKey(p))values.put(p,result.get(p));
             for(var p:n.directPorts())if(!p.input()&&result.containsKey(p.pos()))values.put(p.pos(),result.get(p.pos()));
             var before=memory==null?Map.<String,Boolean>of():n.nodeMemory();
-            if(n.applyDirect(values,memory,error))notifications.add(n);
+            boolean colorsChanged=n.applyScreenColors(colors);
+            if(n.applyDirect(values,memory,error)||colorsChanged)notifications.add(n);
             if(memory!=null&&!before.equals(n.nodeMemory()))data.setDirty();
         }
         // Publish the entire stable group before notifying any vanilla observer.

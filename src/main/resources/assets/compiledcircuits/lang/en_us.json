@@ -88,5 +88,9 @@
   "keyboard.compiledcircuits.no_ports": "No keyboard ports connected to this keyboard.",
   "keyboard.compiledcircuits.unsafe_camera": "Saved camera position is obstructed or has no safe floor.",
   "keyboard.compiledcircuits.camera_setup": "Camera setup: move and look | Enter: save | Esc: cancel | Delete: clear",
-  "keyboard.compiledcircuits.camera_range": "Stay within 16 blocks of the keyboard to save."
+  "keyboard.compiledcircuits.camera_range": "Stay within 16 blocks of the keyboard to save.",
+  "block.compiledcircuits.color_screen": "Color screen (RGB332)",
+  "item.compiledcircuits.screen_port": "Screen port",
+  "screen.compiledcircuits.channels": "RGB332 channels: %s–%s",
+  "screen.compiledcircuits.hint": "Right-click: base ID. Install on cable facing the back of a screen."
 }

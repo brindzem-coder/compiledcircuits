@@ -38,6 +38,7 @@ public final class LogicProgram {
     long fullWork() { long work = 0; for (int[] p : parents) work += 1 + p.length; return work; }
     /** Contract complete network regions, then sort execution units without changing original IDs. */
     void installTable(NetworkTruthTable table, Set<BlockPos> region) {
+        if (screenNodes.keySet().stream().anyMatch(region::contains)) throw new IllegalArgumentException("Whole-network tables do not yet support RGB screens; use graph optimization");
         var members = new HashSet<Integer>();
         for (int i = 0; i < positions.length; i++) if (region.contains(positions[i])) members.add(i);
         if (members.isEmpty()) throw new IllegalArgumentException("Empty table region");
@@ -262,6 +263,14 @@ public final class LogicProgram {
     private final String signature;
     public static final int MAX_SETTLE_SWEEPS = 256, MAX_EVALUATION_WORK = 262144;
     private final Map<BlockPos, Integer> inputs, outputs;
+    private Map<BlockPos,int[]> screenNodes = Map.of();
+    boolean hasScreens() { return !screenNodes.isEmpty(); }
+    Map<BlockPos,Integer> screenColors() {
+        if(screenNodes.isEmpty())return Map.of();
+        Map<BlockPos,Integer> result=new HashMap<>();
+        screenNodes.forEach((pos,bits)->{int color=0;for(int i=0;i<8;i++)if(stable[bits[i]])color|=1<<i;result.put(pos,color);});
+        return result;
+    }
     private final Map<BundleFace, Integer> faceOutputs;
     private final Set<Integer> faceInputs;
     private final Map<BundleFace, Integer> faceInputNodes;
@@ -637,10 +646,19 @@ public final class LogicProgram {
                 throw error("Keyboard port needs a compatible signal connection",face.pos());
             edge(nodes,faceInputNodes.get(face),target);
         }
+        Map<BlockPos,int[]> screenBits=new HashMap<>();
+        Set<BlockPos> connectedScreens=new HashSet<>();
+        for(var entry:faces.entrySet())if(entry.getValue().screen()) {
+            var face=entry.getKey();var pos=face.pos().relative(face.side());var state=states.get(pos);
+            if(state==null||!(state.getBlock() instanceof ColorScreenBlock)||state.getValue(EndpointBlock.FACING)!=face.side()
+                    ||!Objects.equals(ownership.get(face.pos()),ownership.get(pos))||!connectedScreens.add(pos))
+                throw error("Screen port must connect to the back of one screen",face.pos());
+            int[] bits=new int[8];for(int i=0;i<8;i++){bits[i]=add(nodes,Op.OR,pos);edge(nodes,bits[i],outputs.get(pos));}screenBits.put(pos,bits);
+        }
         List<int[]> bundleEdges = new ArrayList<>();
         for (var route : bundleRoutes) {
             int from = bundleNode(states, route.input(), true, source, sink, enableSink, ownership, faceNodes);
-            int to = bundleNode(states, route.output(), false, source, sink, enableSink, ownership, faceNodes);
+            int to = route.output().bit() >= 0 ? screenBits.get(route.output().pos().relative(route.output().face().side()))[route.output().bit()] : bundleNode(states, route.output(), false, source, sink, enableSink, ownership, faceNodes);
             if (from == to) throw error("Bundle channel " + route.channel() + " forms a cycle", route.input().pos());
             edge(nodes, from, to); bundleEdges.add(new int[]{from, to});
         }
@@ -661,7 +679,9 @@ public final class LogicProgram {
             if (ring && (inversions & 1) != 0)
                 throw error("Feedback cycle has no stable state", nodes.get(group[0]).position);
         }
-        return new LogicProgram(nodes, groups, inputs, outputs, faceOutputs, faceInputNodes);
+        var program = new LogicProgram(nodes, groups, inputs, outputs, faceOutputs, faceInputNodes);
+        program.screenNodes=Map.copyOf(screenBits);
+        return program;
     }
     private static int bundleNode(Map<BlockPos, BlockState> states, BundleTopology.Port port, boolean input,
                                   Map<BlockPos, Integer> sources, Map<BlockPos, Integer> sinks, Map<BlockPos, Integer> enable,

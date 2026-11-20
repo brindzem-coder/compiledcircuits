@@ -88,5 +88,9 @@
   "keyboard.compiledcircuits.no_ports": "До клавіатури не під’єднано її портів.",
   "keyboard.compiledcircuits.unsafe_camera": "Збережена позиція камери зайнята або не має безпечної підлоги.",
   "keyboard.compiledcircuits.camera_setup": "Виберіть позицію й погляд | Enter: зберегти | Esc: скасувати | Delete: очистити",
-  "keyboard.compiledcircuits.camera_range": "Для збереження залишайтеся в межах 16 блоків від клавіатури."
+  "keyboard.compiledcircuits.camera_range": "Для збереження залишайтеся в межах 16 блоків від клавіатури.",
+  "block.compiledcircuits.color_screen": "Кольоровий екран (RGB332)",
+  "item.compiledcircuits.screen_port": "Порт екрана",
+  "screen.compiledcircuits.channels": "Канали RGB332: %s–%s",
+  "screen.compiledcircuits.hint": "ПКМ: базовий ID. Встановіть на кабель біля задньої сторони екрана."
 }

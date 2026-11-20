@@ -7,7 +7,8 @@ import java.util.*;
 
 /** Compile-time routing, scoped by cable component and compilation ownership. */
 final class BundleTopology {
-    record Port(BundleFace face, BundleWireEntity.Port config, boolean inline) {
+    record Port(BundleFace face, BundleWireEntity.Port config, boolean inline, int bit) {
+        Port(BundleFace face, BundleWireEntity.Port config, boolean inline) { this(face,config,inline,-1); }
         BlockPos pos() { return face.pos(); }
     }
     record Route(Port input, Port output, String channel) {}
@@ -42,7 +43,9 @@ final class BundleTopology {
             if (entry.getValue().getBlock() instanceof BundledWireBlock) {
                 for (var side : Direction.values()) {
                     var face = new BundleFace(pos, side); var config = faces.get(face);
-                    if (config != null && !config.keyboard()) ports.add(new Port(face, config, true));
+                    if (config != null && config.screen()) {
+                        for(int bit=0;bit<8;bit++) ports.add(new Port(face,new BundleWireEntity.Port(2,ScreenColors.channel(config.id(),bit)),true,bit));
+                    } else if (config != null && !config.keyboard()) ports.add(new Port(face, config, true));
                 }
             } else if (entry.getValue().getBlock() instanceof BundlePortBlock port) {
                 String channel = channels.get(pos);

@@ -57,6 +57,13 @@ public class CompiledNetwork {
         if(logic!=null && memory!=null)logic.importNodeMemory(memory);
         return changed;
     }
+    private Map<BlockPos,Integer> screenColors=Map.of();
+    boolean applyScreenColors(Map<BlockPos,Integer> values){
+        if(values.isEmpty()){boolean changed=!screenColors.isEmpty();screenColors=Map.of();return changed;}
+        var own=new java.util.HashMap<BlockPos,Integer>();for(var p:outputs){var color=values.get(p);if(color!=null)own.put(p,color);}
+        boolean changed=!screenColors.equals(own);screenColors=Map.copyOf(own);return changed;
+    }
+    public int screenColor(BlockPos pos){return directReady()&&directGroupAvailable&&directError.isEmpty()&&feedbackError==null?screenColors.getOrDefault(pos,0):0;}
     private String directError="";
     private boolean directGroupAvailable=true;
     void directAvailability(boolean ready){directGroupAvailable=ready;}
@@ -195,7 +202,8 @@ public class CompiledNetwork {
             feedbackError = unstable;
             next = Map.of();
         }
-        boolean changed = hadError != (feedbackError != null) || !next.equals(outputSignals); outputSignals = next;
+        boolean colorsChanged=applyScreenColors(logic!=null&&!logicInvalid&&feedbackError==null?logic.screenColors():Map.of());
+        boolean changed = colorsChanged || hadError != (feedbackError != null) || !next.equals(outputSignals); outputSignals = next;
         powered = next.containsValue(true);
         return changed;
     }
@@ -263,7 +271,7 @@ public class CompiledNetwork {
                     "compiledcircuits:bundled_wire", "compiledcircuits:bundle_input", "compiledcircuits:bundle_output",
                     "compiledcircuits:bundle_network_input", "compiledcircuits:bundle_network_output" -> CircuitElementType.WIRE;
                 case "compiledcircuits:input_endpoint", "compiledcircuits:signal_switch", "compiledcircuits:keyboard" -> CircuitElementType.INPUT;
-                case "compiledcircuits:output_endpoint", "compiledcircuits:signal_lamp" -> CircuitElementType.OUTPUT;
+                case "compiledcircuits:output_endpoint", "compiledcircuits:signal_lamp", "compiledcircuits:color_screen" -> CircuitElementType.OUTPUT;
                 case "compiledcircuits:and_gate", "compiledcircuits:or_gate", "compiledcircuits:not_gate", "compiledcircuits:d_latch",
                         "compiledcircuits:nand_gate", "compiledcircuits:nor_gate", "compiledcircuits:xor_gate", "compiledcircuits:xnor_gate" -> CircuitElementType.GATE;
                 case "compiledcircuits:gate_input" -> CircuitElementType.GATE_INPUT;

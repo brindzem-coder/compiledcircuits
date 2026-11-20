@@ -71,7 +71,7 @@ public final class CompiledBlockStateMatcher {
         if (saved != null && actual.getBlock() instanceof com.example.compiledcircuits.block.SignalLampBlock)
             actual = actual.setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.LIT,
                     saved.getValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.LIT));
-        boolean functionalState = com.example.compiledcircuits.block.SignalPorts.isControl(actual) || actual.getBlock() instanceof com.example.compiledcircuits.block.BundlePortBlock || actual.getBlock() instanceof com.example.compiledcircuits.block.NetworkWireBlock || actual.getBlock() instanceof com.example.compiledcircuits.block.NotGateBlock
+        boolean functionalState = actual.getBlock() instanceof com.example.compiledcircuits.block.ColorScreenBlock || com.example.compiledcircuits.block.SignalPorts.isControl(actual) || actual.getBlock() instanceof com.example.compiledcircuits.block.BundlePortBlock || actual.getBlock() instanceof com.example.compiledcircuits.block.NetworkWireBlock || actual.getBlock() instanceof com.example.compiledcircuits.block.NotGateBlock
                 || actual.getBlock() instanceof com.example.compiledcircuits.block.DLatchBlock
                 || actual.getBlock() instanceof com.example.compiledcircuits.block.GateBodyBlock;
         if ((exact || functionalState) && decoded.status() == CompiledBlockStateCodec.Status.EXACT && !saved.equals(actual)) return Match.STATE_MISMATCH;

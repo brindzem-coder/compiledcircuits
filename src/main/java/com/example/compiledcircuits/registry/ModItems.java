@@ -106,6 +106,8 @@ public class ModItems {
     public static final RegistryObject<Item> KEYBOARD = ITEMS.register("keyboard", () -> new BlockItem(ModBlocks.KEYBOARD.get(), new Item.Properties()));
     public static final RegistryObject<Item> KEYBOARD_PORT = ITEMS.register("keyboard_port", () -> new com.example.compiledcircuits.item.KeyboardPortItem(new Item.Properties()));
 
+    public static final RegistryObject<Item> COLOR_SCREEN = ITEMS.register("color_screen", () -> new BlockItem(ModBlocks.COLOR_SCREEN.get(),new Item.Properties()));
+    public static final RegistryObject<Item> SCREEN_PORT = ITEMS.register("screen_port", () -> new com.example.compiledcircuits.item.ScreenPortItem(new Item.Properties()));
     public static void register(IEventBus eventBus) {
         ITEMS.register(eventBus);
     }

@@ -105,6 +105,7 @@ public class ModBlocks {
 
     public static final RegistryObject<Block> KEYBOARD = BLOCKS.register("keyboard", () -> new com.example.compiledcircuits.block.KeyboardBlock(BlockBehaviour.Properties.of().strength(1).noOcclusion()));
 
+    public static final RegistryObject<Block> COLOR_SCREEN = BLOCKS.register("color_screen", () -> new com.example.compiledcircuits.block.ColorScreenBlock(BlockBehaviour.Properties.of().strength(1).noOcclusion()));
     public static void register(IEventBus eventBus) {
         BLOCKS.register(eventBus);
     }

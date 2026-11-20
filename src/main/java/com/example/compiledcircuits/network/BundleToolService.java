@@ -12,7 +12,7 @@ public final class BundleToolService {
     private static final Map<UUID, Session> sessions = new HashMap<>();
     public static int open(ServerPlayer player, InteractionHand hand) {
         var stack = player.getItemInHand(hand);
-        if (!(stack.getItem() instanceof BundlePortItem) && !(stack.getItem() instanceof com.example.compiledcircuits.item.KeyboardPortItem)) {
+        if (!(stack.getItem() instanceof BundlePortItem) && !(stack.getItem() instanceof com.example.compiledcircuits.item.KeyboardPortItem) && !(stack.getItem() instanceof com.example.compiledcircuits.item.ScreenPortItem)) {
             player.sendSystemMessage(net.minecraft.network.chat.Component.translatable("bundle.compiledcircuits.hold")); return 0;
         }
         var session = new Session(hand, stack, UUID.randomUUID()); sessions.put(player.getUUID(), session);
@@ -25,7 +25,7 @@ public final class BundleToolService {
         sessions.remove(player.getUUID());
         if (cancel || !NetworkOperations.canModify(player) || player.getItemInHand(session.hand) != session.stack) return;
         boolean keyboard = session.stack.getItem() instanceof com.example.compiledcircuits.item.KeyboardPortItem;
-        try { id = keyboard ? KeyboardBinding.parse(id).encode() : WireIds.normalize(id); } catch (IllegalArgumentException invalid) { return; }
+        try { id = keyboard ? KeyboardBinding.parse(id).encode() : session.stack.getItem() instanceof com.example.compiledcircuits.item.ScreenPortItem ? ScreenColors.base(id) : WireIds.normalize(id); } catch (IllegalArgumentException invalid) { return; }
         session.stack.getOrCreateTag().putString(keyboard ? "KeyboardBinding" : "ChannelId", id); player.containerMenu.broadcastChanges();
     }
     public static void forget(ServerPlayer player) { sessions.remove(player.getUUID()); }

@@ -17,6 +17,7 @@ import net.minecraftforge.fml.common.Mod;
 @Mod.EventBusSubscriber(modid = CompiledCircuits.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public final class ItemIdDecorations {
     @SubscribeEvent public static void register(RegisterItemDecorationsEvent event) {
+        event.register(ModItems.SCREEN_PORT.get(), ItemIdDecorations::render);
         event.register(ModItems.KEYBOARD_PORT.get(), ItemIdDecorations::render);
         event.register(ModItems.ID_WIRE.get(), ItemIdDecorations::render);
         event.register(ModItems.BUNDLE_INPUT.get(), ItemIdDecorations::render);

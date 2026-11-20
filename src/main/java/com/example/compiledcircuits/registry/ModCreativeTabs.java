@@ -34,6 +34,8 @@ public final class ModCreativeTabs {
                         // Bundled cable and its four ports.
                         output.accept(ModItems.BUNDLED_WIRE.get());
                         output.accept(ModItems.KEYBOARD.get());
+                        output.accept(ModItems.COLOR_SCREEN.get());
+                        output.accept(ModItems.SCREEN_PORT.get());
                         output.accept(ModItems.KEYBOARD_PORT.get());
                         output.accept(ModItems.BUNDLE_INPUT.get());
                         output.accept(ModItems.BUNDLE_OUTPUT.get());

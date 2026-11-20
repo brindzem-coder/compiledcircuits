@@ -44,7 +44,7 @@ public final class BundlePortRenderer implements BlockEntityRenderer<BundleWireE
         pose.mulPose(side.getRotation()); pose.mulPose(Axis.XP.rotationDegrees(-90));
         if (plate) {
             var vertices = buffers.getBuffer(RenderType.entitySolid(TEXTURE));
-            int signal = port.keyboard() ? 0xe64949 : port.input() ? 0x8ed44e : 0x63b9ed;
+            int signal = port.screen() ? 0xbc79ee : port.keyboard() ? 0xe64949 : port.input() ? 0x8ed44e : 0x63b9ed;
             int border = port.external() ? 0xe6e6e6 : 0x252525;
             // A five-pixel-deep frame with a six-pixel through-hole for the cable.
             float outer = 5.5f / 16, hole = 3f / 16;
