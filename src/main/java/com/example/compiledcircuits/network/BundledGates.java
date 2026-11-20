@@ -44,7 +44,7 @@ public final class BundledGates {
             if(attachments.isEmpty())continue;
             if(!legacyPorts.isEmpty())throw new IllegalArgumentException("Bundled gates require surface gate ports at "+start.toShortString());
             Set<BundleFace> bundled=new HashSet<>();attachments.forEach(a->bundled.add(a.gateFace));
-            for(var pin:pins)if(!bundled.contains(pin)){
+            for(var pin:pins)if(!bundled.contains(pin)&&role(states.get(pin.pos()),pin.side())!=3){
                 var other=states.get(pin.pos().relative(pin.side()));
                 if(other!=null&&Objects.equals(Crossings.owner(owners,pin.pos(),pin.side()),Crossings.owner(owners,pin.pos().relative(pin.side()),pin.side().getOpposite()))&&other.getBlock() instanceof IWireConnectable connect&&connect.canWireConnect(other,pin.side().getOpposite()))
                     throw new IllegalArgumentException("Do not mix ordinary and bundled inputs on one gate at "+start.toShortString()+"; use bundle channel ports to convert");

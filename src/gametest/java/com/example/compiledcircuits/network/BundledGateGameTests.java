@@ -97,4 +97,36 @@ public class BundledGateGameTests {
         h.assertTrue(graph.screenColors().get(screen)==0,"absent channels remain LOW after two inversions");h.succeed();
     }
 
+    @GameTest(template="empty",batch="bundled_gates")
+    public static void scalarEnableControlsEveryBundledLatchChannel(GameTestHelper h){
+        var r=new Rig(ModBlocks.D_LATCH.get().defaultBlockState().setValue(EndpointBlock.FACING,Direction.EAST));
+        var inputs=new BundleFace[8];var outputs=new BundleFace[8];
+        for(int ch=0;ch<8;ch++){
+            var left=CENTER.west(ch/2+1);var right=CENTER.east(ch/2+1);
+            r.states.put(left,ModBlocks.BUNDLED_WIRE.get().defaultBlockState());
+            r.states.put(right,ModBlocks.BUNDLED_WIRE.get().defaultBlockState());
+            var face=ch%2==0?Direction.UP:Direction.DOWN;
+            inputs[ch]=new BundleFace(left,face);outputs[ch]=new BundleFace(right,face);
+            r.ports.put(inputs[ch],new BundleWireEntity.Port(3,Integer.toString(100+ch)));
+            r.ports.put(outputs[ch],new BundleWireEntity.Port(4,Integer.toString(100+ch)));
+        }
+        r.states.put(CENTER.north(),ModBlocks.BASIC_WIRE.get().defaultBlockState());
+        var enable=CENTER.north(2);r.states.put(enable,ModBlocks.INPUT_ENDPOINT.get().defaultBlockState());
+        for(boolean optimized:new boolean[]{false,true}){
+            var graph=r.compile();if(optimized)graph.optimize(r.states.keySet(),true);
+            Map<BundleFace,Boolean> data=new HashMap<>();
+            for(int ch=0;ch<8;ch++)data.put(inputs[ch],ch%2==0);
+            graph.evaluate(Map.of(enable,false),data);
+            for(var out:outputs)h.assertTrue(!graph.faceOutput(out),"LOW WDE holds initial state");
+            graph.evaluate(Map.of(enable,true),data);
+            for(int ch=0;ch<8;ch++)h.assertTrue(graph.faceOutput(outputs[ch])==(ch%2==0),"shared WDE writes channel "+ch);
+            data.replaceAll((face,value)->!value);graph.evaluate(Map.of(enable,false),data);
+            for(int ch=0;ch<8;ch++)h.assertTrue(graph.faceOutput(outputs[ch])==(ch%2==0),"LOW WDE retains channel "+ch);
+            var loaded=r.compile();loaded.restoreMemory(graph.saveMemory());loaded.evaluate(Map.of(enable,false),data);
+            for(int ch=0;ch<8;ch++)h.assertTrue(loaded.faceOutput(outputs[ch])==(ch%2==0),"shared-WDE memory survives reload "+ch);
+            graph.evaluate(Map.of(enable,true),data);
+            for(int ch=0;ch<8;ch++)h.assertTrue(graph.faceOutput(outputs[ch])==(ch%2!=0),"shared WDE updates all channels "+ch);
+        }h.succeed();
+    }
+
 }

@@ -483,7 +483,12 @@ public final class LogicProgram {
         var bundleTopology = BundleTopology.resolveGates(states, wireIds, ownership, faces);
         var bundleRoutes = bundleTopology.routes();
         Set<BundleFace> busPins = new HashSet<>();
-        for(var group:bundleTopology.gates().groups()) busPins.addAll(group.pins());
+        for(var group:bundleTopology.gates().groups()) for(var pin:group.pins()) {
+            // A scalar WDE remains in the ordinary graph and fans out to all channel latches.
+            boolean sharedEnable=BundledGates.role(states.get(pin.pos()),pin.side())==3
+                    && group.attachments().stream().noneMatch(a->a.gateFace().equals(pin));
+            if(!sharedEnable)busPins.add(pin);
+        }
         var keyboardPorts = KeyboardTopology.resolve(states, faces, ownership);
         List<Node> nodes = new ArrayList<>();
         Map<BundleFace, Integer> faceNodes = new HashMap<>(), faceOutputs = new HashMap<>();
@@ -670,6 +675,7 @@ public final class LogicProgram {
                 int node=output;
                 if(role!=2) {
                     node=add(nodes,Op.OR,pin.pos()); edge(nodes,node,output);
+                    if(role==3&&!busPins.contains(pin))edge(nodes,enableSink.get(pin.pos()),node);
                     if(op==Op.LATCH) { if(role==3)nodes.get(output).enable=node;else nodes.get(output).data=node; }
                 }
                 busNodes.put(new BundledGates.Key(pin,channel),node);

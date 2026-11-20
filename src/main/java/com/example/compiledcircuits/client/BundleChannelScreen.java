@@ -34,6 +34,12 @@ public final class BundleChannelScreen extends Screen {
         String id = cancel ? "0" : WireIds.normalize(field.getValue()); finished = true;
         ModNetworking.CHANNEL.sendToServer(new BundleSettingsC2SPacket(token, id, cancel)); minecraft.setScreen(null);
     }
+    @Override public boolean keyPressed(int key,int scan,int modifiers) {
+        if(key==org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER||key==org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ENTER) {
+            if(field!=null&&!field.getValue().isEmpty())finish(false); return true;
+        }
+        return super.keyPressed(key,scan,modifiers);
+    }
     @Override public void onClose() { finish(true); }
     @Override public void removed() {
         if (!finished) { finished = true; ModNetworking.CHANNEL.sendToServer(new BundleSettingsC2SPacket(token, "0", true)); }

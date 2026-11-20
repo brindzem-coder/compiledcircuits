@@ -70,6 +70,12 @@ public final class WireEditorScreen extends Screen {
         try { String id = WireIds.normalize(draft); finished = true; ModNetworking.CHANNEL.sendToServer(new WireSettingsC2SPacket(token, id, id.equals("0") ? WireIds.RED : rgb, false)); super.onClose(); }
         catch (IllegalArgumentException ignored) { }
     }
+    @Override public boolean keyPressed(int key,int scan,int modifiers) {
+        if(key==org.lwjgl.glfw.GLFW.GLFW_KEY_ENTER||key==org.lwjgl.glfw.GLFW.GLFW_KEY_KP_ENTER) {
+            if(!finished)finish(); return true;
+        }
+        return super.keyPressed(key,scan,modifiers);
+    }
     @Override public void onClose() { cancel(); super.onClose(); }
     @Override public void removed() { cancel(); super.removed(); }
     private void cancel() { if (!finished) { finished = true; ModNetworking.CHANNEL.sendToServer(new WireSettingsC2SPacket(token, "0", 0, true)); } }
