@@ -23,7 +23,8 @@ public final class ColorScreenRenderer implements BlockEntityRenderer<ColorScree
     @Override public void render(ColorScreenEntity screen,float tick,PoseStack pose,MultiBufferSource buffers,int light,int overlay){
         int rgb=ScreenColors.rgb(screen.color());pose.pushPose();pose.translate(.5,.5,.5);
         pose.mulPose(screen.getBlockState().getValue(EndpointBlock.FACING).getRotation());pose.mulPose(Axis.XP.rotationDegrees(-90));
-        var out=buffers.getBuffer(RenderType.entityTranslucentEmissive(WHITE));
+        // Full-bright lightmap plus no directional diffuse shading keeps identical pixels identical.
+        var out=buffers.getBuffer(net.minecraftforge.client.ForgeRenderTypes.getUnlitTranslucent(WHITE));
         vertex(out,pose,-.5f,-.5f,0,1,rgb);vertex(out,pose,.5f,-.5f,1,1,rgb);vertex(out,pose,.5f,.5f,1,0,rgb);vertex(out,pose,-.5f,.5f,0,0,rgb);pose.popPose();
     }
     private static void vertex(VertexConsumer out,PoseStack pose,float x,float y,float u,float v,int rgb){out.vertex(pose.last().pose(),x,y,.5005f).color(rgb>>16&255,rgb>>8&255,rgb&255,255).uv(u,v).overlayCoords(OverlayTexture.NO_OVERLAY).uv2(LightTexture.FULL_BRIGHT).normal(pose.last().normal(),0,0,1).endVertex();}

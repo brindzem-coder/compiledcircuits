@@ -455,7 +455,7 @@ public final class LogicProgram {
         return bits;
     }
     public static boolean hasLogic(Collection<BlockState> states) {
-        return states.stream().anyMatch(s -> s.getBlock() instanceof CrossingWireBlock || BundleTopology.element(s) || s.getBlock() instanceof GateBodyBlock || s.getBlock() instanceof NetworkWireBlock || CircuitConnections.isTerminal(s));
+        return states.stream().anyMatch(s -> s.getBlock() instanceof IsolatedWireBlock || s.getBlock() instanceof CrossingWireBlock || BundleTopology.element(s) || s.getBlock() instanceof GateBodyBlock || s.getBlock() instanceof NetworkWireBlock || CircuitConnections.isTerminal(s));
     }
     public static LogicProgram compile(Map<BlockPos, BlockState> states) {return compile(states,java.util.Map.of(),java.util.Map.of());}
     static LogicProgram compile(Map<BlockPos,BlockState> states,Map<BlockPos,Set<BlockPos>> links,Map<BlockPos,Integer> ownership) {

@@ -267,7 +267,7 @@ public class CompiledNetwork {
             if (this.elements.putIfAbsent(element.getId(), element) != null)
                 throw new IllegalArgumentException("Duplicate compiled element ID: " + element.getId());
             CircuitElementType requiredRole = switch (element.getBlockId()) {
-                case "compiledcircuits:basic_wire", "compiledcircuits:network_wire", "compiledcircuits:id_wire",
+                case "compiledcircuits:isolated_wire", "compiledcircuits:basic_wire", "compiledcircuits:network_wire", "compiledcircuits:id_wire",
                     "compiledcircuits:bundled_wire", "compiledcircuits:bundle_input", "compiledcircuits:bundle_output",
                     "compiledcircuits:bundle_network_input", "compiledcircuits:bundle_network_output" -> CircuitElementType.WIRE;
                 case "compiledcircuits:input_endpoint", "compiledcircuits:signal_switch", "compiledcircuits:keyboard" -> CircuitElementType.INPUT;
@@ -280,7 +280,7 @@ public class CompiledNetwork {
             };
             if (element.getType() != requiredRole)
                 throw new IllegalArgumentException("Block/role mismatch for element " + element.getId());
-            hasGateElements |= isLogicRole(element.getType()) || (element.getBlockId().equals("compiledcircuits:crossing_wire") || element.getBlockId().equals("compiledcircuits:network_wire") || element.getBlockId().equals("compiledcircuits:id_wire") || element.getBlockId().startsWith("compiledcircuits:bundle"));
+            hasGateElements |= isLogicRole(element.getType()) || (element.getBlockId().equals("compiledcircuits:isolated_wire") || element.getBlockId().equals("compiledcircuits:crossing_wire") || element.getBlockId().equals("compiledcircuits:network_wire") || element.getBlockId().equals("compiledcircuits:id_wire") || element.getBlockId().startsWith("compiledcircuits:bundle"));
             collectPorts(element,collectedPorts);
             collectWireColor(element, wirePalette);
             BlockPos pos = element.getPos().immutable();
@@ -311,7 +311,7 @@ public class CompiledNetwork {
             if (sealed || element.getId() != elements.size() + 1 || positions.containsKey(element.getPos()))
                 throw new IllegalArgumentException("Invalid staged element");
             elements.put(element.getId(), element); positions.put(element.getPos(), element);
-            hasGates |= isLogicRole(element.getType()) || (element.getBlockId().equals("compiledcircuits:crossing_wire") || element.getBlockId().equals("compiledcircuits:network_wire") || element.getBlockId().equals("compiledcircuits:id_wire") || element.getBlockId().startsWith("compiledcircuits:bundle"));
+            hasGates |= isLogicRole(element.getType()) || (element.getBlockId().equals("compiledcircuits:isolated_wire") || element.getBlockId().equals("compiledcircuits:crossing_wire") || element.getBlockId().equals("compiledcircuits:network_wire") || element.getBlockId().equals("compiledcircuits:id_wire") || element.getBlockId().startsWith("compiledcircuits:bundle"));
             collectPorts(element,ports);
             collectWireColor(element, wirePalette);
             switch (element.getType()) {

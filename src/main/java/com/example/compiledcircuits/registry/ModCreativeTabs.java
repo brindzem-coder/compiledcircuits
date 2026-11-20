@@ -44,6 +44,7 @@ public final class ModCreativeTabs {
 
                         // Ordinary wires, endpoints, and signal controls.
                         output.accept(ModItems.BASIC_WIRE.get());
+                        output.accept(ModItems.ISOLATED_WIRE.get());
                         output.accept(ModItems.ID_WIRE.get());
                         output.accept(ModItems.INPUT_ENDPOINT.get());
                         output.accept(ModItems.OUTPUT_ENDPOINT.get());

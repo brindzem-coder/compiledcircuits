@@ -54,6 +54,9 @@ public class ModBlocks {
                                     .noOcclusion()
                     ));
 
+    public static final RegistryObject<Block> ISOLATED_WIRE = BLOCKS.register("isolated_wire",
+            () -> new com.example.compiledcircuits.block.IsolatedWireBlock(BlockBehaviour.Properties.of().mapColor(MapColor.COLOR_YELLOW).strength(1).noOcclusion()));
+
     public static final RegistryObject<Block> ID_WIRE = BLOCKS.register("id_wire",
             () -> new com.example.compiledcircuits.block.IdWireBlock(BlockBehaviour.Properties.of().strength(1).noOcclusion()));
 

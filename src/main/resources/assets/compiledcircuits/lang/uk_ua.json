@@ -1,4 +1,5 @@
 {
+  "block.compiledcircuits.isolated_wire": "Роздільний дріт",
   "itemGroup.compiledcircuits": "Compiled Circuits",
   "block.compiledcircuits.basic_wire": "Базовий дріт",
   "block.compiledcircuits.input_endpoint": "Вхід",

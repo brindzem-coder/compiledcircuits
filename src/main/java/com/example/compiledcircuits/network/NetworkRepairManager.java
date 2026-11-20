@@ -12,7 +12,7 @@ public final class NetworkRepairManager {
     public enum Outcome { PLACED, OCCUPIED, UNSUPPORTED, FAILED, CORRECT, UNLOADED, INVALID, PROTECTED, CHANGED }
     /** Explicitly supported placements; arbitrary saved block IDs must not bypass repair policy. */
     private static boolean supports(Block block) {
-        return block instanceof com.example.compiledcircuits.block.CrossingWireBlock || block instanceof com.example.compiledcircuits.block.BundledWireBlock || block instanceof com.example.compiledcircuits.block.BundlePortBlock || block == ModBlocks.ID_WIRE.get() || block == ModBlocks.NETWORK_WIRE.get() || block == ModBlocks.BASIC_WIRE.get()
+        return block instanceof com.example.compiledcircuits.block.CrossingWireBlock || block instanceof com.example.compiledcircuits.block.BundledWireBlock || block instanceof com.example.compiledcircuits.block.BundlePortBlock || block == ModBlocks.ID_WIRE.get() || block == ModBlocks.NETWORK_WIRE.get() || block == ModBlocks.BASIC_WIRE.get() || block == ModBlocks.ISOLATED_WIRE.get()
                 || block == ModBlocks.INPUT_ENDPOINT.get() || block == ModBlocks.OUTPUT_ENDPOINT.get()
                 || block == ModBlocks.SIGNAL_SWITCH.get() || block == ModBlocks.SIGNAL_LAMP.get()
                 || block == ModBlocks.AND_GATE.get() || block == ModBlocks.OR_GATE.get()

@@ -20,6 +20,7 @@ public final class CircuitConnections {
         return connects(a, "", b, "", side);
     }
     private static boolean structural(BlockState a, BlockState b, Direction side) {
+        if(a.getBlock() instanceof IsolatedWireBlock && b.getBlock() instanceof IsolatedWireBlock)return false;
         if (a.getBlock() instanceof BundledWireBlock)
             return com.example.compiledcircuits.network.BundledGates.role(b,side.getOpposite())!=0 || b.getBlock() instanceof BundledWireBlock || b.getBlock() instanceof KeyboardBlock || b.getBlock() instanceof BundlePortBlock && BundlePortBlock.cableSide(b) == side.getOpposite();
         if (b.getBlock() instanceof BundledWireBlock) return structural(b, a, side.getOpposite());

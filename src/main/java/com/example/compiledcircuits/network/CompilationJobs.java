@@ -253,7 +253,7 @@ public final class CompilationJobs {
                 int fresh=CrossingWireBlock.mask(state)&~CrossingWireBlock.mask(old);if(fresh==0)return;
                 state=CrossingWireBlock.only(state,fresh);snapshots.put(pos,CrossingWireBlock.merge(old,state));frontier.addLast(new Node(pos.immutable(),state));return;
             }
-            hasLogic |= state.getBlock() instanceof CrossingWireBlock || BundleTopology.element(state) || state.getBlock() instanceof com.example.compiledcircuits.block.NetworkWireBlock || state.getBlock() instanceof GateBodyBlock || CircuitConnections.isTerminal(state);
+            hasLogic |= state.getBlock() instanceof IsolatedWireBlock || state.getBlock() instanceof CrossingWireBlock || BundleTopology.element(state) || state.getBlock() instanceof com.example.compiledcircuits.block.NetworkWireBlock || state.getBlock() instanceof GateBodyBlock || CircuitConnections.isTerminal(state);
             if (hasLogic && snapshots.size() >= LogicProgram.MAX_ELEMENTS) {
                 fail(Code.TOO_LARGE, "Logic circuits support at most " + LogicProgram.MAX_ELEMENTS + " elements."); return;
             }

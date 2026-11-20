@@ -51,6 +51,9 @@ public class ModItems {
     public static final RegistryObject<Item> NETWORK_OUTPUT = ITEMS.register("network_output",
             () -> new com.example.compiledcircuits.item.NetworkPortItem(new Item.Properties(),false));
 
+    public static final RegistryObject<Item> ISOLATED_WIRE = ITEMS.register("isolated_wire",
+            () -> new BlockItem(ModBlocks.ISOLATED_WIRE.get(),new Item.Properties()));
+
     public static final RegistryObject<Item> ID_WIRE = ITEMS.register("id_wire",
             () -> new com.example.compiledcircuits.item.IdWireItem(new Item.Properties()));
 
