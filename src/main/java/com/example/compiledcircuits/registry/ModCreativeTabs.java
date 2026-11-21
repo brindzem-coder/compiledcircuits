@@ -41,6 +41,9 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.BUNDLE_OUTPUT.get());
                         output.accept(ModItems.BUNDLE_NETWORK_INPUT.get());
                         output.accept(ModItems.BUNDLE_NETWORK_OUTPUT.get());
+                        output.accept(ModItems.BUNDLE_MAPPING.get());
+                        output.accept(ModItems.BUNDLE_MAPPING_OUTPUT.get());
+                        output.accept(ModItems.BUNDLE_MAPPING_INPUT.get());
 
                         // Ordinary wires, endpoints, and signal controls.
                         output.accept(ModItems.BASIC_WIRE.get());

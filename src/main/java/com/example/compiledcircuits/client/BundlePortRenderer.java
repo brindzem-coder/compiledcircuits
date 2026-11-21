@@ -44,7 +44,7 @@ public final class BundlePortRenderer implements BlockEntityRenderer<BundleWireE
         pose.mulPose(side.getRotation()); pose.mulPose(Axis.XP.rotationDegrees(-90));
         if (plate) {
             var vertices = buffers.getBuffer(RenderType.entitySolid(TEXTURE));
-            int signal = port.screen() ? 0xbc79ee : port.keyboard() ? 0xe64949 : port.input() ? 0x8ed44e : 0x63b9ed;
+            int signal = port.mapping() ? (port.kind()==9?0x65d7bd:0xf0aa42) : port.screen() ? 0xbc79ee : port.keyboard() ? 0xe64949 : port.input() ? 0x8ed44e : 0x63b9ed;
             int border = port.external() ? 0xe6e6e6 : 0x252525;
             // A five-pixel-deep frame with a six-pixel through-hole for the cable.
             float outer = 5.5f / 16, hole = 3f / 16;
@@ -85,7 +85,7 @@ public final class BundlePortRenderer implements BlockEntityRenderer<BundleWireE
     }
     private static void label(Font font, BundleWireEntity.Port port, PoseStack pose, MultiBufferSource buffers, int light, float z) {
         pose.pushPose();
-        var text = port.label(); int columns = 12, lines = (text.length() + columns - 1) / columns;
+        var text = port.label(); if(text.length()>64)text=text.substring(0,61)+"..."; int columns = 12, lines = (text.length() + columns - 1) / columns;
         float width = 1;
         for (int i = 0; i < lines; i++) width = Math.max(width, font.width(text.substring(i * columns, Math.min(text.length(), (i + 1) * columns))));
         float scale = Math.min(.58f / width, .12f / (lines * font.lineHeight));

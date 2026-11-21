@@ -1,4 +1,13 @@
 {
+  "item.compiledcircuits.bundle_mapping": "Bundle Channel Mapper",
+  "item.compiledcircuits.bundle_mapping_output": "Inter-network Bundle Mapping Output",
+  "item.compiledcircuits.bundle_mapping_input": "Inter-network Bundle Mapping Input",
+  "mapping.compiledcircuits.editor": "Bundle channel mapping",
+  "mapping.compiledcircuits.example": "Examples: 0-7 | 1,2=3,3-6=4-7 | 0-7=1",
+  "mapping.compiledcircuits.hint": "Right-click in air: edit rules. Place on the source cable.",
+  "mapping.compiledcircuits.receiver_hint": "Place opposite a mapping output to copy its rules. Re-place after changing the output rules.",
+  "mapping.compiledcircuits.receiver_needs_output": "Place the input opposite an inter-network bundle mapping output.",
+
   "blueprint.compiledcircuits.placed_uncompiled": "Placed uncompiled circuits: %s",
   "block.compiledcircuits.isolated_wire": "Isolated Wire",
   "itemGroup.compiledcircuits": "Compiled Circuits",

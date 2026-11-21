@@ -38,6 +38,7 @@ public final class LogicProgram {
     long fullWork() { long work = 0; for (int[] p : parents) work += 1 + p.length; return work; }
     /** Contract complete network regions, then sort execution units without changing original IDs. */
     void installTable(NetworkTruthTable table, Set<BlockPos> region) {
+        if(mappingBoundaries.stream().anyMatch(region::contains))throw new IllegalArgumentException("Use graph optimization for inter-network bundle mappings");
         if (screenNodes.keySet().stream().anyMatch(region::contains)) throw new IllegalArgumentException("Whole-network tables do not yet support RGB screens; use graph optimization");
         var members = new HashSet<Integer>();
         for (int i = 0; i < positions.length; i++) if (region.contains(positions[i])) members.add(i);
@@ -264,6 +265,8 @@ public final class LogicProgram {
     public static final int MAX_SETTLE_SWEEPS = 256, MAX_EVALUATION_WORK = 262144;
     private final Map<BlockPos, Integer> inputs, outputs;
     private Map<BlockPos,int[]> screenNodes = Map.of();
+    private Set<BlockPos> mappingBoundaries=Set.of();
+    boolean hasMappingBoundaries(){return !mappingBoundaries.isEmpty();}
     boolean hasScreens() { return !screenNodes.isEmpty(); }
     Map<BlockPos,Integer> screenColors() {
         if(screenNodes.isEmpty())return Map.of();
@@ -480,7 +483,7 @@ public final class LogicProgram {
         Map<BlockPos, BlockState> sorted = new TreeMap<>(Comparator.comparingInt((BlockPos p) -> p.getX())
                 .thenComparingInt(BlockPos::getY).thenComparingInt(BlockPos::getZ));
         sorted.putAll(states); states = sorted;
-        var bundleTopology = BundleTopology.resolveGates(states, wireIds, ownership, faces);
+        var bundleTopology = BundleTopology.resolveGates(states, wireIds, ownership, faces, faceLinks);
         var bundleRoutes = bundleTopology.routes();
         Set<BundleFace> busPins = new HashSet<>();
         for(var group:bundleTopology.gates().groups()) for(var pin:group.pins()) {
@@ -533,7 +536,7 @@ public final class LogicProgram {
             if (BundleTopology.element(state)) {
                 if (state.getBlock() instanceof BundledWireBlock) for (var side : Direction.values()) {
                     var face = new BundleFace(pos, side); var config = faces.get(face);
-                    if (config != null && (config.external() || config.keyboard())) {
+                    if (config != null && !config.mapping() && (config.external() || config.keyboard())) {
                         int id = add(nodes, Op.OR, pos); faceNodes.put(face, id);
                         if (config.input() || config.keyboard()) faceInputNodes.put(face, id); else faceOutputs.put(face, id);
                     }
@@ -636,6 +639,7 @@ public final class LogicProgram {
             if(!a.equals(b))edge(nodes,a,b);
         }));
         for (var link : faceLinks) {
+            if(faces.containsKey(link.from())&&faces.get(link.from()).mapping())continue;
             Integer from = faceNodes.containsKey(link.from()) ? faceNodes.get(link.from()) : source.get(link.from().pos());
             Integer to = faceNodes.containsKey(link.to()) ? faceNodes.get(link.to()) : sink.get(link.to().pos());
             if (from == null || to == null) throw error("Invalid direct face link", link.from().pos());
@@ -687,10 +691,18 @@ public final class LogicProgram {
                 busNodes.put(new BundledGates.Key(pin,channel),node);
             }
         }
+        Map<BundleMappingTopology.Key,Integer> mappingNodes=new LinkedHashMap<>();
+        for(var key:bundleTopology.mappings().nodes())mappingNodes.put(key,add(nodes,Op.OR,key.face().pos()));
         List<int[]> bundleEdges = new ArrayList<>();
+        for(var link:bundleTopology.mappings().links()){
+            int from=mappingNodes.get(link.from()),to=mappingNodes.get(link.to());edge(nodes,from,to);bundleEdges.add(new int[]{from,to});
+        }
+        for(var entry:mappingNodes.entrySet())if(faces.get(entry.getKey().face()).kind()==8){
+            int out=outputs.computeIfAbsent(entry.getKey().face().pos(),p->add(nodes,Op.OR,p));edge(nodes,entry.getValue(),out);
+        }
         for (var route : bundleRoutes) {
-            int from = route.input().gate() ? busNode(busNodes,route.input()) : bundleNode(states, route.input(), true, source, sink, enableSink, ownership, faceNodes);
-            int to = route.output().gate() ? busNode(busNodes,route.output()) : route.output().bit() >= 0 ? screenBits.get(route.output().pos().relative(route.output().face().side()))[route.output().bit()] : bundleNode(states, route.output(), false, source, sink, enableSink, ownership, faceNodes);
+            int from = route.input().mapping()!=null ? mappingNodes.get(route.input().mapping()) : route.input().gate() ? busNode(busNodes,route.input()) : bundleNode(states, route.input(), true, source, sink, enableSink, ownership, faceNodes);
+            int to = route.output().mapping()!=null ? mappingNodes.get(route.output().mapping()) : route.output().gate() ? busNode(busNodes,route.output()) : route.output().bit() >= 0 ? screenBits.get(route.output().pos().relative(route.output().face().side()))[route.output().bit()] : bundleNode(states, route.output(), false, source, sink, enableSink, ownership, faceNodes);
             if (from == to) throw error("Bundle channel " + route.channel() + " forms a cycle", route.input().pos());
             edge(nodes, from, to); bundleEdges.add(new int[]{from, to});
         }
@@ -713,6 +725,7 @@ public final class LogicProgram {
         }
         var program = new LogicProgram(nodes, groups, inputs, outputs, faceOutputs, faceInputNodes);
         program.screenNodes=Map.copyOf(screenBits);
+        program.mappingBoundaries=bundleTopology.mappings().boundaries();
         return program;
     }
     private static int busNode(Map<BundledGates.Key,Integer> nodes,BundleTopology.Port port) {

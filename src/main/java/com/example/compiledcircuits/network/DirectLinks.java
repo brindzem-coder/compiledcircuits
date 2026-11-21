@@ -35,6 +35,7 @@ final class DirectLinks {
             var key = key(network, port).opposite();
             var other = overlay.getOrDefault(key, ports.get(key));
             if (other == null || other.network == network || other.port.input() == port.input()) return null;
+            if(!compatible(new Endpoint(network,port),other))throw new IllegalArgumentException("Inter-network port types and bundle mapping rules must match");
             // Explicit output/input ports cross network boundaries independently of local wire IDs.
             return other;
         };
@@ -70,9 +71,18 @@ final class DirectLinks {
     boolean contains(CompiledNetwork n){return samples.containsKey(n);}
     void optimizationChanged(CompiledNetwork n) { if (contains(n)) topologyChanged(Set.of(n)); }
     private Key key(CompiledNetwork n,CompiledNetwork.Port p){return new Key(n.getDimension(),p.pos(),p.side());}
+    private static boolean compatible(Endpoint a,Endpoint b){
+        var left=a.network.bundleFaces().get(new BundleFace(a.port.pos(),a.port.side()));
+        var right=b.network.bundleFaces().get(new BundleFace(b.port.pos(),b.port.side()));
+        boolean lm=left!=null&&left.mapping(),rm=right!=null&&right.mapping();
+        if(!lm&&!rm)return true;
+        return lm&&rm&&((left.kind()==8&&right.kind()==9)||(left.kind()==9&&right.kind()==8))
+                &&ChannelMapping.parse(left.id()).equivalent(ChannelMapping.parse(right.id()));
+    }
     private Endpoint peer(CompiledNetwork n,CompiledNetwork.Port p){
         var other=ports.get(key(n,p).opposite());
         if (other == null || other.network == n || other.port.input() == p.input()) return null;
+        if(!compatible(new Endpoint(n,p),other))return null;
         // Wire IDs isolate passive connections inside a network, not explicit inter-network ports.
         return other;
     }

@@ -17,6 +17,9 @@ import net.minecraftforge.fml.common.Mod;
 @Mod.EventBusSubscriber(modid = CompiledCircuits.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public final class ItemIdDecorations {
     @SubscribeEvent public static void register(RegisterItemDecorationsEvent event) {
+        event.register(ModItems.BUNDLE_MAPPING.get(), ItemIdDecorations::render);
+        event.register(ModItems.BUNDLE_MAPPING_INPUT.get(), ItemIdDecorations::render);
+        event.register(ModItems.BUNDLE_MAPPING_OUTPUT.get(), ItemIdDecorations::render);
         event.register(ModItems.SCREEN_PORT.get(), ItemIdDecorations::render);
         event.register(ModItems.KEYBOARD_PORT.get(), ItemIdDecorations::render);
         event.register(ModItems.ID_WIRE.get(), ItemIdDecorations::render);
@@ -33,8 +36,10 @@ public final class ItemIdDecorations {
             catch (IllegalArgumentException ignored) { }
         }
         if (stack.getItem() instanceof com.example.compiledcircuits.item.KeyboardPortItem) id = com.example.compiledcircuits.item.KeyboardPortItem.binding(stack).label();
+        if(stack.getItem() instanceof com.example.compiledcircuits.item.BundleMappingItem)id=com.example.compiledcircuits.item.BundleMappingItem.rules(stack);
+        if(stack.getItem() instanceof com.example.compiledcircuits.item.BundleMappingItem && id.length()>40)id=id.substring(0,37)+"...";
         boolean wire = stack.getItem() instanceof IdWireItem;
-        boolean network = stack.is(ModItems.BUNDLE_NETWORK_INPUT.get()) || stack.is(ModItems.BUNDLE_NETWORK_OUTPUT.get());
+        boolean network = stack.is(ModItems.BUNDLE_NETWORK_INPUT.get()) || stack.is(ModItems.BUNDLE_NETWORK_OUTPUT.get()) || stack.is(ModItems.BUNDLE_MAPPING_INPUT.get()) || stack.is(ModItems.BUNDLE_MAPPING_OUTPUT.get());
         boolean keyboardPort = stack.is(ModItems.KEYBOARD_PORT.get());
         boolean screenPort = stack.is(ModItems.SCREEN_PORT.get());
         boolean devicePort = keyboardPort || screenPort;

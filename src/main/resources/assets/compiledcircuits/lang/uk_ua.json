@@ -1,4 +1,13 @@
 {
+  "item.compiledcircuits.bundle_mapping": "Перехід каналів мультидроту",
+  "item.compiledcircuits.bundle_mapping_output": "Міжмережевий вихід каналів мультидроту",
+  "item.compiledcircuits.bundle_mapping_input": "Міжмережевий вхід каналів мультидроту",
+  "mapping.compiledcircuits.editor": "Перепризначення каналів мультидроту",
+  "mapping.compiledcircuits.example": "Приклади: 0-7 | 1,2=3,3-6=4-7 | 0-7=1",
+  "mapping.compiledcircuits.hint": "ПКМ у повітрі: змінити правила. Встановлюється на кабель-джерело.",
+  "mapping.compiledcircuits.receiver_hint": "Встановіть навпроти міжмережевого виходу для копіювання правил. Після їх зміни перевстановіть вхід.",
+  "mapping.compiledcircuits.receiver_needs_output": "Встановіть вхід навпроти міжмережевого виходу каналів мультидроту.",
+
   "blueprint.compiledcircuits.placed_uncompiled": "Вставлено некомпільованих мереж: %s",
   "block.compiledcircuits.isolated_wire": "Роздільний дріт",
   "itemGroup.compiledcircuits": "Compiled Circuits",

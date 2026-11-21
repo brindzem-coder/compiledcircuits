@@ -12,8 +12,12 @@ public final class BundleConnections {
     public static boolean connects(BlockGetter level, BlockPos pos, BlockState a, BlockState b, Direction side) {
         if (!(a.getBlock() instanceof BundledWireBlock)) return connects(level, pos.relative(side), b, a, side.getOpposite());
         var port = port(level, pos, side);
-        if (b.getBlock() instanceof BundledWireBlock)
-            return port == null && port(level, pos.relative(side), side.getOpposite()) == null;
+        if (b.getBlock() instanceof BundledWireBlock){
+            var peer=port(level,pos.relative(side),side.getOpposite());
+            // Internal mappings connect the scan, while retaining two electrical cable components.
+            return port==null&&peer==null || port!=null&&port.kind()==7&&peer==null || port==null&&peer!=null&&peer.kind()==7;
+        }
+        if(port!=null&&port.mapping())return false;
         if (b.getBlock() instanceof ColorScreenBlock) return port != null && port.screen() && side == b.getValue(EndpointBlock.FACING);
         if (port != null && port.screen()) return false;
         if (b.getBlock() instanceof KeyboardBlock) return port == null;

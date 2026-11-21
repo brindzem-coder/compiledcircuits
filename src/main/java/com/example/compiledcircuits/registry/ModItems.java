@@ -111,6 +111,9 @@ public class ModItems {
 
     public static final RegistryObject<Item> COLOR_SCREEN = ITEMS.register("color_screen", () -> new BlockItem(ModBlocks.COLOR_SCREEN.get(),new Item.Properties()));
     public static final RegistryObject<Item> SCREEN_PORT = ITEMS.register("screen_port", () -> new com.example.compiledcircuits.item.ScreenPortItem(new Item.Properties()));
+    public static final RegistryObject<Item> BUNDLE_MAPPING = ITEMS.register("bundle_mapping",()->new com.example.compiledcircuits.item.BundleMappingItem(new Item.Properties(),7));
+    public static final RegistryObject<Item> BUNDLE_MAPPING_OUTPUT = ITEMS.register("bundle_mapping_output",()->new com.example.compiledcircuits.item.BundleMappingItem(new Item.Properties(),8));
+    public static final RegistryObject<Item> BUNDLE_MAPPING_INPUT = ITEMS.register("bundle_mapping_input",()->new com.example.compiledcircuits.item.BundleMappingItem(new Item.Properties(),9));
     public static void register(IEventBus eventBus) {
         ITEMS.register(eventBus);
     }

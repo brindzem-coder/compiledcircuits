@@ -12,11 +12,12 @@ import java.util.*;
 public final class BundleWireEntity extends BlockEntity {
     public record Port(int kind, String id) {
         public Port {
-            if (kind < 1 || kind > 6) throw new IllegalArgumentException("Invalid bundle port kind");
-            id = kind == 5 ? KeyboardBinding.parse(id).encode() : kind == 6 ? ScreenColors.base(id) : WireIds.normalize(id);
+            if (kind < 1 || kind > 9) throw new IllegalArgumentException("Invalid bundle port kind");
+            id = kind >= 7 ? ChannelMapping.parse(id).text() : kind == 5 ? KeyboardBinding.parse(id).encode() : kind == 6 ? ScreenColors.base(id) : WireIds.normalize(id);
         }
-        public boolean input() { return kind == 1 || kind == 3; }
-        public boolean external() { return kind == 3 || kind == 4; }
+        public boolean input() { return kind == 1 || kind == 3 || kind == 9; }
+        public boolean external() { return kind == 3 || kind == 4 || kind == 8 || kind == 9; }
+        public boolean mapping() { return kind >= 7; }
         public boolean screen() { return kind == 6; }
         public boolean keyboard() { return kind == 5; }
         public String label() { return keyboard() ? KeyboardBinding.parse(id).label() : id; }
