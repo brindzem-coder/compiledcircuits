@@ -52,27 +52,52 @@ public final class BundledGates {
             groups.add(new Group(start,state,List.copyOf(pins),List.copyOf(attachments),new TreeSet<>(),new HashMap<>()));
         }
         if(groups.isEmpty())return new Plan(List.of(),List.of());
-        // Only producers introduce IDs. Consumers never create a channel on an input cable.
-        Map<Integer,Set<String>> domains=new HashMap<>();
-        Map<Integer,List<Group>> readers=new HashMap<>();
+        // Ordinary-only gates broadcast into requested IDs. Demand may travel upstream,
+        // but only these broadcasters introduce channels; other gates retain sparse inputs.
+        Map<Integer,Set<String>> domains=new HashMap<>(),wanted=new HashMap<>();
+        Map<Integer,List<Group>> readers=new HashMap<>(),writers=new HashMap<>();
         for(var group:groups)for(var a:group.attachments())
-            if(role(states.get(a.gateFace().pos()),a.gateFace().side())!=2)
-                readers.computeIfAbsent(a.cable(),k->new ArrayList<>()).add(group);
+            (role(states.get(a.gateFace().pos()),a.gateFace().side())==2?writers:readers)
+                    .computeIfAbsent(a.cable(),k->new ArrayList<>()).add(group);
         record Channel(int cable,String id) {}
-        ArrayDeque<Channel> pending=new ArrayDeque<>();
-        for(var port:ports)if(port.config().input()){
+        ArrayDeque<Channel> pending=new ArrayDeque<>(),requests=new ArrayDeque<>();
+        long[] work={0,0};
+        java.util.function.BiConsumer<Integer,String> request=(cable,id)->{
+            if(wanted.computeIfAbsent(cable,k->new HashSet<>()).add(id)){
+                if(++work[1]>262144)throw new IllegalArgumentException("Bundled channel discovery exceeds its work limit");
+                requests.add(new Channel(cable,id));
+            }
+        };
+        java.util.function.BiConsumer<Group,String> activate=(group,id)->{
+            if(!group.channels().add(id))return;
+            work[0]+=group.pins().size()+3;
+            if(work[0]>32768)throw new IllegalArgumentException("Bundled gate expansion exceeds 32768 logic nodes");
+            for(var a:group.attachments()){
+                request.accept(a.cable(),id);
+                if(role(states.get(a.gateFace().pos()),a.gateFace().side())==2
+                        &&domains.computeIfAbsent(a.cable(),k->new HashSet<>()).add(id))pending.add(new Channel(a.cable(),id));
+            }
+        };
+        for(var port:ports){
             var cablePos=port.inline()?port.pos():port.pos().relative(port.face().side().getOpposite());
             var cable=cables.get(new BundleFace(cablePos,port.face().side()));
-            if(cable!=null&&domains.computeIfAbsent(cable,k->new HashSet<>()).add(port.config().id()))pending.add(new Channel(cable,port.config().id()));
+            if(cable==null)continue;
+            request.accept(cable,port.config().id());
+            if(port.config().input()&&domains.computeIfAbsent(cable,k->new HashSet<>()).add(port.config().id()))pending.add(new Channel(cable,port.config().id()));
         }
-        long expansion=0;
-        while(!pending.isEmpty()){
-            var channel=pending.remove();
-            for(var group:readers.getOrDefault(channel.cable(),List.of()))if(group.channels().add(channel.id())){
-                expansion+=group.pins().size()+3;
-                if(expansion>32768)throw new IllegalArgumentException("Bundled gate expansion exceeds 32768 logic nodes");
-                for(var a:group.attachments())if(role(states.get(a.gateFace().pos()),a.gateFace().side())==2
-                        &&domains.computeIfAbsent(a.cable(),k->new HashSet<>()).add(channel.id()))pending.add(new Channel(a.cable(),channel.id()));
+        while(!pending.isEmpty()||!requests.isEmpty()){
+            if(!pending.isEmpty()){
+                var channel=pending.remove();
+                for(var group:readers.getOrDefault(channel.cable(),List.of()))activate.accept(group,channel.id());
+            }else{
+                var channel=requests.remove();
+                for(var group:writers.getOrDefault(channel.cable(),List.of())){
+                    boolean broadcast=true;
+                    for(var a:group.attachments())if(role(states.get(a.gateFace().pos()),a.gateFace().side())!=2){
+                        broadcast=false;request.accept(a.cable(),channel.id());
+                    }
+                    if(broadcast)activate.accept(group,channel.id());
+                }
             }
         }
         for(var group:groups)for(var a:group.attachments())if(role(states.get(a.gateFace().pos()),a.gateFace().side())!=2)

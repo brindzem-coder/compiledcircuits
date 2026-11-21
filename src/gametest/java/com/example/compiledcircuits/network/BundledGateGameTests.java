@@ -192,4 +192,45 @@ public class BundledGateGameTests {
         try{r.compile();h.fail("consumer must not invent a source ID upstream");}catch(IllegalArgumentException expected){h.assertTrue(expected.getMessage().contains("999")&&expected.getMessage().contains("has no input"),expected.getMessage());}h.succeed();
     }
 
+    @GameTest(template="empty",batch="bundled_gates")
+    public static void ordinaryInputsBroadcastToEveryOutputId(GameTestHelper h){
+        for(var kind:GateBodyBlock.Kind.values()){
+            var r=new Rig(body(kind));var out0=r.channel(Direction.EAST,0,false);var out1=r.channel(Direction.EAST,1,false);
+            r.states.put(CENTER.west(),ModBlocks.BASIC_WIRE.get().defaultBlockState());r.states.put(CENTER.north(),ModBlocks.BASIC_WIRE.get().defaultBlockState());
+            var a=CENTER.west(2);var b=CENTER.north(2);
+            r.states.put(a,ModBlocks.INPUT_ENDPOINT.get().defaultBlockState());r.states.put(b,ModBlocks.INPUT_ENDPOINT.get().defaultBlockState());
+            var graph=r.compile();
+            for(int optimized=0;optimized<2;optimized++){
+                if(optimized==1)graph.optimize(r.states.keySet(),true);
+                for(int bits=0;bits<4;bits++){
+                    boolean av=(bits&1)!=0,bv=(bits&2)!=0;graph.evaluate(Map.of(a,av,b,bv));
+                    h.assertTrue(graph.faceOutput(out0)==expected(kind,av,bv)&&graph.faceOutput(out1)==expected(kind,av,bv),kind+" broadcasts equal results to both IDs");
+                }
+            }
+        }h.succeed();
+    }
+    @GameTest(template="empty",batch="bundled_gates")
+    public static void scalarNotBroadcastThroughGateToScreen(GameTestHelper h){
+        var not=ModBlocks.NOT_GATE.get().defaultBlockState().setValue(EndpointBlock.FACING,Direction.EAST);var r=new Rig(not);
+        var input=CENTER.west();r.states.put(input,ModBlocks.INPUT_ENDPOINT.get().defaultBlockState());
+        r.states.put(CENTER.east(),ModBlocks.BUNDLED_WIRE.get().defaultBlockState());r.states.put(CENTER.east(2),not);
+        r.states.put(CENTER.east(3),ModBlocks.BUNDLED_WIRE.get().defaultBlockState());var screen=CENTER.east(4);
+        r.states.put(screen,ModBlocks.COLOR_SCREEN.get().defaultBlockState().setValue(EndpointBlock.FACING,Direction.EAST));
+        r.ports.put(new BundleFace(CENTER.east(3),Direction.EAST),new BundleWireEntity.Port(6,"100"));
+        var graph=r.compile();graph.optimize(r.states.keySet(),true);
+        graph.evaluate(Map.of(input,true));h.assertTrue(graph.screenColors().get(screen)==255,"all eight requested screen IDs cross two NOTs");
+        graph.evaluate(Map.of(input,false));h.assertTrue(graph.screenColors().get(screen)==0,"all eight screen bits clear together");h.succeed();
+    }
+    @GameTest(template="empty",batch="bundled_gates")
+    public static void scalarLatchBroadcastKeepsMemory(GameTestHelper h){
+        var r=new Rig(ModBlocks.D_LATCH.get().defaultBlockState().setValue(EndpointBlock.FACING,Direction.EAST));
+        var q0=r.channel(Direction.EAST,0,false);var q1=r.channel(Direction.EAST,1,false);
+        var d=CENTER.west();var e=CENTER.north();r.states.put(d,ModBlocks.INPUT_ENDPOINT.get().defaultBlockState());r.states.put(e,ModBlocks.INPUT_ENDPOINT.get().defaultBlockState());
+        var graph=r.compile();graph.evaluate(Map.of(d,true,e,true));
+        h.assertTrue(graph.faceOutput(q0)&&graph.faceOutput(q1),"ordinary D and WDE write all IDs");
+        var loaded=r.compile();loaded.restoreMemory(graph.saveMemory());loaded.optimize(r.states.keySet(),true);loaded.evaluate(Map.of(d,false,e,false));
+        h.assertTrue(loaded.faceOutput(q0)&&loaded.faceOutput(q1),"all IDs hold after reload");
+        loaded.evaluate(Map.of(d,false,e,true));h.assertTrue(!loaded.faceOutput(q0)&&!loaded.faceOutput(q1),"all IDs clear together");h.succeed();
+    }
+
 }
