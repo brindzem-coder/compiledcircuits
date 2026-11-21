@@ -700,10 +700,22 @@ public final class LogicProgram {
         for(var entry:mappingNodes.entrySet())if(faces.get(entry.getKey().face()).kind()==8){
             int out=outputs.computeIfAbsent(entry.getKey().face().pos(),p->add(nodes,Op.OR,p));edge(nodes,entry.getValue(),out);
         }
+        // Merge once per cable/channel, before its consumers (including AND/XOR gate inputs).
+        Map<List<BundleTopology.Port>,Integer> channelNodes=new HashMap<>();
         for (var route : bundleRoutes) {
-            int from = route.input().mapping()!=null ? mappingNodes.get(route.input().mapping()) : route.input().gate() ? busNode(busNodes,route.input()) : bundleNode(states, route.input(), true, source, sink, enableSink, ownership, faceNodes);
+            Integer from=channelNodes.get(route.inputs());
+            if(from==null){
+                var drivers=route.inputs();
+                int merged=drivers.size()>1?add(nodes,Op.OR,drivers.get(0).pos()):-1;
+                for(var driver:drivers){
+                    int node=driver.mapping()!=null?mappingNodes.get(driver.mapping()):driver.gate()?busNode(busNodes,driver):bundleNode(states,driver,true,source,sink,enableSink,ownership,faceNodes);
+                    if(merged<0)merged=node;
+                    else {edge(nodes,node,merged);bundleEdges.add(new int[]{node,merged});}
+                }
+                from=merged;channelNodes.put(drivers,from);
+            }
             int to = route.output().mapping()!=null ? mappingNodes.get(route.output().mapping()) : route.output().gate() ? busNode(busNodes,route.output()) : route.output().bit() >= 0 ? screenBits.get(route.output().pos().relative(route.output().face().side()))[route.output().bit()] : bundleNode(states, route.output(), false, source, sink, enableSink, ownership, faceNodes);
-            if (from == to) throw error("Bundle channel " + route.channel() + " forms a cycle", route.input().pos());
+            if (from == to) throw error("Bundle channel " + route.channel() + " forms a cycle", route.inputs().get(0).pos());
             edge(nodes, from, to); bundleEdges.add(new int[]{from, to});
         }
         int[][] groups = components(nodes);

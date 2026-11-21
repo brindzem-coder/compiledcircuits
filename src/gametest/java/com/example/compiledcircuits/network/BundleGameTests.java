@@ -61,8 +61,19 @@ public class BundleGameTests {
     @GameTest(template="empty",batch="bundles")
     public static void duplicateAndMissingSources(GameTestHelper h) {
         var r=internal();r.port(3,1,true,false,Direction.SOUTH,"9");r.endpoint(3,2,true);
-        rejects(h,r::compile,"multiple inputs");r.ids.put(p(3,1),"10");r.ids.put(p(6,1),"11");
+        var graph=r.compile();
+        for(int bits=0;bits<4;bits++)h.assertTrue(graph.evaluate(Map.of(p(0,2),(bits&1)!=0,p(3,2),(bits&2)!=0)).get(p(6,2))==(bits!=0),"multiple legacy inputs merge through OR");
+        r.ids.put(p(3,1),"10");r.ids.put(p(6,1),"11");
         rejects(h,r::compile,"has no input");h.succeed();
+    }
+    @GameTest(template="empty",batch="bundles")
+    public static void multipleSourcesMergeBeforeInversion(GameTestHelper h) {
+        var r=internal();r.port(3,1,true,false,Direction.SOUTH,"9");r.endpoint(3,2,true);
+        r.states.put(p(6,2),ModBlocks.NOT_GATE.get().defaultBlockState().setValue(EndpointBlock.FACING,Direction.SOUTH));r.endpoint(6,3,false);
+        for(boolean optimize:List.of(false,true)){
+            var graph=r.compile();if(optimize)graph.optimize(r.states.keySet());
+            for(int bits=0;bits<4;bits++)h.assertTrue(graph.evaluate(Map.of(p(0,2),(bits&1)!=0,p(3,2),(bits&2)!=0)).get(p(6,3))==(bits==0),"NOT consumes the merged OR, not individual sources");
+        }h.succeed();
     }
     @GameTest(template="empty",batch="bundles")
     public static void cableComponentsScopeIds(GameTestHelper h) {
@@ -177,8 +188,8 @@ public class BundleGameTests {
                     if(++attempts>180){String detail="phase "+phase+" networks="+data.getNetworks().size();for(var n:data.getNetworks())detail+=" "+n.getName()+":"+n.getRuntimeStatus()+":"+n.getLogicError()+" damaged="+n.getBrokenElements();cleanup.run();h.fail("bundle integration timeout at "+detail);return;}
                     NetworkIntegrityManager.processPending(server);NetworkRuntime.tick(server);
                     if(CompilationJobs.isBusy(player)){h.runAfterDelay(1,()->run());return;}
-                    if(phase==0){compile(anchor,"invalid-bundle");phase=1;}
-                    else if(phase==1){h.assertTrue(data.getNetworks().isEmpty(),"duplicate channel rejects publication atomically");level.setBlock(duplicate,net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),3);phase=2;}
+                    if(phase==0){((BundlePortEntity)level.getBlockEntity(out)).configure("9");compile(anchor,"invalid-bundle");phase=1;}
+                    else if(phase==1){h.assertTrue(data.getNetworks().isEmpty(),"missing channel rejects publication atomically");level.setBlock(duplicate,net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),3);((BundlePortEntity)level.getBlockEntity(out)).configure("8");phase=2;}
                     else if(phase==2){compile(anchor,"transport");phase=3;}
                     else if(phase==3){cable=data.findNetworkContaining(level,anchor);h.assertTrue(cable!=null&&data.getNetworks().size()==1,"standalone cable compiles without consuming peer networks");compile(source,"source");phase=4;}
                     else if(phase==4){a=data.findNetworkContaining(level,source);h.assertTrue(a!=null,"source compiles");compile(target,"target");phase=5;}

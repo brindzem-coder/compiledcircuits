@@ -50,6 +50,21 @@ public class BundleMappingGameTests {
         port(faces,B,Direction.EAST,4,"1");
         rejects(h,()->LogicProgram.compileFaces(cables(),Map.of(),faces),"unselected channel is not created");h.succeed();
     }
+    @GameTest(template="empty",batch="bundle_mapping")
+    public static void multipleSourcesMergeBeforeMappingAndOptimization(GameTestHelper h){
+        var faces=new HashMap<BundleFace,BundleWireEntity.Port>();
+        port(faces,A,Direction.WEST,3,"0");port(faces,A,Direction.UP,3,"0");port(faces,A,Direction.DOWN,3,"1");
+        port(faces,A,Direction.EAST,7,"0=8,1=9");
+        port(faces,B,Direction.UP,3,"8");port(faces,B,Direction.EAST,4,"8");port(faces,B,Direction.DOWN,4,"9");
+        for(boolean optimize:List.of(false,true)){
+            var graph=LogicProgram.compileFaces(cables(),Map.of(),faces);if(optimize)graph.optimize(cables().keySet());
+            for(int bits=0;bits<16;bits++){
+                graph.evaluate(Map.of(),Map.of(f(A,Direction.WEST),(bits&1)!=0,f(A,Direction.UP),(bits&2)!=0,f(B,Direction.UP),(bits&4)!=0,f(A,Direction.DOWN),(bits&8)!=0));
+                h.assertTrue(graph.faceOutput(f(B,Direction.EAST))==((bits&7)!=0),"original and mapped sources merge through OR");
+                h.assertTrue(graph.faceOutput(f(B,Direction.DOWN))==((bits&8)!=0),"other channel stays independent");
+            }
+        }h.succeed();
+    }
     static CompiledNetwork network(int id,boolean source,String rules){
         var p=source?A:B;var side=source?Direction.EAST:Direction.WEST;var endpoint=p.relative(side.getOpposite());
         var local=new EnumMap<Direction,BundleWireEntity.Port>(Direction.class);

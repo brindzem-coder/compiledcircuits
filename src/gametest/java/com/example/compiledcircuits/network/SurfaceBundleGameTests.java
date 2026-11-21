@@ -38,8 +38,9 @@ public class SurfaceBundleGameTests {
             h.assertTrue(result.get(C.east())==((bits&1)!=0)&&result.get(C.south())==((bits&2)!=0),"channels on one block remain independent");
         }
         var faces=ports(false);faces.put(new BundleFace(C,Direction.NORTH),new BundleWireEntity.Port(1,"7"));
-        boolean rejected=false;try{LogicProgram.compileFaces(states,Map.of(),faces);}catch(IllegalArgumentException expected){rejected=expected.getMessage().contains("multiple inputs");}
-        h.assertTrue(rejected,"duplicate input on another face rejects compilation");h.succeed();
+        faces.put(new BundleFace(C,Direction.SOUTH),new BundleWireEntity.Port(2,"7"));
+        var merged=LogicProgram.compileFaces(states,Map.of(),faces);
+        for(int bits=0;bits<4;bits++)h.assertTrue(merged.evaluate(Map.of(C.west(),(bits&1)!=0,C.north(),(bits&2)!=0)).get(C.east())==(bits!=0),"same channel on two faces merges through OR");h.succeed();
     }
     @GameTest(template="empty",batch="bundle_faces")
     public static void allSixFacesAndTablePersistence(GameTestHelper h) {

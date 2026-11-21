@@ -13,7 +13,7 @@ final class BundleTopology {
         Port(BundleFace face, BundleWireEntity.Port config, boolean inline) { this(face,config,inline,-1,false); }
         BlockPos pos() { return face.pos(); }
     }
-    record Route(Port input, Port output, String channel) {}
+    record Route(List<Port> inputs, Port output, String channel) {}
     static boolean element(BlockState state) {
         return state.getBlock() instanceof BundledWireBlock || state.getBlock() instanceof BundlePortBlock;
     }
@@ -43,7 +43,7 @@ final class BundleTopology {
             }
         }
         record Key(int cable, String channel) {}
-        Map<Key, Port> inputs = new HashMap<>(); Map<Key, List<Port>> outputs = new LinkedHashMap<>();
+        Map<Key, List<Port>> inputs = new HashMap<>(); Map<Key, List<Port>> outputs = new LinkedHashMap<>();
         List<Port> ports = new ArrayList<>();
         for (var entry : states.entrySet()) {
             var pos = entry.getKey();
@@ -74,18 +74,15 @@ final class BundleTopology {
                     || !port.inline && faces.containsKey(new BundleFace(cable, port.face.side())))
                 throw new IllegalArgumentException("Bundle port needs a cable connection at " + port.pos().toShortString());
             var key = new Key(component, port.config.id());
-            if (port.config.input()) {
-                var previous = inputs.putIfAbsent(key, port);
-                if (previous != null) throw new IllegalArgumentException("Bundle channel " + key.channel + " has multiple inputs at "
-                        + previous.pos().toShortString() + " " + previous.face.side() + " and " + port.pos().toShortString() + " " + port.face.side());
-            } else outputs.computeIfAbsent(key, k -> new ArrayList<>()).add(port);
+            if (port.config.input()) inputs.computeIfAbsent(key, k -> new ArrayList<>()).add(port);
+            else outputs.computeIfAbsent(key, k -> new ArrayList<>()).add(port);
         }
         var routes = new ArrayList<Route>();
         for (var entry : outputs.entrySet()) {
             var input = inputs.get(entry.getKey());
             if (input == null && entry.getValue().stream().allMatch(Port::gate)) continue;
             if (input == null) throw new IllegalArgumentException("Bundle channel " + entry.getKey().channel + " has no input at " + entry.getValue().get(0).pos().toShortString());
-            for (var output : entry.getValue()) routes.add(new Route(input, output, entry.getKey().channel));
+            for (var output : entry.getValue()) routes.add(new Route(List.copyOf(input), output, entry.getKey().channel));
         }
         return new Result(routes,gates,mappings);
     }
