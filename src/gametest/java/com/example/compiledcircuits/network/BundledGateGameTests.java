@@ -46,13 +46,14 @@ public class BundledGateGameTests {
         }h.succeed();
     }
     @GameTest(template="empty",batch="bundled_gates")
-    public static void absentChannelIsLow(GameTestHelper h){
+    public static void absentChannelIsOmitted(GameTestHelper h){
         var r=new Rig(body(GateBodyBlock.Kind.AND));var a=r.channel(Direction.WEST,0,true);r.channel(Direction.NORTH,1,true);var out=r.channel(Direction.EAST,0,false);
-        var graph=r.compile();graph.evaluate(Map.of(),Map.of(a,true));h.assertTrue(!graph.faceOutput(out),"missing second channel is LOW, not an omitted AND operand");
+        var graph=r.compile();graph.evaluate(Map.of(),Map.of(a,true));h.assertTrue(graph.faceOutput(out),"missing second channel is omitted");
+        graph.evaluate(Map.of(),Map.of(a,false));h.assertTrue(!graph.faceOutput(out),"present LOW is still an operand");
         var n=new Rig(ModBlocks.NOT_GATE.get().defaultBlockState().setValue(EndpointBlock.FACING,Direction.EAST));
-        var input=n.channel(Direction.WEST,0,true);var zero=n.channel(Direction.EAST,0,false);var one=n.channel(Direction.EAST,1,false);
+        var input=n.channel(Direction.WEST,0,true);var zero=n.channel(Direction.EAST,0,false);var one=n.channel(Direction.EAST,1,false);n.channel(Direction.WEST,1,true);
         var inverse=n.compile();inverse.evaluate(Map.of(),Map.of(input,true));
-        h.assertTrue(!inverse.faceOutput(zero)&&inverse.faceOutput(one),"NOT preserves IDs and inverts absent input LOW");h.succeed();
+        h.assertTrue(!inverse.faceOutput(zero)&&inverse.faceOutput(one),"NOT preserves IDs and inverts present LOW");h.succeed();
     }
     @GameTest(template="empty",batch="bundled_gates")
     public static void latchHasIndependentEnableAndMemory(GameTestHelper h){
@@ -76,12 +77,18 @@ public class BundledGateGameTests {
         h.getLevel().setBlock(pos,gate,3);h.getLevel().setBlock(pos.west(),cable,3);
         h.assertTrue(CircuitConnections.connects(h.getLevel(),pos,gate,cable,Direction.WEST),"world discovery includes gate and bundle");
         r.states.put(CENTER.north(),ModBlocks.BASIC_WIRE.get().defaultBlockState());
-        try{r.compile();h.fail("mixed gate should require explicit conversion");}catch(IllegalArgumentException expected){h.assertTrue(expected.getMessage().contains("Do not mix"),expected.getMessage());}h.succeed();
+        r.compile();
+        r.states.put(CENTER.east(),ModBlocks.BASIC_WIRE.get().defaultBlockState());r.ports.keySet().removeIf(f->f.pos().equals(CENTER.east()));
+        try{r.compile();h.fail("ordinary output on bundled gate must be rejected");}catch(IllegalArgumentException expected){h.assertTrue(expected.getMessage().contains("outputs require bundled"),expected.getMessage());}h.succeed();
     }
     @GameTest(template="empty",batch="bundled_gates")
     public static void channelIdsThroughCrossingAndGateChainToScreen(GameTestHelper h){
         var not=ModBlocks.NOT_GATE.get().defaultBlockState().setValue(EndpointBlock.FACING,Direction.EAST);
         var r=new Rig(not);var input=r.channel(Direction.WEST,0,true);
+        for(int ch=1;ch<8;ch++){
+            var pos=CENTER.west(ch/2+1);r.states.put(pos,ModBlocks.BUNDLED_WIRE.get().defaultBlockState());
+            r.ports.put(new BundleFace(pos,ch%2==0?Direction.UP:Direction.DOWN),new BundleWireEntity.Port(3,Integer.toString(100+ch)));
+        }
         var crossing=ModBlocks.CROSSING_WIRE.get().defaultBlockState().setValue(CrossingWireBlock.LANES[Direction.Axis.X.ordinal()],3).setValue(CrossingWireBlock.LANES[Direction.Axis.Z.ordinal()],1);
         r.states.put(CENTER.east(),crossing);
         r.states.put(CENTER.east(2),ModBlocks.BUNDLED_WIRE.get().defaultBlockState());
@@ -127,6 +134,62 @@ public class BundledGateGameTests {
             graph.evaluate(Map.of(enable,true),data);
             for(int ch=0;ch<8;ch++)h.assertTrue(graph.faceOutput(outputs[ch])==(ch%2!=0),"shared WDE updates all channels "+ch);
         }h.succeed();
+    }
+
+    static boolean fold(GateBodyBlock.Kind kind,boolean... values){
+        boolean all=true,any=false,parity=false;for(boolean v:values){all&=v;any|=v;parity^=v;}
+        return switch(kind){case AND->all;case OR->any;case XOR->parity;case NAND->!all;case NOR->!any;case XNOR->!parity;};
+    }
+    @GameTest(template="empty",batch="bundled_gates")
+    public static void fiveMixedInputsAllGateKinds(GameTestHelper h){
+        for(var kind:GateBodyBlock.Kind.values()){
+            var gate=body(kind);for(var side:new Direction[]{Direction.SOUTH,Direction.UP,Direction.DOWN})gate=GateBodyBlock.withPort(gate,side,1);
+            var r=new Rig(gate);var a0=r.channel(Direction.WEST,0,true);var a1=r.channel(Direction.WEST,1,true);
+            var b1=r.channel(Direction.NORTH,1,true);var c0=r.channel(Direction.SOUTH,0,true);
+            var o0=r.channel(Direction.EAST,0,false);var o1=r.channel(Direction.EAST,1,false);
+            r.states.put(CENTER.above(),ModBlocks.BASIC_WIRE.get().defaultBlockState());r.states.put(CENTER.below(),ModBlocks.BASIC_WIRE.get().defaultBlockState());
+            var e=CENTER.above(2);var f=CENTER.below(2);
+            r.states.put(e,ModBlocks.INPUT_ENDPOINT.get().defaultBlockState());r.states.put(f,ModBlocks.INPUT_ENDPOINT.get().defaultBlockState());
+            var graph=r.compile();
+            for(int optimize=0;optimize<2;optimize++){
+                if(optimize==1)graph.optimize(r.states.keySet(),true);
+                for(int bits=0;bits<64;bits++){
+                    boolean av=(bits&1)!=0,bv=(bits&2)!=0,cv=(bits&4)!=0,dv=(bits&8)!=0,ev=(bits&16)!=0,fv=(bits&32)!=0;
+                    graph.evaluate(Map.of(e,ev,f,fv),Map.of(a0,av,a1,bv,b1,cv,c0,dv));
+                    h.assertTrue(graph.faceOutput(o0)==fold(kind,av,dv,ev,fv),kind+" channel 100 mixed inputs "+bits);
+                    h.assertTrue(graph.faceOutput(o1)==fold(kind,bv,cv,ev,fv),kind+" channel 101 mixed inputs "+bits);
+                }
+            }
+        }h.succeed();
+    }
+    @GameTest(template="empty",batch="bundled_gates")
+    public static void sharedDataWithPerChannelEnable(GameTestHelper h){
+        var r=new Rig(ModBlocks.D_LATCH.get().defaultBlockState().setValue(EndpointBlock.FACING,Direction.EAST));
+        var e0=r.channel(Direction.NORTH,0,true);var e1=r.channel(Direction.NORTH,1,true);
+        var q0=r.channel(Direction.EAST,0,false);var q1=r.channel(Direction.EAST,1,false);
+        r.states.put(CENTER.west(),ModBlocks.BASIC_WIRE.get().defaultBlockState());var d=CENTER.west(2);
+        r.states.put(d,ModBlocks.INPUT_ENDPOINT.get().defaultBlockState());
+        for(boolean optimized:new boolean[]{false,true}){
+            var graph=r.compile();if(optimized)graph.optimize(r.states.keySet(),true);
+            graph.evaluate(Map.of(d,true),Map.of(e0,true,e1,false));
+            h.assertTrue(graph.faceOutput(q0)&&!graph.faceOutput(q1),"shared D writes only enabled ID");
+            graph.evaluate(Map.of(d,true),Map.of(e0,false,e1,true));
+            h.assertTrue(graph.faceOutput(q0)&&graph.faceOutput(q1),"other ID can record shared D");
+            var loaded=r.compile();loaded.restoreMemory(graph.saveMemory());loaded.evaluate(Map.of(d,false),Map.of(e0,true,e1,false));
+            h.assertTrue(!loaded.faceOutput(q0)&&loaded.faceOutput(q1),"selective clearing after memory reload");
+        }h.succeed();
+    }
+    @GameTest(template="empty",batch="bundled_gates")
+    public static void channelPresencePropagatesForwardOnly(GameTestHelper h){
+        var r=new Rig(body(GateBodyBlock.Kind.AND));var a=r.channel(Direction.WEST,0,true);r.channel(Direction.NORTH,1,true);
+        r.states.put(CENTER.east(),ModBlocks.BUNDLED_WIRE.get().defaultBlockState());
+        var not=ModBlocks.NOT_GATE.get().defaultBlockState().setValue(EndpointBlock.FACING,Direction.EAST);
+        r.states.put(CENTER.east(2),not);r.states.put(CENTER.east(3),ModBlocks.BUNDLED_WIRE.get().defaultBlockState());
+        var out=new BundleFace(CENTER.east(3),Direction.UP);r.ports.put(out,new BundleWireEntity.Port(4,"100"));
+        var graph=r.compile();graph.evaluate(Map.of(),Map.of(a,true));h.assertTrue(!graph.faceOutput(out),"AND omits absent operand before downstream NOT");
+        graph.evaluate(Map.of(),Map.of(a,false));h.assertTrue(graph.faceOutput(out),"present LOW remains in upstream AND");
+        r.ports.put(new BundleFace(CENTER.east(3),Direction.DOWN),new BundleWireEntity.Port(4,"999"));
+        try{r.compile();h.fail("consumer must not invent a source ID upstream");}catch(IllegalArgumentException expected){h.assertTrue(expected.getMessage().contains("999")&&expected.getMessage().contains("has no input"),expected.getMessage());}h.succeed();
     }
 
 }

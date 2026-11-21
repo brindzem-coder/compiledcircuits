@@ -484,10 +484,8 @@ public final class LogicProgram {
         var bundleRoutes = bundleTopology.routes();
         Set<BundleFace> busPins = new HashSet<>();
         for(var group:bundleTopology.gates().groups()) for(var pin:group.pins()) {
-            // A scalar WDE remains in the ordinary graph and fans out to all channel latches.
-            boolean sharedEnable=BundledGates.role(states.get(pin.pos()),pin.side())==3
-                    && group.attachments().stream().noneMatch(a->a.gateFace().equals(pin));
-            if(!sharedEnable)busPins.add(pin);
+            // Shared scalar inputs retain their ordinary wiring; all outputs stay bus-only.
+            if(BundledGates.role(states.get(pin.pos()),pin.side())==2||group.inputChannels().containsKey(pin))busPins.add(pin);
         }
         var keyboardPorts = KeyboardTopology.resolve(states, faces, ownership);
         List<Node> nodes = new ArrayList<>();
@@ -672,10 +670,18 @@ public final class LogicProgram {
             int output = add(nodes,op,group.root());
             for(var pin:group.pins()) {
                 int role=BundledGates.role(states.get(pin.pos()),pin.side());
+                boolean bundledInput=group.inputChannels().containsKey(pin);
+                boolean present=!bundledInput||group.inputChannels().get(pin).contains(channel);
+                // Missing bus operands are omitted; latch D/WDE remain defined LOW when absent.
+                if(role!=2&&!present&&op!=Op.LATCH)continue;
                 int node=output;
                 if(role!=2) {
                     node=add(nodes,Op.OR,pin.pos()); edge(nodes,node,output);
-                    if(role==3&&!busPins.contains(pin))edge(nodes,enableSink.get(pin.pos()),node);
+                    if(!bundledInput){
+                        Integer shared=group.state().getBlock() instanceof GateBodyBlock?crossingGateFaces.get(pin)
+                                :role==3?enableSink.get(pin.pos()):sink.get(pin.pos());
+                        edge(nodes,shared,node);
+                    }
                     if(op==Op.LATCH) { if(role==3)nodes.get(output).enable=node;else nodes.get(output).data=node; }
                 }
                 busNodes.put(new BundledGates.Key(pin,channel),node);
