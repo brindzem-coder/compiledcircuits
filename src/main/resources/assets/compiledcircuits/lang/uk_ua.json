@@ -1,4 +1,5 @@
 {
+  "blueprint.compiledcircuits.placed_uncompiled": "Вставлено некомпільованих мереж: %s",
   "block.compiledcircuits.isolated_wire": "Роздільний дріт",
   "itemGroup.compiledcircuits": "Compiled Circuits",
   "block.compiledcircuits.basic_wire": "Базовий дріт",
@@ -48,7 +49,7 @@
   "blueprint.compiledcircuits.copy": "Копіювати",
   "blueprint.compiledcircuits.copied": "Скопійовано: %s",
   "blueprint.compiledcircuits.placed": "Вставлено компіляцію №%s",
-  "blueprint.compiledcircuits.no_network": "Для копіювання наведіть на скомпільовану мережу",
+  "blueprint.compiledcircuits.no_network": "Для копіювання наведіть на блок з’єднаної мережі",
   "blueprint.compiledcircuits.hold_tool": "Тримайте копіювач компіляцій у руці",
   "blueprint.compiledcircuits.hint": "Shift+ПКМ: замінити копію; Ctrl+Shift+ПКМ: додати мережу",
   "blueprint.compiledcircuits.controls": "ПКМ: вставити | R: обертати | Y: дзеркало X | Ctrl+Y: дзеркало Z | F: закріпити | Стрілки/PgUp/PgDn: рух | Esc: скасувати",

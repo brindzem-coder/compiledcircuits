@@ -19,7 +19,7 @@ public final class CircuitBlueprint {
         if (entries.isEmpty() || entries.size() > MAX_ELEMENTS) throw new IllegalArgumentException("Blueprint limit: 1–4096 blocks");
         Map<BlockPos,Integer> positions=new HashMap<>();
         for (var tag : entries) {
-            var e = CompiledCircuitElement.load((CompoundTag)tag);
+            var e = CompiledCircuitElement.loadForBlueprint((CompoundTag)tag);
             int used=positions.getOrDefault(e.getPos(),0),mask=Crossings.mask(e);if((used&mask)!=0)throw new IllegalArgumentException("Duplicate blueprint position");positions.put(e.getPos(),used|mask);
             var relative=e.getPos().subtract(origin());
             if(Math.abs((long)relative.getX())>256||Math.abs((long)relative.getY())>256||Math.abs((long)relative.getZ())>256)throw new IllegalArgumentException("Blueprint size limit: 256 blocks per axis");
@@ -32,12 +32,20 @@ public final class CircuitBlueprint {
         if (!data.contains("networks")) return List.of(this);
         return data.getList("networks",Tag.TAG_COMPOUND).stream().map(t->new CircuitBlueprint((CompoundTag)t)).toList();
     }
+    public boolean uncompiled() { return data.getBoolean("uncompiled"); }
+    public int uncompiledCount() { return (int)parts().stream().filter(CircuitBlueprint::uncompiled).count(); }
+    private Map<BlockPos,Integer> sourcePositions(){
+        var result=new HashMap<BlockPos,Integer>();for(var raw:data.getList("elements",Tag.TAG_COMPOUND)){
+            var e=CompiledCircuitElement.loadForBlueprint((CompoundTag)raw);result.merge(e.getPos(),Crossings.mask(e),(a,b)->a|b);
+        }return result;
+    }
     public int networkCount() { return parts().size(); }
     public CircuitBlueprint append(CircuitBlueprint next) {
         if (data.getString("sourceDimension").isEmpty() || !data.getString("sourceDimension").equals(next.data.getString("sourceDimension")))
             throw new IllegalArgumentException("Copies must come from the same dimension; start a new copy with Shift+right-click");
         var parts=new ArrayList<>(parts());
-        if(parts.stream().anyMatch(p->p.data.getInt("sourceNetwork")==next.data.getInt("sourceNetwork"))) return this;
+        if(parts.stream().anyMatch(p->p.uncompiled()==next.uncompiled() && (p.uncompiled()
+                ? p.sourcePositions().equals(next.sourcePositions()) : p.data.getInt("sourceNetwork")==next.data.getInt("sourceNetwork")))) return this;
         parts.addAll(next.parts());
         var group=new CompoundTag(); var networks=new ListTag(); var elements=new ListTag();
         for(var part:parts) { networks.add(part.save()); part.data.getList("elements",Tag.TAG_COMPOUND).forEach(t->elements.add(t.copy())); }
@@ -49,6 +57,7 @@ public final class CircuitBlueprint {
     public List<CompiledNetwork> networks(int firstId,String dimension,BlockPos anchor,int turns,boolean mirrored,boolean mirroredZ) {
         var result=new ArrayList<CompiledNetwork>();
         for(var part:parts()) {
+            if(part.uncompiled())continue;
             if((long)firstId+result.size()>Integer.MAX_VALUE)throw new IllegalArgumentException("Network ID space exhausted");
             var tag=part.save(); tag.putLong("origin",origin().asLong());
             result.add(new CircuitBlueprint(tag).network(firstId+result.size(),dimension,anchor,turns,mirrored,mirroredZ));
@@ -133,7 +142,7 @@ public final class CircuitBlueprint {
     public List<CompiledCircuitElement> elements(BlockPos anchor,int turns,boolean mirrored,boolean mirroredZ) {
         var result=new ArrayList<CompiledCircuitElement>();
         for(var raw:data.getList("elements",Tag.TAG_COMPOUND)) {
-            var old=CompiledCircuitElement.load((CompoundTag)raw);var tag=old.save();
+            var old=CompiledCircuitElement.loadForBlueprint((CompoundTag)raw);var tag=old.save();
             tag.putLong("pos",position(old.getPos(),anchor,turns,mirrored,mirroredZ).asLong());
             tag.merge(CompiledBlockStateCodec.write(CompiledBlockStateCodec.capture(transformState(old.resolveState().state().orElseThrow(),turns,mirrored,mirroredZ))));
             if(!old.bundleFaces().isEmpty()) {
@@ -152,13 +161,14 @@ public final class CircuitBlueprint {
                     lanes.put(transformSide(Direction.get(Direction.AxisDirection.POSITIVE,axis),turns,mirrored,mirroredZ).getAxis().getName(),old.crossingLanes().getCompound(axis.getName()));
                 tag.put("crossingLanes",lanes);
             }
-            result.add(CompiledCircuitElement.load(tag));
+            result.add(CompiledCircuitElement.loadForBlueprint(tag));
         }
         return result;
     }
     CompiledNetwork network(int id,String dimension,BlockPos anchor,int turns) { return network(id,dimension,anchor,turns,false); }
     CompiledNetwork network(int id,String dimension,BlockPos anchor,int turns,boolean mirrored) { return network(id,dimension,anchor,turns,mirrored,false); }
     CompiledNetwork network(int id,String dimension,BlockPos anchor,int turns,boolean mirrored,boolean mirroredZ) {
+        if(uncompiled())throw new IllegalArgumentException("Uncompiled copies must be placed without compilation");
         if(data.contains("networks"))throw new IllegalArgumentException("Use grouped placement for multiple networks");
         var elements=elements(anchor,turns,mirrored,mirroredZ);
         var network=new CompiledNetwork(id,name()+" (copy)",0,dimension,elements);

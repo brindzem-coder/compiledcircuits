@@ -1,4 +1,5 @@
 {
+  "blueprint.compiledcircuits.placed_uncompiled": "Placed uncompiled circuits: %s",
   "block.compiledcircuits.isolated_wire": "Isolated Wire",
   "itemGroup.compiledcircuits": "Compiled Circuits",
   "block.compiledcircuits.basic_wire": "Basic Wire",
@@ -48,7 +49,7 @@
   "blueprint.compiledcircuits.copy": "Copy",
   "blueprint.compiledcircuits.copied": "Copied %s",
   "blueprint.compiledcircuits.placed": "Placed compilation #%s",
-  "blueprint.compiledcircuits.no_network": "Look at a compiled circuit to copy it",
+  "blueprint.compiledcircuits.no_network": "Look at a circuit block to copy its connected network",
   "blueprint.compiledcircuits.hold_tool": "Hold the Circuit Copier in either hand",
   "blueprint.compiledcircuits.hint": "Shift+right-click: replace copy; Ctrl+Shift+right-click: add network",
   "blueprint.compiledcircuits.controls": "Right-click: paste | R: rotate | Y: mirror X | Ctrl+Y: mirror Z | F: lock | Arrows/PgUp/PgDn: move | Esc: cancel",

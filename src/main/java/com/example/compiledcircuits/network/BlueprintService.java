@@ -29,20 +29,25 @@ public final class BlueprintService {
         final int selected=mask;
         var source=NetworkSavedData.get(player.getServer()).getMembershipOwners(player.serverLevel().dimension().location().toString(),pos).stream()
                 .filter(o->(Crossings.mask(o.element())&selected)!=0).map(NetworkSavedData.ElementLocation::network).findFirst().orElse(null);
-        if(source==null)player.sendSystemMessage(Component.translatable("blueprint.compiledcircuits.no_network"));
+        if(source==null)request(player,0,append,pos,selected);
         else request(player,source.getId(),append);
     }
-    public static void request(ServerPlayer player,int networkId,boolean append){
+    public static void request(ServerPlayer player,int networkId,boolean append){request(player,networkId,append,null,7);}
+    private static void request(ServerPlayer player,int networkId,boolean append,BlockPos captureStart,int mask){
         if(!NetworkOperations.canModify(player)||tool(player).isEmpty())return;
         long now=player.serverLevel().getGameTime();Long previous=lastAction.get(player);if(previous!=null&&now-previous<5)return;lastAction.put(player,now);
         try{
             var storage=BlueprintStorage.get(player.getServer());var stack=tool(player);UUID id=id(stack);
-            if(networkId>0){
+            if(networkId>0||captureStart!=null){
+                CircuitBlueprint blueprint;
+                if(captureStart!=null)blueprint=UncompiledBlueprint.capture(player.serverLevel(),captureStart,mask);
+                else {
                 var source=NetworkSavedData.get(player.getServer()).getNetwork(networkId);
                 if(source==null)throw new IllegalArgumentException("Compilation no longer exists");
                 var sourceLevel=player.getServer().getLevel(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.DIMENSION,new net.minecraft.resources.ResourceLocation(source.getDimension())));
                 if(sourceLevel==null)throw new IllegalArgumentException("Source dimension is unavailable");
-                var blueprint=CircuitBlueprint.capture(source,sourceLevel);
+                blueprint=CircuitBlueprint.capture(source,sourceLevel);
+                }
                 if(append && id!=null && storage.get(id)!=null)blueprint=storage.get(id).append(blueprint);
                 id=storage.put(blueprint);
                 stack.getOrCreateTag().putUUID("Blueprint",id);stack.getOrCreateTag().putString("BlueprintName",blueprint.name());
@@ -64,7 +69,8 @@ public final class BlueprintService {
             if(anchor.distSqr(player.blockPosition())>128*128||turns<0||turns>3)throw new IllegalArgumentException("Placement is too far away");
             var blueprint=BlueprintStorage.get(player.getServer()).get(id);if(blueprint==null)throw new IllegalArgumentException("Blueprint no longer exists");
             var networks=pasteAll(player,blueprint,anchor,turns,mirrored,mirroredZ);
-            player.sendSystemMessage(Component.translatable("blueprint.compiledcircuits.placed",networks.stream().map(n->Integer.toString(n.getId())).collect(java.util.stream.Collectors.joining(", "))));
+            if(blueprint.uncompiledCount()>0)player.sendSystemMessage(Component.translatable("blueprint.compiledcircuits.placed_uncompiled",blueprint.uncompiledCount()));
+            if(!networks.isEmpty())player.sendSystemMessage(Component.translatable("blueprint.compiledcircuits.placed",networks.stream().map(n->Integer.toString(n.getId())).collect(java.util.stream.Collectors.joining(", "))));
         }catch(IllegalArgumentException failure){player.sendSystemMessage(Component.literal(failure.getMessage()));}
     }
     static CompiledNetwork paste(ServerPlayer player,CircuitBlueprint blueprint,BlockPos anchor,int turns){
@@ -75,11 +81,11 @@ public final class BlueprintService {
         var level=player.serverLevel();var data=NetworkSavedData.get(player.getServer());
         if(level.captureBlockSnapshots||level.restoringBlockSnapshots||!level.capturedBlockSnapshots.isEmpty())throw new IllegalArgumentException("Placement transaction is busy");
         var networks=blueprint.networks(data.getNextNetworkId(),level.dimension().location().toString(),anchor,turns,mirrored,mirroredZ);
-        var elements=networks.stream().flatMap(n->n.getElements().stream()).toList();
+        var elements=blueprint.elements(anchor,turns,mirrored,mirroredZ);
         for(var e:elements){
             var pos=e.getPos();
             if(level.isOutsideBuildHeight(pos)||!level.getWorldBorder().isWithinBounds(pos)||!NetworkRuntime.isChunkAvailable(level,RuntimeSignalReader.chunk(pos)))throw new IllegalArgumentException("Placement crosses an unavailable area");
-            if(!level.getBlockState(pos).isAir()||!data.getMembershipOwners(level.dimension().location().toString(),pos).isEmpty())throw new IllegalArgumentException("Placement is occupied at "+pos.toShortString());
+            if(!level.getBlockState(pos).isAir()||!CircuitBoundary.uncompiled(data,level.dimension().location().toString(),pos))throw new IllegalArgumentException("Placement is occupied at "+pos.toShortString());
             if(!level.isUnobstructed(e.resolveState().state().orElseThrow(),pos,net.minecraft.world.phys.shapes.CollisionContext.empty()))throw new IllegalArgumentException("An entity obstructs placement at "+pos.toShortString());
             if(!level.mayInteract(player,pos)||!player.mayUseItemAt(pos,Direction.UP,tool(player)))throw new IllegalArgumentException("Placement is not allowed here");
         }
@@ -95,7 +101,10 @@ public final class BlueprintService {
                     if(!level.setBlock(pos,placed,Block.UPDATE_CLIENTS|Block.UPDATE_KNOWN_SHAPE))throw new IllegalArgumentException("Could not place "+pos.toShortString());
                     var entity=level.getBlockEntity(pos);
                     if(entity instanceof CrossingWireEntity wire){var lanes=wire.snapshot(7);lanes.merge(e.crossingLanes());wire.restore(lanes);}
-                    if(entity instanceof IdWireEntity wire)wire.configure(e.wireId(),e.wireColor());
+                    if(entity instanceof IdWireEntity wire){
+                        if(!e.wireId().isEmpty())wire.configure(e.wireId(),e.wireColor());
+                        else {var tag=new net.minecraft.nbt.CompoundTag();tag.putString("WireId","");tag.putInt("WireColor",e.wireColor());wire.load(tag);}
+                    }
                     if(entity instanceof BundlePortEntity port)port.configure(e.channelId());
                     if(entity instanceof KeyboardEntity keyboard)keyboard.restoreCamera(e.keyboardCamera());
                     if(entity instanceof BundleWireEntity wire)wire.restorePorts(e.bundleFaces());
@@ -105,7 +114,7 @@ public final class BlueprintService {
             if(denied||!NetworkOperations.canModify(player))throw new IllegalArgumentException("Placement was denied");
             for(var e:elements)if(CompiledBlockStateMatcher.match(e,level,level.getBlockState(e.getPos()),true)!=CompiledBlockStateMatcher.Match.MATCH)throw new IllegalArgumentException("Placement changed before completion");
             for(var network:networks)data.runtime().validateBundleCompilation(network);
-            data.addNetworks(networks);committed=true;
+            if(!networks.isEmpty())data.addNetworks(networks);committed=true;
             for(var e:elements){
                 var pos=e.getPos();if(level.getBlockEntity(pos) instanceof IdWireEntity wire)wire.reconcile();
                 var state=level.getBlockState(pos);level.sendBlockUpdated(pos,net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),state,3);

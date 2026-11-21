@@ -77,12 +77,13 @@ public class CompiledCircuitElement {
     public String channelId() { return stateData.getString("channelId"); }
     public String wireId() { return stateData.getString("wireId"); }
     public int wireColor() { return stateData.getInt("wireColor"); }
-    public CompiledCircuitElement captureWire(net.minecraft.world.level.BlockGetter level) {
+    public CompiledCircuitElement captureWire(net.minecraft.world.level.BlockGetter level) { return captureWire(level,false); }
+    CompiledCircuitElement captureWire(net.minecraft.world.level.BlockGetter level,boolean draft) {
         if (level.getBlockEntity(pos) instanceof com.example.compiledcircuits.block.KeyboardEntity keyboard) stateData.put("keyboardCamera", keyboard.cameraData());
         if (level.getBlockEntity(pos) instanceof com.example.compiledcircuits.block.CrossingWireEntity wire)
             stateData.put("crossingLanes", wire.snapshot(Crossings.mask(this)));
         if (level.getBlockEntity(pos) instanceof com.example.compiledcircuits.block.IdWireEntity wire) {
-            String id = com.example.compiledcircuits.network.WireIds.normalize(wire.wireId());
+            String id = draft&&wire.wireId().isEmpty()?"":com.example.compiledcircuits.network.WireIds.normalize(wire.wireId());
             if (id.equals("0")) throw new IllegalArgumentException("Unconfigured wire");
             stateData.putString("wireId", id); stateData.putInt("wireColor", wire.color());
         }
@@ -90,7 +91,7 @@ public class CompiledCircuitElement {
             stateData.putString("channelId", WireIds.normalize(port.channel()));
         if (level.getBlockEntity(pos) instanceof com.example.compiledcircuits.block.BundleWireEntity wire)
             stateData.put("bundleFaces", wire.portData());
-        if (blockId.equals("compiledcircuits:id_wire") && wireId().isEmpty()) throw new IllegalArgumentException("Unconfigured ID wire");
+        if (!draft && blockId.equals("compiledcircuits:id_wire") && wireId().isEmpty()) throw new IllegalArgumentException("Unconfigured ID wire");
         return this;
     }
     public int getId() {
@@ -121,7 +122,9 @@ public class CompiledCircuitElement {
         return tag;
     }
 
-    public static CompiledCircuitElement load(CompoundTag tag) {
+    public static CompiledCircuitElement load(CompoundTag tag) { return load(tag,false); }
+    static CompiledCircuitElement loadForBlueprint(CompoundTag tag) { return load(tag,true); }
+    private static CompiledCircuitElement load(CompoundTag tag,boolean draft) {
         int id = tag.getInt("id");
         BlockPos pos = BlockPos.of(tag.getLong("pos"));
 
@@ -139,7 +142,7 @@ public class CompiledCircuitElement {
         boolean upgrade = data.isEmpty();
         var element = new CompiledCircuitElement(id, pos, type, tag.getString("blockId"),
                 upgrade ? legacyData() : data, upgrade);
-        if (element.blockId.equals("compiledcircuits:id_wire")) {
+        if (element.blockId.equals("compiledcircuits:id_wire") && !(draft&&element.wireId().isEmpty())) {
             try {
                 String wireId = WireIds.normalize(element.wireId());
                 if (wireId.equals("0") || !wireId.equals(element.wireId())) throw new IllegalArgumentException();
