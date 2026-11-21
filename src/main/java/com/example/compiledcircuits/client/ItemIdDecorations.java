@@ -35,11 +35,14 @@ public final class ItemIdDecorations {
         if (stack.getItem() instanceof com.example.compiledcircuits.item.KeyboardPortItem) id = com.example.compiledcircuits.item.KeyboardPortItem.binding(stack).label();
         boolean wire = stack.getItem() instanceof IdWireItem;
         boolean network = stack.is(ModItems.BUNDLE_NETWORK_INPUT.get()) || stack.is(ModItems.BUNDLE_NETWORK_OUTPUT.get());
+        boolean keyboardPort = stack.is(ModItems.KEYBOARD_PORT.get());
+        boolean screenPort = stack.is(ModItems.SCREEN_PORT.get());
+        boolean devicePort = keyboardPort || screenPort;
         // Coordinates are in the 16x16 inventory slot, matched to the 128px item textures.
-        float centerX = wire ? 12.05f : network ? 7.4f : 8f;
-        float centerY = wire ? 10.3f : network ? 6.5f : 6.7f;
+        float centerX = wire ? 12.05f : devicePort ? 7.8f : network ? 7.4f : 8f;
+        float centerY = wire ? 10.3f : keyboardPort ? 5.7f : screenPort ? 6.65f : network ? 6.5f : 6.7f;
         float labelWidth = wire ? 4.4f : 6.7f;
-        float labelHeight = network ? 1.8f : 2.3f;
+        float labelHeight = devicePort ? 1.7f : network ? 1.8f : 2.3f;
         int columns = wire ? 6 : 10;
         int lines = (id.length() + columns - 1) / columns, width = 1;
         for (int row = 0; row < lines; row++)

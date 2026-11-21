@@ -1,3 +1,6 @@
 {
-  "parent": "compiledcircuits:block/keyboard"
+  "textures": {
+    "layer0": "compiledcircuits:item/keyboard"
+  },
+  "parent": "minecraft:item/generated"
 }

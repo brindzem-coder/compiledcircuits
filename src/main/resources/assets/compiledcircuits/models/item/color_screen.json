@@ -1,3 +1,6 @@
 {
-  "parent": "compiledcircuits:block/color_screen"
+  "textures": {
+    "layer0": "compiledcircuits:item/color_screen"
+  },
+  "parent": "minecraft:item/generated"
 }
