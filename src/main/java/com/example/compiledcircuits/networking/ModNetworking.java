@@ -8,7 +8,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 
 public final class ModNetworking {
 
-    private static final String PROTOCOL_VERSION = "30";
+    private static final String PROTOCOL_VERSION = "32";
 
     public static final SimpleChannel CHANNEL =
             NetworkRegistry.ChannelBuilder
@@ -33,6 +33,8 @@ public final class ModNetworking {
     }
 
     public static void register() {
+        CHANNEL.registerMessage(packetId++,CreativeHotbarC2SPacket.class,CreativeHotbarC2SPacket::encode,CreativeHotbarC2SPacket::decode,CreativeHotbarC2SPacket::handle,java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER));
+        CHANNEL.registerMessage(packetId++,CreativeHotbarS2CPacket.class,CreativeHotbarS2CPacket::encode,CreativeHotbarS2CPacket::decode,CreativeHotbarS2CPacket::handle,java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));
         CHANNEL.registerMessage(packetId++, KeyboardCameraS2CPacket.class, KeyboardCameraS2CPacket::encode, KeyboardCameraS2CPacket::decode, KeyboardCameraS2CPacket::handle, java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));
         CHANNEL.registerMessage(packetId++, KeyboardCameraC2SPacket.class, KeyboardCameraC2SPacket::encode, KeyboardCameraC2SPacket::decode, KeyboardCameraC2SPacket::handle, java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER));
         CHANNEL.registerMessage(packetId++, KeyboardInputC2SPacket.class, KeyboardInputC2SPacket::encode, KeyboardInputC2SPacket::decode, KeyboardInputC2SPacket::handle, java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER));

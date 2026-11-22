@@ -7,7 +7,6 @@
   "mapping.compiledcircuits.hint": "Right-click in air: edit rules. Place on the source cable.",
   "mapping.compiledcircuits.receiver_hint": "Place opposite a mapping output to copy its rules. Re-place after changing the output rules.",
   "mapping.compiledcircuits.receiver_needs_output": "Place the input opposite an inter-network bundle mapping output.",
-
   "blueprint.compiledcircuits.placed_uncompiled": "Placed uncompiled circuits: %s",
   "block.compiledcircuits.isolated_wire": "Isolated Wire",
   "itemGroup.compiledcircuits": "Compiled Circuits",
@@ -103,5 +102,8 @@
   "block.compiledcircuits.color_screen": "Color screen (RGB332)",
   "item.compiledcircuits.screen_port": "Screen port",
   "screen.compiledcircuits.channels": "RGB332 channels: %s–%s",
-  "screen.compiledcircuits.hint": "Right-click: base ID. Install on cable facing the back of a screen."
+  "screen.compiledcircuits.hint": "Right-click: base ID. Install on cable facing the back of a screen.",
+  "hotbar.compiledcircuits.add": "Add a hotbar slot (up to 38)",
+  "hotbar.compiledcircuits.remove": "Hide the last slot (minimum 9). Its contents are kept.",
+  "hotbar.compiledcircuits.empty": "Slot %s: left-click to move or swap; right-click for half / one item"
 }

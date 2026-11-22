@@ -8,7 +8,10 @@
     "LevelChunkVisualIndexMixin",
     "CreativeTabOrderMixin",
     "KeyboardCaptureMixin",
-    "KeyboardMouseMixin"
+    "KeyboardMouseMixin",
+    "HotbarSlotAccessor",
+    "HotbarScreenAccessor",
+    "CreativeHotbarScreenMixin"
   ],
   "injectors": {
     "defaultRequire": 1

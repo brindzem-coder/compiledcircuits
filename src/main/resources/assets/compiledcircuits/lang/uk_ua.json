@@ -7,7 +7,6 @@
   "mapping.compiledcircuits.hint": "ПКМ у повітрі: змінити правила. Встановлюється на кабель-джерело.",
   "mapping.compiledcircuits.receiver_hint": "Встановіть навпроти міжмережевого виходу для копіювання правил. Після їх зміни перевстановіть вхід.",
   "mapping.compiledcircuits.receiver_needs_output": "Встановіть вхід навпроти міжмережевого виходу каналів мультидроту.",
-
   "blueprint.compiledcircuits.placed_uncompiled": "Вставлено некомпільованих мереж: %s",
   "block.compiledcircuits.isolated_wire": "Роздільний дріт",
   "itemGroup.compiledcircuits": "Compiled Circuits",
@@ -103,5 +102,8 @@
   "block.compiledcircuits.color_screen": "Кольоровий екран (RGB332)",
   "item.compiledcircuits.screen_port": "Порт екрана",
   "screen.compiledcircuits.channels": "Канали RGB332: %s–%s",
-  "screen.compiledcircuits.hint": "ПКМ: базовий ID. Встановіть на кабель біля задньої сторони екрана."
+  "screen.compiledcircuits.hint": "ПКМ: базовий ID. Встановіть на кабель біля задньої сторони екрана.",
+  "hotbar.compiledcircuits.add": "Додати комірку панелі (до 38)",
+  "hotbar.compiledcircuits.remove": "Приховати останню комірку (мінімум 9). Вміст зберігається.",
+  "hotbar.compiledcircuits.empty": "Комірка %s: ЛКМ — перемістити або обміняти; ПКМ — половина / один предмет"
 }
