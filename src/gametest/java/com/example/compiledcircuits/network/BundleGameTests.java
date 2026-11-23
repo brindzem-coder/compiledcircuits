@@ -144,6 +144,13 @@ public class BundleGameTests {
         table.remove(a);DirectLinkGameTests.settle(table);h.assertTrue(c.getEffectiveSignal(p(7,0))==0,"decompiled source cannot leave stale HIGH");h.succeed();
     }
     @GameTest(template="empty",batch="bundles")
+    public static void unconnectedLegacyInputCanBeInverted(GameTestHelper h) {
+        var r=new Rig();r.cable(0,1,0);r.port(-1,0,true,true,Direction.WEST,"8");r.port(2,0,false,false,Direction.EAST,"8");
+        r.states.put(p(3,0),ModBlocks.NOT_GATE.get().defaultBlockState().setValue(EndpointBlock.FACING,Direction.EAST));r.endpoint(4,0,false);
+        var n=r.network(1);var links=new DirectLinks(new NetworkSavedData(),ignored->{});links.add(n);links.update(n,Map.of());DirectLinkGameTests.settle(links);
+        h.assertTrue(n.getEffectiveSignal(p(4,0))==15,"unconnected legacy input is LOW, so NOT outputs HIGH");h.assertTrue(n.getRuntimeStatus().equals("READY"),"missing peer is not an availability error");h.succeed();
+    }
+    @GameTest(template="empty",batch="bundles")
     public static void channelIdentityIntegrityAndItemPlacement(GameTestHelper h) {
         var level=h.getLevel();var pos=h.absolutePos(new BlockPos(1,2,1));
         level.setBlock(pos,port(true,false,Direction.WEST),3);var entity=(BundlePortEntity)level.getBlockEntity(pos);entity.configure("98765432101234567890");
@@ -208,7 +215,7 @@ public class BundleGameTests {
                     }else if(phase==7){
                         if(b.getEffectiveSignal(output)!=15){h.runAfterDelay(1,()->run());return;}
                         data.removeNetwork(a.getId());h.assertTrue(b.getEffectiveSignal(output)==0,"source decompilation clears downstream HIGH immediately");phase=8;
-                    }else{h.assertTrue(b.getEffectiveSignal(output)==0,"unlinked transport remains unavailable");cleanup.run();h.succeed();return;}
+                    }else{h.assertTrue(b.getEffectiveSignal(output)==0,"unlinked transport outputs LOW");cleanup.run();h.succeed();return;}
                     h.runAfterDelay(2,()->run());
                 }catch(Throwable failure){cleanup.run();throw failure;}}
             }.run();

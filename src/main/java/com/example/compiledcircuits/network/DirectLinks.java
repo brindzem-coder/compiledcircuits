@@ -182,9 +182,8 @@ final class DirectLinks {
         if(!samples.containsKey(first)){dirty.remove(first);return;}
         var group=group(first);dirty.removeAll(group.members);
         boolean ready=group.members.stream().allMatch(n->samples.get(n).ready&&n.directReady());
-        // A disconnected transport input is unavailable, rather than a valid LOW that a gate could invert.
-        ready &= group.members.stream().allMatch(n -> n.directPorts().stream().noneMatch(p -> p.input()
-                && (n.getElementAt(p.pos()).getBlockId().equals("compiledcircuits:bundle_network_input") || n.getElementAt(p.pos()).getBlockId().equals("compiledcircuits:bundled_wire")) && peer(n, p) == null));
+        // Unconnected boundary nodes have no driver and evaluate LOW. Their absence must not
+        // disable independent channels or other networks in this linked group.
         Map<BlockPos,Boolean> result=Map.of();Map<String,Boolean> memory=null;String error=group.error;
         if(ready&&error.isEmpty())try{
             Map<BlockPos,Boolean> inputs=new HashMap<>();for(var n:group.members)inputs.putAll(samples.get(n).values);

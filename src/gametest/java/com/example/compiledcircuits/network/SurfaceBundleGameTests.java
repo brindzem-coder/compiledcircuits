@@ -76,7 +76,7 @@ public class SurfaceBundleGameTests {
             h.assertTrue(peers.get(2).getEffectiveSignal(C.east(2))==((bits&1)!=0?15:0),"first face signal crosses networks independently");
             h.assertTrue(peers.get(3).getEffectiveSignal(C.south(2))==((bits&2)!=0?15:0),"second face signal crosses networks independently");
         }
-        table.remove(peers.get(0));DirectLinkGameTests.settle(table);h.assertTrue(peers.get(3).getEffectiveSignal(C.south(2))==0,"missing required source gates linked group");h.succeed();
+        table.remove(peers.get(0));DirectLinkGameTests.settle(table);h.assertTrue(peers.get(2).getEffectiveSignal(C.east(2))==0,"disconnected channel becomes LOW");h.assertTrue(peers.get(3).getEffectiveSignal(C.south(2))==15,"independent channel remains HIGH after disconnect");h.succeed();
     }
     @GameTest(template="empty",batch="bundle_faces")
     public static void facePortsSeparateCableComponents(GameTestHelper h) {
