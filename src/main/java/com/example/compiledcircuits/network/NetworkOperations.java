@@ -29,7 +29,7 @@ public final class NetworkOperations {
         return player != null && !player.isRemoved() && !player.isSpectator() && player.mayBuild();
     }
     public static void forget(Object actor) {
-        if (actor instanceof ServerPlayer player) { CompilationJobs.cancel(player); RepairJobs.cancel(player); DeletionJobs.cancel(player); com.example.compiledcircuits.networking.DamageSync.forget(player); HighlightSync.forget(player); CompiledElementSync.forget(player); }
+        if (actor instanceof ServerPlayer player) { BlueprintFileService.forget(player); CompilationJobs.cancel(player); RepairJobs.cancel(player); DeletionJobs.cancel(player); com.example.compiledcircuits.networking.DamageSync.forget(player); HighlightSync.forget(player); CompiledElementSync.forget(player); }
         budgets.remove(actor);
     }
     public static void clear() { budgets.clear(); }

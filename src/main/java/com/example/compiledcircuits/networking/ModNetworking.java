@@ -8,7 +8,7 @@ import net.minecraftforge.network.simple.SimpleChannel;
 
 public final class ModNetworking {
 
-    private static final String PROTOCOL_VERSION = "32";
+    private static final String PROTOCOL_VERSION = "34";
 
     public static final SimpleChannel CHANNEL =
             NetworkRegistry.ChannelBuilder
@@ -123,5 +123,8 @@ public final class ModNetworking {
                 CompiledElementPositionsS2CPacket::handle,
                 java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));
         CHANNEL.registerMessage(packetId++,CrossingPlaceC2SPacket.class,CrossingPlaceC2SPacket::encode,CrossingPlaceC2SPacket::decode,CrossingPlaceC2SPacket::handle,java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER));
+        CHANNEL.registerMessage(packetId++,BlueprintFileRequestC2SPacket.class,BlueprintFileRequestC2SPacket::encode,BlueprintFileRequestC2SPacket::decode,BlueprintFileRequestC2SPacket::handle,java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER));
+        CHANNEL.registerMessage(packetId++,BlueprintFilePartC2SPacket.class,BlueprintFilePartC2SPacket::encode,BlueprintFilePartC2SPacket::decode,BlueprintFilePartC2SPacket::handle,java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_SERVER));
+        CHANNEL.registerMessage(packetId++,BlueprintFilePartS2CPacket.class,BlueprintFilePartS2CPacket::encode,BlueprintFilePartS2CPacket::decode,BlueprintFilePartS2CPacket::handle,java.util.Optional.of(net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT));
     }
 }
