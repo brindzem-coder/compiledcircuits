@@ -27,6 +27,12 @@ public final class ClientNetworkSelection {
     public static int laneMask(BlockPos pos){return laneMasks.getOrDefault(pos,7);}
     private static Object selectionLevel;
     public static boolean isForLevel(Object level){return selectionLevel==level;}
+    public static boolean isVisibleForLevel(Object level) {
+        var player = net.minecraft.client.Minecraft.getInstance().player;
+        return level != null && isForLevel(level) && player != null
+                && (player.getMainHandItem().is(com.example.compiledcircuits.registry.ModItems.NETWORK_SELECTOR.get())
+                || player.getOffhandItem().is(com.example.compiledcircuits.registry.ModItems.NETWORK_SELECTOR.get()));
+    }
     public static void publish(Object level,com.example.compiledcircuits.networking.HighlightReplica.Selection selected){
         selectionLevel=level;laneMasks=selected.lanes();WIRES=selected.wires();INPUTS=selected.inputs();OUTPUTS=selected.outputs();
     }

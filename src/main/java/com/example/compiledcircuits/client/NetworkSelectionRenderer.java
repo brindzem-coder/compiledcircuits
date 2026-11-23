@@ -70,7 +70,7 @@ public class NetworkSelectionRenderer {
         }
 
         ClientHighlightSync.refresh();
-        if (!ClientNetworkSelection.isForLevel(Minecraft.getInstance().level) || ClientNetworkSelection.getTotalSize() == 0) {
+        if (!ClientNetworkSelection.isVisibleForLevel(Minecraft.getInstance().level) || ClientNetworkSelection.getTotalSize() == 0) {
             return;
         }
 

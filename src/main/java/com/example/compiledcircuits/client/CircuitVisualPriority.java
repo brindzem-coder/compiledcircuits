@@ -21,7 +21,7 @@ public final class CircuitVisualPriority {
         return capture(dimension, true);
     }
     public static Exclusions capture(String dimension, Object level) {
-        return capture(dimension, ClientNetworkSelection.isForLevel(level));
+        return capture(dimension, ClientNetworkSelection.isVisibleForLevel(level));
     }
     private static Exclusions capture(String dimension, boolean selectionCurrent) {
         Set<BlockPos> broken = new HashSet<>();
@@ -29,7 +29,7 @@ public final class CircuitVisualPriority {
         for (var focused : ClientBrokenElements.getFocused()) {
             if (dimension.equals(focused.dimension())) broken.add(focused.pos());
         }
-        // Selection renderer is active whenever these sets are nonempty in the active level.
+        // Hidden selections must not suppress the ordinary circuit outlines.
         if (!selectionCurrent) return new Exclusions(Set.copyOf(broken), Set.of(), Set.of(), Set.of());
         return new Exclusions(Set.copyOf(broken), ClientNetworkSelection.getWires(),
                 ClientNetworkSelection.getInputs(), ClientNetworkSelection.getOutputs());
