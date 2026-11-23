@@ -37,6 +37,8 @@ public final class CompiledBlockStateMatcher {
         return result;
     }
     public static Match match(CompiledCircuitElement element, BlockState actual, boolean exact) {
+        if ((element.getBlockId().equals("compiledcircuits:isolated_wire") || actual.getBlock() instanceof com.example.compiledcircuits.block.IsolatedWireBlock)
+                && !element.getBlockId().equals(BuiltInRegistries.BLOCK.getKey(actual.getBlock()).toString())) return Match.BLOCK_MISMATCH;
         if ((element.getBlockId().equals("compiledcircuits:id_wire") || actual.getBlock() instanceof com.example.compiledcircuits.block.IdWireBlock)
                 && !element.getBlockId().equals(BuiltInRegistries.BLOCK.getKey(actual.getBlock()).toString())) return Match.BLOCK_MISMATCH;
         if ((element.getBlockId().equals("compiledcircuits:bundled_wire") || actual.getBlock() instanceof com.example.compiledcircuits.block.BundledWireBlock)

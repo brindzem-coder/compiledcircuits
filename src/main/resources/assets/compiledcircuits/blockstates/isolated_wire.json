@@ -7,7 +7,7 @@
     },
     {
       "when": {
-        "north": "true"
+        "face_north": "1|2|3"
       },
       "apply": {
         "model": "compiledcircuits:block/isolated_wire_north"
@@ -15,7 +15,7 @@
     },
     {
       "when": {
-        "south": "true"
+        "face_south": "1|2|3"
       },
       "apply": {
         "model": "compiledcircuits:block/isolated_wire_south"
@@ -23,7 +23,7 @@
     },
     {
       "when": {
-        "west": "true"
+        "face_west": "1|2|3"
       },
       "apply": {
         "model": "compiledcircuits:block/isolated_wire_west"
@@ -31,7 +31,7 @@
     },
     {
       "when": {
-        "east": "true"
+        "face_east": "1|2|3"
       },
       "apply": {
         "model": "compiledcircuits:block/isolated_wire_east"
@@ -39,7 +39,7 @@
     },
     {
       "when": {
-        "up": "true"
+        "face_up": "1|2|3"
       },
       "apply": {
         "model": "compiledcircuits:block/isolated_wire_up"
@@ -47,10 +47,106 @@
     },
     {
       "when": {
-        "down": "true"
+        "face_down": "1|2|3"
       },
       "apply": {
         "model": "compiledcircuits:block/isolated_wire_down"
+      }
+    },
+    {
+      "when": {
+        "face_down": "2"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_down_2"
+      }
+    },
+    {
+      "when": {
+        "face_down": "3"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_down_3"
+      }
+    },
+    {
+      "when": {
+        "face_up": "2"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_up_2"
+      }
+    },
+    {
+      "when": {
+        "face_up": "3"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_up_3"
+      }
+    },
+    {
+      "when": {
+        "face_north": "2"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_north_2"
+      }
+    },
+    {
+      "when": {
+        "face_north": "3"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_north_3"
+      }
+    },
+    {
+      "when": {
+        "face_south": "2"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_south_2"
+      }
+    },
+    {
+      "when": {
+        "face_south": "3"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_south_3"
+      }
+    },
+    {
+      "when": {
+        "face_west": "2"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_west_2"
+      }
+    },
+    {
+      "when": {
+        "face_west": "3"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_west_3"
+      }
+    },
+    {
+      "when": {
+        "face_east": "2"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_east_2"
+      }
+    },
+    {
+      "when": {
+        "face_east": "3"
+      },
+      "apply": {
+        "model": "compiledcircuits:block/network_face_east_3"
       }
     }
   ]

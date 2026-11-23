@@ -63,6 +63,19 @@ public final class CompiledBlockStateCodec {
         BlockState state = BuiltInRegistries.BLOCK.get(id).defaultBlockState();
         if (state.isAir()) return invalid("Air cannot be a compiled element");
         CompoundTag properties = snapshot.getCompound("Properties");
+        // Isolated wires originally stored six boolean arms, before they supported face ports.
+        if (state.getBlock() instanceof com.example.compiledcircuits.block.IsolatedWireBlock
+                && properties.size() == 6 && properties.contains("north")) {
+            for (var side : net.minecraft.core.Direction.values()) {
+                String key = side.getName();
+                if (!properties.contains(key, Tag.TAG_STRING)
+                        || !(properties.getString(key).equals("true") || properties.getString(key).equals("false")))
+                    return invalid("Invalid legacy isolated wire arm: " + key);
+                state = com.example.compiledcircuits.block.NetworkWireBlock.withFace(state, side,
+                        properties.getString(key).equals("true") ? 1 : 0);
+            }
+            return new DecodeResult(Status.EXACT, Optional.of(state), "Migrated isolated wire arms");
+        }
         // Before surface ports, gate bodies had an explicitly empty property schema.
         if (properties.isEmpty() && state.getBlock() instanceof com.example.compiledcircuits.block.GateBodyBlock)
             return new DecodeResult(Status.EXACT, Optional.of(state), "Migrated portless gate body");

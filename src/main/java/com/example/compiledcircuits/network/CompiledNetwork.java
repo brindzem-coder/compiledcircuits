@@ -42,7 +42,7 @@ public class CompiledNetwork {
             if (port.isExternal()) result.add(new Port(element.getPos(), resolved.getValue(com.example.compiledcircuits.block.EndpointBlock.FACING), port.isInput()));
             return;
         }
-        if (!(element.getBlockId().equals("compiledcircuits:network_wire") || element.getBlockId().equals("compiledcircuits:id_wire"))) return;
+        if (!(resolved != null && resolved.getBlock() instanceof com.example.compiledcircuits.block.NetworkWireBlock)) return;
         var state=element.resolveState().state().orElse(null); if(state==null)return;
         for(var side:net.minecraft.core.Direction.values()) {
             int face=com.example.compiledcircuits.block.NetworkWireBlock.face(state,side);
